@@ -107,8 +107,8 @@ struct CliResult {
     result: String,
     #[serde(default)]
     is_error: bool,
-    #[serde(default)]
-    cost_usd: f64,
+    #[serde(default, alias = "cost_usd")]
+    total_cost_usd: f64,
     #[serde(default)]
     num_turns: u32,
     #[serde(default)]
@@ -117,6 +117,24 @@ struct CliResult {
     duration_api_ms: u64,
     #[serde(default)]
     session_id: String,
+}
+
+/// Parse the CLI output, which may be a JSON array (verbose mode) or a
+/// single JSON object. Extract the result entry.
+fn parse_cli_output(stdout: &str) -> std::result::Result<CliResult, String> {
+    // Try as JSON array first (verbose mode returns [...])
+    if let Ok(entries) = serde_json::from_str::<Vec<serde_json::Value>>(stdout) {
+        for entry in entries.iter().rev() {
+            if entry.get("type").and_then(|t| t.as_str()) == Some("result") {
+                return serde_json::from_value(entry.clone())
+                    .map_err(|e| format!("failed to parse result entry: {e}"));
+            }
+        }
+        return Err("no result entry found in CLI output".into());
+    }
+    // Fall back to single JSON object
+    serde_json::from_str(stdout)
+        .map_err(|e| format!("failed to parse CLI output: {e}"))
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -184,10 +202,10 @@ impl LlmPort for ClaudeCliProvider {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let cli_result: CliResult = serde_json::from_str(&stdout).map_err(|e| {
+        let cli_result: CliResult = parse_cli_output(&stdout).map_err(|e| {
             RusvelError::Llm(format!(
-                "failed to parse claude CLI output: {e}\nraw: {}",
-                stdout.chars().take(200).collect::<String>()
+                "{e}\nraw: {}",
+                stdout.chars().take(300).collect::<String>()
             ))
         })?;
 
@@ -199,7 +217,7 @@ impl LlmPort for ClaudeCliProvider {
         }
 
         debug!(
-            cost_usd = cli_result.cost_usd,
+            cost_usd = cli_result.total_cost_usd,
             turns = cli_result.num_turns,
             duration_ms = cli_result.duration_ms,
             "claude-cli response"
@@ -214,7 +232,7 @@ impl LlmPort for ClaudeCliProvider {
             },
             metadata: serde_json::json!({
                 "source": "claude-cli",
-                "cost_usd": cli_result.cost_usd,
+                "cost_usd": cli_result.total_cost_usd,
                 "num_turns": cli_result.num_turns,
                 "duration_ms": cli_result.duration_ms,
                 "duration_api_ms": cli_result.duration_api_ms,
@@ -319,23 +337,38 @@ mod tests {
     }
 
     #[test]
-    fn parse_cli_result() {
+    fn parse_cli_result_single_object() {
         let json = r#"{
             "type": "result",
             "subtype": "success",
             "result": "Hello there!",
             "session_id": "abc-123",
-            "cost_usd": 0.0,
+            "total_cost_usd": 0.0,
             "duration_ms": 1500,
             "duration_api_ms": 1200,
             "num_turns": 1,
             "is_error": false
         }"#;
-        let parsed: CliResult = serde_json::from_str(json).unwrap();
+        let parsed = parse_cli_output(json).unwrap();
         assert_eq!(parsed.result, "Hello there!");
         assert!(!parsed.is_error);
-        assert_eq!(parsed.cost_usd, 0.0);
+        assert_eq!(parsed.total_cost_usd, 0.0);
         assert_eq!(parsed.session_id, "abc-123");
+    }
+
+    #[test]
+    fn parse_cli_result_from_array() {
+        let json = r#"[
+            {"type": "system", "subtype": "init", "session_id": "abc"},
+            {"type": "assistant", "message": {}},
+            {"type": "result", "subtype": "success", "result": "Hello!", "is_error": false,
+             "total_cost_usd": 0.07, "num_turns": 1, "duration_ms": 2000,
+             "duration_api_ms": 1800, "session_id": "abc-123"}
+        ]"#;
+        let parsed = parse_cli_output(json).unwrap();
+        assert_eq!(parsed.result, "Hello!");
+        assert!(!parsed.is_error);
+        assert_eq!(parsed.total_cost_usd, 0.07);
     }
 
     #[test]
@@ -345,14 +378,30 @@ mod tests {
             "subtype": "error_during_execution",
             "result": "Something went wrong",
             "is_error": true,
-            "cost_usd": 0.0,
+            "total_cost_usd": 0.0,
             "duration_ms": 100,
             "duration_api_ms": 0,
             "num_turns": 0,
             "session_id": ""
         }"#;
-        let parsed: CliResult = serde_json::from_str(json).unwrap();
+        let parsed = parse_cli_output(json).unwrap();
         assert!(parsed.is_error);
+    }
+
+    #[test]
+    fn parse_cli_legacy_cost_field() {
+        let json = r#"{
+            "type": "result",
+            "result": "Hi",
+            "is_error": false,
+            "cost_usd": 0.05,
+            "num_turns": 1,
+            "duration_ms": 100,
+            "duration_api_ms": 80,
+            "session_id": "x"
+        }"#;
+        let parsed = parse_cli_output(json).unwrap();
+        assert_eq!(parsed.total_cost_usd, 0.05);
     }
 
     #[test]

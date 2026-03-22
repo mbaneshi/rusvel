@@ -24,7 +24,7 @@ use rusvel_core::ports::{SessionPort, StoragePort};
 use rusvel_db::Database;
 use rusvel_event::EventBus;
 use rusvel_jobs::JobQueue;
-use rusvel_llm::OllamaProvider;
+use rusvel_llm::ClaudeCliProvider;
 #[allow(unused_imports)] // TODO: wire --mcp flag dispatch
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
     // 3. Concrete adapters
     let db: Arc<Database> = Arc::new(Database::open(data_dir.join("rusvel.db"))?);
     let config = Arc::new(TomlConfig::load(data_dir.join("config.toml"))?);
-    let llm: Arc<dyn rusvel_core::ports::LlmPort> = Arc::new(OllamaProvider::new());
+    let llm: Arc<dyn rusvel_core::ports::LlmPort> = Arc::new(ClaudeCliProvider::max_subscription());
     let events = Arc::new(EventBus::new(db.clone() as Arc<dyn rusvel_core::ports::EventStore>));
     let memory: Arc<dyn rusvel_core::ports::MemoryPort> = Arc::new(
         MemoryStore::open(data_dir.join("memory.db").to_str().unwrap_or("memory.db"))?,
@@ -114,10 +114,23 @@ async fn main() -> Result<()> {
         config,
     ));
 
-    // 5. Parse CLI
+    // 5. Load user profile
+    let profile_path = data_dir.join("profile.toml");
+    let profile = match UserProfile::load(&profile_path) {
+        Ok(p) => {
+            tracing::info!("Loaded profile for {}", p.identity.name);
+            Some(p)
+        }
+        Err(e) => {
+            tracing::warn!("No profile loaded ({}): {e}", profile_path.display());
+            None
+        }
+    };
+
+    // 6. Parse CLI
     let cli = Cli::parse();
 
-    // 6. Dispatch
+    // 7. Dispatch
     if cli.command.is_some() {
         // Subcommand present -> CLI handler
         rusvel_cli::run(cli, forge.clone(), sessions.clone()).await?;
@@ -127,8 +140,27 @@ async fn main() -> Result<()> {
             forge: forge.clone(),
             sessions: sessions.clone(),
             events: events.clone(),
+            storage: db.clone() as Arc<dyn StoragePort>,
+            profile,
         };
-        let router = rusvel_api::build_router(state);
+
+        // Look for frontend build in known locations
+        let frontend_dir = [
+            std::path::PathBuf::from("frontend/build"),           // dev: run from repo root
+            data_dir.join("frontend"),                             // installed: ~/.rusvel/frontend
+            std::env::current_exe()                                // next to binary
+                .unwrap_or_default()
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("frontend"),
+        ]
+        .into_iter()
+        .find(|p| p.join("index.html").exists());
+
+        if let Some(ref dir) = frontend_dir {
+            tracing::info!("Serving frontend from {}", dir.display());
+        }
+        let router = rusvel_api::build_router_with_frontend(state, frontend_dir);
         let addr: SocketAddr = "127.0.0.1:3000".parse()?;
         tracing::info!("RUSVEL starting on http://{addr}");
 

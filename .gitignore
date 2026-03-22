@@ -25,3 +25,14 @@ Thumbs.db
 
 # RUSVEL data
 .rusvel/
+
+# Old/archived projects (63GB+)
+/old/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log

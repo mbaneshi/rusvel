@@ -11,9 +11,11 @@ mod claude_cli;
 mod multi;
 mod ollama;
 mod openai;
+pub mod stream;
 
 pub use claude::ClaudeProvider;
 pub use claude_cli::ClaudeCliProvider;
 pub use multi::MultiProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAiProvider;
+pub use stream::{ClaudeCliStreamer, StreamEvent};

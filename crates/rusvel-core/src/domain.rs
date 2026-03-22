@@ -753,6 +753,90 @@ pub struct MetricFilter {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  User Profile (god agent identity)
+// ════════════════════════════════════════════════════════════════════
+
+/// The user's persistent identity, loaded from `~/.rusvel/profile.toml`.
+/// Injected into every agent's system prompt so all agents know who they serve.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserProfile {
+    pub identity: ProfileIdentity,
+    pub skills: ProfileSkills,
+    pub products: ProfileProducts,
+    pub mission: ProfileMission,
+    pub preferences: ProfilePreferences,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileIdentity {
+    pub name: String,
+    pub role: String,
+    pub tagline: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileSkills {
+    pub primary: Vec<String>,
+    #[serde(default)]
+    pub secondary: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileProducts {
+    pub names: Vec<String>,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileMission {
+    pub vision: String,
+    #[serde(default)]
+    pub values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfilePreferences {
+    #[serde(default = "default_style")]
+    pub style: String,
+}
+
+fn default_style() -> String { "Direct and technical".into() }
+
+impl UserProfile {
+    /// Load from a TOML file.
+    pub fn load(path: impl AsRef<std::path::Path>) -> std::result::Result<Self, String> {
+        let content = std::fs::read_to_string(path.as_ref())
+            .map_err(|e| format!("cannot read profile: {e}"))?;
+        toml::from_str(&content)
+            .map_err(|e| format!("invalid profile TOML: {e}"))
+    }
+
+    /// Generate the system prompt preamble that gives agents full context about the user.
+    pub fn to_system_prompt(&self) -> String {
+        format!(
+            "You are the RUSVEL AI assistant for {name}, {role}.\n\
+             {tagline}\n\n\
+             Primary skills: {skills}\n\
+             Products: {products} — {desc}\n\
+             Mission: {mission}\n\
+             Values: {values}\n\
+             Communication style: {style}\n\n\
+             You help {name} with planning, strategy, development, content creation, \
+             finding opportunities, and business operations. Be {style}.",
+            name = self.identity.name,
+            role = self.identity.role,
+            tagline = self.identity.tagline,
+            skills = self.skills.primary.join(", "),
+            products = self.products.names.join(", "),
+            desc = self.products.description,
+            mission = self.mission.vision,
+            values = self.mission.values.join(", "),
+            style = self.preferences.style.to_lowercase(),
+        )
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Tests
 // ════════════════════════════════════════════════════════════════════
 

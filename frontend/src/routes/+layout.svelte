@@ -13,8 +13,9 @@
 	let error = $state('');
 
 	const navItems = [
+		{ href: '/chat', label: 'Chat', icon: '>' },
 		{ href: '/', label: 'Dashboard', icon: '~' },
-		{ href: '/forge', label: 'Forge', icon: '>' },
+		{ href: '/forge', label: 'Forge', icon: '=' },
 		{ href: '/code', label: 'Code', icon: '#' },
 		{ href: '/harvest', label: 'Harvest', icon: '$' },
 		{ href: '/content', label: 'Content', icon: '*' },

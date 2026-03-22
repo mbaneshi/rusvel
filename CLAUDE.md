@@ -7,8 +7,8 @@
 
 ```bash
 cargo build                    # Build all crates
-cargo test                     # Run all tests
-cargo run                      # Start API server on :3000
+cargo test                     # Run all tests (149 tests)
+cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- session create X  # Create a session
 cargo run -- forge mission today  # Generate daily plan
@@ -18,10 +18,10 @@ cargo run -- forge mission today  # Generate daily plan
 
 Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
-- **rusvel-core** — 10 port traits + shared domain types. Zero framework deps.
+- **rusvel-core** — 10 port traits + ~40 domain types. Zero framework deps.
 - **Adapters** — Implement port traits (rusvel-db, rusvel-llm, rusvel-agent, etc.)
 - **Engines** — Domain logic, depend ONLY on rusvel-core traits (forge, code, harvest, content, gtm)
-- **Surfaces** — CLI, API, MCP, (TUI planned) — wire adapters into engines
+- **Surfaces** — CLI, API, MCP, TUI — wire adapters into engines
 - **rusvel-app** — Composition root, the single binary
 
 ## Key Rules
@@ -38,27 +38,34 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
 ```
 crates/
-├── rusvel-core/     Ports + shared types (the contract)
-├── rusvel-db/       SQLite WAL + 5 stores + migrations
-├── rusvel-llm/      Ollama adapter (Claude/OpenAI later)
-├── rusvel-agent/    Agent runtime (wraps LLM+Tool+Memory)
+├── rusvel-core/     Ports (10 traits) + shared domain types (~40 structs/enums)
+├── rusvel-db/       SQLite WAL + 5 sub-stores + migrations (largest crate, ~1500 lines)
+├── rusvel-llm/      4 providers: Ollama, OpenAI, Claude API, Claude CLI + multi-router
+├── rusvel-agent/    Agent runtime (wraps LLM+Tool+Memory) + persona + workflow
 ├── rusvel-event/    Event bus + persistence
 ├── rusvel-memory/   FTS5 session-namespaced search
 ├── rusvel-tool/     Tool registry + JSON Schema
 ├── rusvel-jobs/     Central job queue + approval
-├── rusvel-auth/     Credential storage
-├── rusvel-config/   TOML config + session overrides
-├── forge-engine/    Agent orchestration + Mission
-├── code-engine/     Code intelligence (stub)
-├── harvest-engine/  Opportunity discovery (stub)
-├── content-engine/  Content creation (stub)
-├── gtm-engine/      GoToMarket: CRM + outreach (stub)
-├── rusvel-cli/      Clap CLI
-├── rusvel-api/      Axum HTTP + WebSocket
-├── rusvel-mcp/      MCP server (stdio JSON-RPC)
-└── rusvel-app/      Binary entry point
-frontend/            SvelteKit 5 + Tailwind 4
+├── rusvel-auth/     In-memory credential storage (from env)
+├── rusvel-config/   TOML config + per-session overrides
+├── forge-engine/    Agent orchestration + Mission (goals, daily plan, reviews, 10 personas, safety guard)
+├── code-engine/     Code intelligence: parser, dependency graph, BM25 search, metrics
+├── harvest-engine/  Opportunity discovery: source scanning, scorer, proposal gen, pipeline
+├── content-engine/  Content creation: writer, calendar, platform adapters, analytics
+├── gtm-engine/      GoToMarket: CRM, outreach sequences, invoicing, deal stages
+├── rusvel-cli/      Clap CLI (session + forge mission subcommands)
+├── rusvel-api/      Axum HTTP: health, sessions, goals, mission, events (7 endpoints)
+├── rusvel-mcp/      MCP server (stdio JSON-RPC) — imported but not yet dispatched
+├── rusvel-tui/      TUI surface: layout + widgets — not yet wired into main
+└── rusvel-app/      Binary entry point + composition root
+frontend/            SvelteKit 5 + Tailwind 4 (layout + /forge route)
 ```
+
+## Not Yet Wired
+
+- **MCP dispatch** — `rusvel-mcp` is imported in `rusvel-app` but the `--mcp` flag isn't connected
+- **TUI** — `rusvel-tui` has layout + widgets but isn't launched from main
+- **Frontend** — minimal SvelteKit shell (layout + 2 routes), not yet embedded via rust-embed
 
 ## Design Docs
 
@@ -72,14 +79,17 @@ frontend/            SvelteKit 5 + Tailwind 4
 ## Testing
 
 ```bash
-cargo test                     # All tests
+cargo test                     # All 149 tests
 cargo test -p rusvel-core      # Single crate
-cargo test -p forge-engine     # Engine tests (use mock ports)
+cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
+cargo test -p content-engine   # Content engine (7 tests)
+cargo test -p harvest-engine   # Harvest engine (12 tests)
+cargo test -p rusvel-db        # DB store (41 tests, largest suite)
 ```
 
 ## Stack
 
 - Rust edition 2024, SQLite WAL, Axum, Clap 4, tokio
 - SvelteKit 5, Tailwind CSS 4
-- LLM: Ollama (local), Claude/OpenAI/Gemini (planned)
-- Frontend embedded in binary via rust-embed
+- LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented
+- Frontend embedded in binary via rust-embed (planned)

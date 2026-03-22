@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 rusvel-core = { workspace = true }
+rusvel-llm = { workspace = true }
 forge-engine = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
@@ -18,3 +19,10 @@ tokio = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+futures = { workspace = true }
+tokio-stream = "0.1"
+
+[dev-dependencies]
+async-trait = { workspace = true }
+axum-test = "16"
+rusvel-core = { workspace = true }

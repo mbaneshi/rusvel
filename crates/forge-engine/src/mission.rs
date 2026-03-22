@@ -62,10 +62,11 @@ impl ForgeEngine {
         let run_id = self.agent.create(config).await?;
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
 
-        let text = extract_text(&output.content);
-        let parsed: PlanResponse = serde_json::from_str(&text).unwrap_or(PlanResponse {
+        let raw_text = extract_text(&output.content);
+        let text = strip_code_fences(&raw_text);
+        let parsed: PlanResponse = serde_json::from_str(text).unwrap_or(PlanResponse {
             tasks: vec![TaskEntry { title: "Review and plan manually".into(), priority: "Medium".into() }],
-            focus_areas: vec!["Planning".into()], notes: text.clone(),
+            focus_areas: vec!["Planning".into()], notes: text.to_string(),
         });
 
         let today = Utc::now().date_naive();
@@ -152,8 +153,9 @@ impl ForgeEngine {
         let run_id = self.agent.create(config).await?;
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
 
-        let text = extract_text(&output.content);
-        let parsed: ReviewResponse = serde_json::from_str(&text).unwrap_or(ReviewResponse {
+        let raw_text = extract_text(&output.content);
+        let text = strip_code_fences(&raw_text);
+        let parsed: ReviewResponse = serde_json::from_str(text).unwrap_or(ReviewResponse {
             accomplishments: vec!["Review data collected".into()], blockers: vec![],
             insights: vec![], next_actions: vec!["Complete manual review".into()],
         });
@@ -181,4 +183,17 @@ struct ReviewResponse { accomplishments: Vec<String>, blockers: Vec<String>, ins
 fn extract_text(content: &Content) -> String {
     content.parts.iter().find_map(|p| if let Part::Text(s) = p { Some(s.clone()) } else { None })
         .unwrap_or_default()
+}
+
+/// Strip markdown code fences (```json ... ```) from LLM output so we can parse the JSON.
+fn strip_code_fences(text: &str) -> &str {
+    let trimmed = text.trim();
+    if let Some(rest) = trimmed.strip_prefix("```") {
+        // Skip the language tag (e.g., "json") on the first line
+        let rest = rest.strip_prefix("json").unwrap_or(rest);
+        let rest = rest.trim_start_matches('\n');
+        rest.strip_suffix("```").unwrap_or(rest).trim()
+    } else {
+        trimmed
+    }
 }
