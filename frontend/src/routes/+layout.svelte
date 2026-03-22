@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount, type Snippet } from 'svelte';
+	import { page } from '$app/state';
 	import { getSessions, createSession } from '$lib/api';
 	import { sessions, activeSession } from '$lib/stores';
 
@@ -135,11 +136,15 @@
 		<!-- Navigation -->
 		<nav class="flex-1 overflow-y-auto px-3 py-3">
 			{#each navItems as item}
+				{@const isActive = item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
 				<a
 					href={item.href}
-					class="mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-100"
+					class="mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors
+						{isActive
+						? 'bg-indigo-600/15 text-indigo-300 font-medium'
+						: 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}"
 				>
-					<span class="w-5 text-center font-mono text-xs text-gray-600">{item.icon}</span>
+					<span class="w-5 text-center font-mono text-xs {isActive ? 'text-indigo-400' : 'text-gray-600'}">{item.icon}</span>
 					{item.label}
 				</a>
 			{/each}
