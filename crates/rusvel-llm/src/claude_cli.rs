@@ -1,0 +1,383 @@
+//! Claude CLI adapter implementing [`LlmPort`] via `claude -p`.
+//!
+//! Spawns the `claude` CLI binary as a subprocess with env vars that
+//! route through a Claude Max subscription ($0 API credits).
+//!
+//! **Caveat:** The env vars (`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_USE_SUBSCRIPTION`,
+//! `CLAUDE_BYPASS_BALANCE_CHECK`) are undocumented and could break in any CLI update.
+
+use async_trait::async_trait;
+use serde::Deserialize;
+use tokio::process::Command;
+use tracing::debug;
+
+use rusvel_core::domain::*;
+use rusvel_core::error::{Result, RusvelError};
+use rusvel_core::ports::LlmPort;
+
+/// Adapter that calls the `claude` CLI in non-interactive mode (`-p`).
+///
+/// Uses Max subscription env vars by default. Falls back to API key
+/// billing if `use_subscription` is set to `false` and an API key is provided.
+pub struct ClaudeCliProvider {
+    /// Path to the `claude` binary (default: `"claude"`).
+    command: String,
+    /// Use Max subscription env vars instead of API key.
+    use_subscription: bool,
+    /// Optional API key for fallback billing.
+    api_key: Option<String>,
+    /// Default model to report (the CLI picks its own model internally).
+    model: String,
+    /// Timeout in seconds for the subprocess.
+    timeout_secs: u64,
+}
+
+impl ClaudeCliProvider {
+    /// Create a provider that uses Claude Max subscription (no API key needed).
+    pub fn max_subscription() -> Self {
+        Self {
+            command: "claude".into(),
+            use_subscription: true,
+            api_key: None,
+            model: "claude-sonnet-4-20250514".into(),
+            timeout_secs: 300,
+        }
+    }
+
+    /// Create a provider that uses an API key for billing.
+    pub fn with_api_key(api_key: impl Into<String>) -> Self {
+        Self {
+            command: "claude".into(),
+            use_subscription: false,
+            api_key: Some(api_key.into()),
+            model: "claude-sonnet-4-20250514".into(),
+            timeout_secs: 300,
+        }
+    }
+
+    /// Override the path to the `claude` binary.
+    pub fn command(mut self, cmd: impl Into<String>) -> Self {
+        self.command = cmd.into();
+        self
+    }
+
+    /// Override the default model name reported by `list_models`.
+    pub fn model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    /// Override the subprocess timeout (default: 300s).
+    pub fn timeout_secs(mut self, secs: u64) -> Self {
+        self.timeout_secs = secs;
+        self
+    }
+
+    /// Build the prompt string from an [`LlmRequest`].
+    ///
+    /// Concatenates system instructions and user messages into a single
+    /// prompt since `claude -p` takes a flat string, not a message array.
+    fn build_prompt(request: &LlmRequest) -> String {
+        let mut parts = Vec::new();
+
+        for msg in &request.messages {
+            let text = extract_text(&msg.content);
+            if text.is_empty() {
+                continue;
+            }
+            match msg.role {
+                LlmRole::System => parts.push(format!("<system>\n{text}\n</system>")),
+                LlmRole::User => parts.push(text),
+                LlmRole::Assistant => parts.push(format!("<assistant>\n{text}\n</assistant>")),
+                LlmRole::Tool => parts.push(format!("<tool-result>\n{text}\n</tool-result>")),
+            }
+        }
+
+        parts.join("\n\n")
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Claude CLI JSON output shape
+// ════════════════════════════════════════════════════════════════════
+
+#[derive(Deserialize)]
+struct CliResult {
+    #[serde(default)]
+    result: String,
+    #[serde(default)]
+    is_error: bool,
+    #[serde(default)]
+    cost_usd: f64,
+    #[serde(default)]
+    num_turns: u32,
+    #[serde(default)]
+    duration_ms: u64,
+    #[serde(default)]
+    duration_api_ms: u64,
+    #[serde(default)]
+    session_id: String,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  LlmPort implementation
+// ════════════════════════════════════════════════════════════════════
+
+#[async_trait]
+impl LlmPort for ClaudeCliProvider {
+    async fn generate(&self, request: LlmRequest) -> Result<LlmResponse> {
+        let prompt = Self::build_prompt(&request);
+
+        debug!(
+            model = %request.model.model,
+            prompt_len = prompt.len(),
+            "claude-cli generate"
+        );
+
+        let mut cmd = Command::new(&self.command);
+        cmd.arg("-p")
+            .arg(&prompt)
+            .arg("--output-format")
+            .arg("json")
+            .arg("--verbose");
+
+        // Model override: pass --model if the request specifies one.
+        if !request.model.model.is_empty() {
+            cmd.arg("--model").arg(&request.model.model);
+        }
+
+        // Max tokens.
+        if let Some(max) = request.max_tokens {
+            cmd.arg("--max-turns").arg(max.to_string());
+        }
+
+        // Env var setup for Max subscription.
+        if self.use_subscription {
+            cmd.env_remove("ANTHROPIC_API_KEY");
+            cmd.env_remove("CLAUDECODE"); // avoid recursion detection
+            cmd.env("CLAUDE_CODE_ENTRYPOINT", "sdk-max");
+            cmd.env("CLAUDE_USE_SUBSCRIPTION", "true");
+            cmd.env("CLAUDE_BYPASS_BALANCE_CHECK", "true");
+        } else if let Some(ref key) = self.api_key {
+            cmd.env("ANTHROPIC_API_KEY", key);
+        }
+
+        // Capture stdout, inherit stderr for debug logs.
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::inherit());
+
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(self.timeout_secs),
+            cmd.output(),
+        )
+        .await
+        .map_err(|_| RusvelError::Llm("claude CLI timed out".into()))?
+        .map_err(|e| RusvelError::Llm(format!("failed to spawn claude CLI: {e}")))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(RusvelError::Llm(format!(
+                "claude CLI exited with {}: {}",
+                output.status,
+                stderr.chars().take(500).collect::<String>()
+            )));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let cli_result: CliResult = serde_json::from_str(&stdout).map_err(|e| {
+            RusvelError::Llm(format!(
+                "failed to parse claude CLI output: {e}\nraw: {}",
+                stdout.chars().take(200).collect::<String>()
+            ))
+        })?;
+
+        if cli_result.is_error {
+            return Err(RusvelError::Llm(format!(
+                "claude CLI returned error: {}",
+                cli_result.result.chars().take(500).collect::<String>()
+            )));
+        }
+
+        debug!(
+            cost_usd = cli_result.cost_usd,
+            turns = cli_result.num_turns,
+            duration_ms = cli_result.duration_ms,
+            "claude-cli response"
+        );
+
+        Ok(LlmResponse {
+            content: Content::text(cli_result.result),
+            finish_reason: FinishReason::Stop,
+            usage: LlmUsage {
+                input_tokens: 0,  // CLI doesn't report token counts
+                output_tokens: 0,
+            },
+            metadata: serde_json::json!({
+                "source": "claude-cli",
+                "cost_usd": cli_result.cost_usd,
+                "num_turns": cli_result.num_turns,
+                "duration_ms": cli_result.duration_ms,
+                "duration_api_ms": cli_result.duration_api_ms,
+                "session_id": cli_result.session_id,
+            }),
+        })
+    }
+
+    async fn embed(&self, _model: &ModelRef, _text: &str) -> Result<Vec<f32>> {
+        Err(RusvelError::Llm(
+            "claude CLI does not support embeddings".into(),
+        ))
+    }
+
+    async fn list_models(&self) -> Result<Vec<ModelRef>> {
+        Ok(vec![
+            ModelRef {
+                provider: ModelProvider::Claude,
+                model: self.model.clone(),
+            },
+        ])
+    }
+}
+
+/// Extract concatenated text from all `Part::Text` parts.
+fn extract_text(content: &Content) -> String {
+    content
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            Part::Text(t) => Some(t.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Tests
+// ════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_request() -> LlmRequest {
+        LlmRequest {
+            model: ModelRef {
+                provider: ModelProvider::Claude,
+                model: "claude-sonnet-4-20250514".into(),
+            },
+            messages: vec![
+                LlmMessage {
+                    role: LlmRole::System,
+                    content: Content::text("You are helpful."),
+                },
+                LlmMessage {
+                    role: LlmRole::User,
+                    content: Content::text("Hello!"),
+                },
+            ],
+            tools: vec![],
+            temperature: Some(0.7),
+            max_tokens: Some(1024),
+            metadata: serde_json::json!({}),
+        }
+    }
+
+    #[test]
+    fn build_prompt_includes_system_and_user() {
+        let req = sample_request();
+        let prompt = ClaudeCliProvider::build_prompt(&req);
+        assert!(prompt.contains("<system>"));
+        assert!(prompt.contains("You are helpful."));
+        assert!(prompt.contains("Hello!"));
+    }
+
+    #[test]
+    fn build_prompt_skips_empty_messages() {
+        let req = LlmRequest {
+            model: ModelRef {
+                provider: ModelProvider::Claude,
+                model: "test".into(),
+            },
+            messages: vec![
+                LlmMessage {
+                    role: LlmRole::User,
+                    content: Content { parts: vec![] },
+                },
+                LlmMessage {
+                    role: LlmRole::User,
+                    content: Content::text("real message"),
+                },
+            ],
+            tools: vec![],
+            temperature: None,
+            max_tokens: None,
+            metadata: serde_json::json!({}),
+        };
+        let prompt = ClaudeCliProvider::build_prompt(&req);
+        assert_eq!(prompt, "real message");
+    }
+
+    #[test]
+    fn parse_cli_result() {
+        let json = r#"{
+            "type": "result",
+            "subtype": "success",
+            "result": "Hello there!",
+            "session_id": "abc-123",
+            "cost_usd": 0.0,
+            "duration_ms": 1500,
+            "duration_api_ms": 1200,
+            "num_turns": 1,
+            "is_error": false
+        }"#;
+        let parsed: CliResult = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.result, "Hello there!");
+        assert!(!parsed.is_error);
+        assert_eq!(parsed.cost_usd, 0.0);
+        assert_eq!(parsed.session_id, "abc-123");
+    }
+
+    #[test]
+    fn parse_cli_error_result() {
+        let json = r#"{
+            "type": "result",
+            "subtype": "error_during_execution",
+            "result": "Something went wrong",
+            "is_error": true,
+            "cost_usd": 0.0,
+            "duration_ms": 100,
+            "duration_api_ms": 0,
+            "num_turns": 0,
+            "session_id": ""
+        }"#;
+        let parsed: CliResult = serde_json::from_str(json).unwrap();
+        assert!(parsed.is_error);
+    }
+
+    #[test]
+    fn max_subscription_defaults() {
+        let provider = ClaudeCliProvider::max_subscription();
+        assert!(provider.use_subscription);
+        assert!(provider.api_key.is_none());
+        assert_eq!(provider.command, "claude");
+    }
+
+    #[test]
+    fn api_key_fallback() {
+        let provider = ClaudeCliProvider::with_api_key("sk-test");
+        assert!(!provider.use_subscription);
+        assert_eq!(provider.api_key.as_deref(), Some("sk-test"));
+    }
+
+    #[test]
+    fn builder_methods() {
+        let provider = ClaudeCliProvider::max_subscription()
+            .command("/usr/local/bin/claude")
+            .model("claude-opus-4-20250514")
+            .timeout_secs(600);
+        assert_eq!(provider.command, "/usr/local/bin/claude");
+        assert_eq!(provider.model, "claude-opus-4-20250514");
+        assert_eq!(provider.timeout_secs, 600);
+    }
+}

@@ -1,0 +1,27 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# RUSVEL data
+.rusvel/

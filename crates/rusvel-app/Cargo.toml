@@ -1,0 +1,44 @@
+[package]
+name = "rusvel-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "rusvel"
+path = "src/main.rs"
+
+[dependencies]
+# ─── Foundation ───
+rusvel-core   = { workspace = true }
+rusvel-db     = { workspace = true }
+rusvel-llm    = { workspace = true }
+rusvel-agent  = { workspace = true }
+rusvel-event  = { workspace = true }
+rusvel-memory = { workspace = true }
+rusvel-tool   = { workspace = true }
+rusvel-jobs   = { workspace = true }
+rusvel-auth   = { workspace = true }
+rusvel-config = { workspace = true }
+
+# ─── Domain Engines ───
+forge-engine   = { workspace = true }
+code-engine    = { workspace = true }
+harvest-engine = { workspace = true }
+content-engine = { workspace = true }
+gtm-engine     = { workspace = true }
+
+# ─── Surfaces ───
+rusvel-cli = { workspace = true }
+rusvel-api = { workspace = true }
+rusvel-mcp = { workspace = true }
+
+# ─── Third-party ───
+tokio              = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap               = { workspace = true }
+anyhow             = { workspace = true }
+async-trait        = { workspace = true }

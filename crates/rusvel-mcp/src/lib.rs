@@ -1,0 +1,280 @@
+//! MCP (Model Context Protocol) server surface for RUSVEL.
+//!
+//! Exposes Forge Engine capabilities as MCP tools over JSON-RPC/stdio.
+//! This is a lightweight JSON-RPC implementation that reads newline-delimited
+//! JSON from stdin and writes responses to stdout.
+
+use std::sync::Arc;
+
+use chrono::Utc;
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+use forge_engine::ForgeEngine;
+use rusvel_core::domain::*;
+use rusvel_core::id::SessionId;
+use rusvel_core::ports::SessionPort;
+
+// ════════════════════════════════════════════════════════════════════
+//  Error
+// ════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, thiserror::Error)]
+pub enum McpError {
+    #[error("unknown tool: {0}")]
+    UnknownTool(String),
+    #[error("invalid params: {0}")]
+    InvalidParams(String),
+    #[error("engine error: {0}")]
+    Engine(#[from] rusvel_core::error::RusvelError),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  JSON-RPC types
+// ════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+struct JsonRpcRequest {
+    #[allow(dead_code)]
+    jsonrpc: String,
+    id: serde_json::Value,
+    method: String,
+    #[serde(default)]
+    params: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcResponse {
+    jsonrpc: String,
+    id: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<JsonRpcError>,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcError {
+    code: i32,
+    message: String,
+}
+
+impl JsonRpcResponse {
+    fn success(id: serde_json::Value, result: serde_json::Value) -> Self {
+        Self { jsonrpc: "2.0".into(), id, result: Some(result), error: None }
+    }
+    fn error(id: serde_json::Value, code: i32, message: String) -> Self {
+        Self { jsonrpc: "2.0".into(), id, result: None, error: Some(JsonRpcError { code, message }) }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Tool definitions
+// ════════════════════════════════════════════════════════════════════
+
+fn tool_definitions() -> serde_json::Value {
+    serde_json::json!([
+        {
+            "name": "session_list",
+            "description": "List all sessions",
+            "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "session_create",
+            "description": "Create a new session",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Session name" },
+                    "kind": { "type": "string", "enum": ["Project", "Lead", "ContentCampaign", "General"] }
+                },
+                "required": ["name", "kind"]
+            }
+        },
+        {
+            "name": "mission_today",
+            "description": "Get today's prioritized plan for a session",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": { "type": "string", "description": "Session UUID" }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "mission_goals",
+            "description": "List goals for a session",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": { "type": "string", "description": "Session UUID" }
+                },
+                "required": ["session_id"]
+            }
+        },
+        {
+            "name": "mission_add_goal",
+            "description": "Add a goal to a session",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "session_id": { "type": "string", "description": "Session UUID" },
+                    "title": { "type": "string" },
+                    "description": { "type": "string" },
+                    "timeframe": { "type": "string", "enum": ["Day", "Week", "Month", "Quarter"] }
+                },
+                "required": ["session_id", "title", "description", "timeframe"]
+            }
+        }
+    ])
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  RusvelMcp — core dispatcher
+// ════════════════════════════════════════════════════════════════════
+
+pub struct RusvelMcp {
+    engine: Arc<ForgeEngine>,
+    session: Arc<dyn SessionPort>,
+}
+
+impl RusvelMcp {
+    pub fn new(engine: Arc<ForgeEngine>, session: Arc<dyn SessionPort>) -> Self {
+        Self { engine, session }
+    }
+
+    /// Handle an MCP method call and return a JSON result.
+    pub async fn handle_method(
+        &self, method: &str, params: serde_json::Value,
+    ) -> Result<serde_json::Value, McpError> {
+        match method {
+            "initialize" => Ok(serde_json::json!({
+                "protocolVersion": "2024-11-05",
+                "serverInfo": { "name": "rusvel-mcp", "version": "0.1.0" },
+                "capabilities": { "tools": {} }
+            })),
+            "tools/list" => Ok(serde_json::json!({ "tools": tool_definitions() })),
+            "tools/call" => self.handle_tool_call(params).await,
+            "notifications/initialized" | "notifications/cancelled" => {
+                Ok(serde_json::Value::Null)
+            }
+            _ => Err(McpError::UnknownTool(method.into())),
+        }
+    }
+
+    async fn handle_tool_call(
+        &self, params: serde_json::Value,
+    ) -> Result<serde_json::Value, McpError> {
+        let name = params["name"].as_str()
+            .ok_or_else(|| McpError::InvalidParams("missing tool name".into()))?;
+        let args = &params["arguments"];
+
+        let result = match name {
+            "session_list" => {
+                let sessions = self.session.list().await?;
+                serde_json::to_value(&sessions)?
+            }
+            "session_create" => {
+                let name = args["name"].as_str()
+                    .ok_or_else(|| McpError::InvalidParams("missing name".into()))?;
+                let kind: SessionKind = serde_json::from_value(args["kind"].clone())
+                    .map_err(|e| McpError::InvalidParams(e.to_string()))?;
+                let session = Session {
+                    id: SessionId::new(), name: name.into(), kind,
+                    tags: vec![], config: SessionConfig::default(),
+                    created_at: Utc::now(), updated_at: Utc::now(),
+                    metadata: serde_json::json!({}),
+                };
+                let id = self.session.create(session).await?;
+                serde_json::json!({ "session_id": id })
+            }
+            "mission_today" => {
+                let sid = parse_session_id(args)?;
+                let plan = self.engine.mission_today(&sid).await?;
+                serde_json::to_value(&plan)?
+            }
+            "mission_goals" => {
+                let sid = parse_session_id(args)?;
+                let goals = self.engine.list_goals(&sid).await?;
+                serde_json::to_value(&goals)?
+            }
+            "mission_add_goal" => {
+                let sid = parse_session_id(args)?;
+                let title = args["title"].as_str()
+                    .ok_or_else(|| McpError::InvalidParams("missing title".into()))?.to_string();
+                let desc = args["description"].as_str()
+                    .ok_or_else(|| McpError::InvalidParams("missing description".into()))?.to_string();
+                let timeframe: Timeframe = serde_json::from_value(args["timeframe"].clone())
+                    .map_err(|e| McpError::InvalidParams(e.to_string()))?;
+                let goal = self.engine.set_goal(&sid, title, desc, timeframe).await?;
+                serde_json::to_value(&goal)?
+            }
+            other => return Err(McpError::UnknownTool(other.into())),
+        };
+
+        Ok(serde_json::json!({
+            "content": [{ "type": "text", "text": result.to_string() }]
+        }))
+    }
+}
+
+fn parse_session_id(args: &serde_json::Value) -> Result<SessionId, McpError> {
+    let raw = args["session_id"].as_str()
+        .ok_or_else(|| McpError::InvalidParams("missing session_id".into()))?;
+    let uuid: uuid::Uuid = raw.parse()
+        .map_err(|e| McpError::InvalidParams(format!("invalid session_id: {e}")))?;
+    Ok(SessionId::from_uuid(uuid))
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  stdio transport
+// ════════════════════════════════════════════════════════════════════
+
+/// Run the MCP server over stdin/stdout (JSON-RPC, newline-delimited).
+pub async fn run_stdio(mcp: Arc<RusvelMcp>) -> Result<(), McpError> {
+    let stdin = BufReader::new(tokio::io::stdin());
+    let mut stdout = tokio::io::stdout();
+    let mut lines = stdin.lines();
+
+    while let Some(line) = lines.next_line().await? {
+        let line = line.trim().to_string();
+        if line.is_empty() { continue; }
+
+        let req: JsonRpcRequest = match serde_json::from_str(&line) {
+            Ok(r) => r,
+            Err(e) => {
+                let resp = JsonRpcResponse::error(
+                    serde_json::Value::Null, -32700,
+                    format!("parse error: {e}"),
+                );
+                let mut out = serde_json::to_string(&resp)?;
+                out.push('\n');
+                stdout.write_all(out.as_bytes()).await?;
+                stdout.flush().await?;
+                continue;
+            }
+        };
+
+        // Notifications have no id — don't send a response.
+        let is_notification = req.method.starts_with("notifications/");
+
+        let resp = match mcp.handle_method(&req.method, req.params).await {
+            Ok(result) => JsonRpcResponse::success(req.id, result),
+            Err(e) => JsonRpcResponse::error(req.id, -32603, e.to_string()),
+        };
+
+        if !is_notification {
+            let mut out = serde_json::to_string(&resp)?;
+            out.push('\n');
+            stdout.write_all(out.as_bytes()).await?;
+            stdout.flush().await?;
+        }
+    }
+
+    Ok(())
+}

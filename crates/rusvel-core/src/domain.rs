@@ -1,0 +1,819 @@
+//! Shared domain types used across all RUSVEL engines and adapters.
+//!
+//! **ADR-007:** Every struct carries `metadata: serde_json::Value` for
+//! schema evolution — engines can stash extra fields without migrations.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+
+use crate::id::*;
+
+// ════════════════════════════════════════════════════════════════════
+//  Content — universal message type (inspired by adk-rust Content/Part)
+// ════════════════════════════════════════════════════════════════════
+
+/// A multi-part content value used as the universal message type
+/// throughout the agent system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Content {
+    pub parts: Vec<Part>,
+}
+
+impl Content {
+    /// Convenience: create a `Content` with a single text part.
+    pub fn text(s: impl Into<String>) -> Self {
+        Self {
+            parts: vec![Part::Text(s.into())],
+        }
+    }
+
+    /// Returns `true` when there are no parts.
+    pub fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+}
+
+/// A single part inside a [`Content`] value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum Part {
+    Text(String),
+    Image(Vec<u8>),
+    Audio(Vec<u8>),
+    Video(Vec<u8>),
+    File { name: String, data: Vec<u8> },
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  LLM types
+// ════════════════════════════════════════════════════════════════════
+
+/// Reference to a specific model on a specific provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelRef {
+    pub provider: ModelProvider,
+    pub model: String,
+}
+
+/// Supported LLM providers (open-ended via `Other`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ModelProvider {
+    Claude,
+    OpenAI,
+    Gemini,
+    Ollama,
+    Other(String),
+}
+
+/// Request sent to an LLM via [`LlmPort`](crate::ports::LlmPort).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmRequest {
+    pub model: ModelRef,
+    pub messages: Vec<LlmMessage>,
+    pub tools: Vec<serde_json::Value>,
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<u32>,
+    pub metadata: serde_json::Value,
+}
+
+/// A single message in an LLM conversation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmMessage {
+    pub role: LlmRole,
+    pub content: Content,
+}
+
+/// Message roles in an LLM conversation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LlmRole {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+
+/// Response from an LLM.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmResponse {
+    pub content: Content,
+    pub finish_reason: FinishReason,
+    pub usage: LlmUsage,
+    pub metadata: serde_json::Value,
+}
+
+/// Why the LLM stopped generating.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FinishReason {
+    Stop,
+    Length,
+    ToolUse,
+    ContentFilter,
+    Other(String),
+}
+
+/// Token usage for a single LLM call.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LlmUsage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Agent types
+// ════════════════════════════════════════════════════════════════════
+
+/// A reusable agent persona / profile stored in the system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentProfile {
+    pub id: AgentProfileId,
+    pub name: String,
+    pub role: String,
+    pub instructions: String,
+    pub default_model: ModelRef,
+    pub allowed_tools: Vec<String>,
+    pub capabilities: Vec<Capability>,
+    pub budget_limit: Option<f64>,
+    pub metadata: serde_json::Value,
+}
+
+/// Capability tags attached to agents and engines.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Capability {
+    CodeAnalysis,
+    ContentCreation,
+    OpportunityDiscovery,
+    Outreach,
+    Planning,
+    ToolUse,
+    WebBrowsing,
+    Custom(String),
+}
+
+/// Configuration passed to [`AgentPort::create`](crate::ports::AgentPort::create).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfig {
+    pub profile_id: Option<AgentProfileId>,
+    pub session_id: SessionId,
+    pub model: Option<ModelRef>,
+    pub tools: Vec<String>,
+    pub instructions: Option<String>,
+    pub budget_limit: Option<f64>,
+    pub metadata: serde_json::Value,
+}
+
+/// Output returned after an agent run completes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentOutput {
+    pub run_id: RunId,
+    pub content: Content,
+    pub tool_calls: u32,
+    pub usage: LlmUsage,
+    pub cost_estimate: f64,
+    pub metadata: serde_json::Value,
+}
+
+/// Runtime status of a running agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentStatus {
+    Idle,
+    Running,
+    AwaitingTool,
+    AwaitingApproval,
+    Completed,
+    Failed,
+    Stopped,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Session → Run → Thread hierarchy  (architecture-v2)
+// ════════════════════════════════════════════════════════════════════
+
+/// A workspace session (project, lead, campaign, …).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub id: SessionId,
+    pub name: String,
+    pub kind: SessionKind,
+    pub tags: Vec<String>,
+    pub config: SessionConfig,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
+/// What kind of work a session represents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SessionKind {
+    Project,
+    Lead,
+    ContentCampaign,
+    General,
+}
+
+/// Per-session configuration overrides.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SessionConfig {
+    pub default_model: Option<ModelRef>,
+    pub budget_limit: Option<f64>,
+    pub approval_policies: Vec<ApprovalPolicy>,
+    pub metadata: serde_json::Value,
+}
+
+/// Summary returned by [`SessionPort::list`](crate::ports::SessionPort::list).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: SessionId,
+    pub name: String,
+    pub kind: SessionKind,
+    pub tags: Vec<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// A single execution run within a session.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Run {
+    pub id: RunId,
+    pub session_id: SessionId,
+    pub engine: EngineKind,
+    pub input_summary: String,
+    pub status: RunStatus,
+    pub llm_budget_used: f64,
+    pub tool_calls_count: u32,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+/// Status of a [`Run`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunStatus {
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+/// A message thread within a run.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Thread {
+    pub id: ThreadId,
+    pub run_id: RunId,
+    pub channel: ThreadChannel,
+    pub messages: Vec<ThreadMessage>,
+    pub metadata: serde_json::Value,
+}
+
+/// Which channel a thread belongs to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThreadChannel {
+    User,
+    Agent,
+    System,
+    Event,
+}
+
+/// A single message inside a [`Thread`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThreadMessage {
+    pub role: ThreadChannel,
+    pub content: Content,
+    pub created_at: DateTime<Utc>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Engine kind
+// ════════════════════════════════════════════════════════════════════
+
+/// The five domain engines (architecture-v2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EngineKind {
+    Forge,
+    Code,
+    Harvest,
+    Content,
+    GoToMarket,
+}
+
+impl std::fmt::Display for EngineKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Forge => write!(f, "forge"),
+            Self::Code => write!(f, "code"),
+            Self::Harvest => write!(f, "harvest"),
+            Self::Content => write!(f, "content"),
+            Self::GoToMarket => write!(f, "gtm"),
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Central Job Queue  (ADR-003)
+// ════════════════════════════════════════════════════════════════════
+
+/// An async job in the central queue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Job {
+    pub id: JobId,
+    pub session_id: SessionId,
+    pub kind: JobKind,
+    pub payload: serde_json::Value,
+    pub status: JobStatus,
+    pub scheduled_at: Option<DateTime<Utc>>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub retries: u32,
+    pub max_retries: u32,
+    pub error: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+/// Describes a new job to enqueue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewJob {
+    pub session_id: SessionId,
+    pub kind: JobKind,
+    pub payload: serde_json::Value,
+    pub max_retries: u32,
+    pub metadata: serde_json::Value,
+}
+
+/// What kind of work a job represents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JobKind {
+    AgentRun,
+    ContentPublish,
+    OutreachSend,
+    HarvestScan,
+    CodeAnalyze,
+    ScheduledCron,
+    Custom(String),
+}
+
+/// Lifecycle status of a [`Job`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum JobStatus {
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+    /// Human-in-the-loop gate (ADR-008).
+    AwaitingApproval,
+}
+
+/// Result payload attached when a job completes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobResult {
+    pub output: serde_json::Value,
+    pub metadata: serde_json::Value,
+}
+
+/// Filter for listing jobs.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct JobFilter {
+    pub session_id: Option<SessionId>,
+    pub kinds: Vec<JobKind>,
+    pub statuses: Vec<JobStatus>,
+    pub limit: Option<u32>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Opportunity (Harvest engine domain)
+// ════════════════════════════════════════════════════════════════════
+
+/// A discovered opportunity (gig, job, project lead).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Opportunity {
+    pub id: OpportunityId,
+    pub session_id: SessionId,
+    pub source: OpportunitySource,
+    pub title: String,
+    pub url: Option<String>,
+    pub description: String,
+    pub score: f64,
+    pub stage: OpportunityStage,
+    pub value_estimate: Option<f64>,
+    pub metadata: serde_json::Value,
+}
+
+/// Where the opportunity was found.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpportunitySource {
+    Upwork,
+    Freelancer,
+    LinkedIn,
+    GitHub,
+    Manual,
+    Other(String),
+}
+
+/// Pipeline stage for an opportunity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpportunityStage {
+    Cold,
+    Contacted,
+    Qualified,
+    ProposalSent,
+    Won,
+    Lost,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Content item (Content engine domain)
+// ════════════════════════════════════════════════════════════════════
+
+/// A piece of authored content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentItem {
+    pub id: ContentId,
+    pub session_id: SessionId,
+    pub kind: ContentKind,
+    pub title: String,
+    pub body_markdown: String,
+    pub platform_targets: Vec<Platform>,
+    pub status: ContentStatus,
+    pub approval: ApprovalStatus,
+    pub scheduled_at: Option<DateTime<Utc>>,
+    pub published_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+/// Genre / format of a content item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContentKind {
+    LongForm,
+    Tweet,
+    Thread,
+    LinkedInPost,
+    Blog,
+    VideoScript,
+    Email,
+    Proposal,
+}
+
+/// Lifecycle status of a content item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContentStatus {
+    Draft,
+    Adapted,
+    Scheduled,
+    Published,
+    Archived,
+}
+
+/// Publishing platform.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Platform {
+    Twitter,
+    LinkedIn,
+    DevTo,
+    Medium,
+    YouTube,
+    Substack,
+    Email,
+    Custom(String),
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Contact (GoToMarket engine domain)
+// ════════════════════════════════════════════════════════════════════
+
+/// A CRM contact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Contact {
+    pub id: ContactId,
+    pub session_id: SessionId,
+    pub name: String,
+    pub emails: Vec<String>,
+    pub links: Vec<String>,
+    pub company: Option<String>,
+    pub role: Option<String>,
+    pub tags: Vec<String>,
+    pub last_contacted_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Goal + Task (Mission sub-domain inside Forge)
+// ════════════════════════════════════════════════════════════════════
+
+/// A goal tracked by the mission sub-system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Goal {
+    pub id: GoalId,
+    pub session_id: SessionId,
+    pub title: String,
+    pub description: String,
+    pub timeframe: Timeframe,
+    pub status: GoalStatus,
+    pub progress: f64,
+    pub metadata: serde_json::Value,
+}
+
+/// Duration bucket for a goal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Timeframe {
+    Day,
+    Week,
+    Month,
+    Quarter,
+}
+
+/// Lifecycle status of a goal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GoalStatus {
+    Active,
+    Completed,
+    Abandoned,
+    Deferred,
+}
+
+/// An actionable task, optionally linked to a goal.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Task {
+    pub id: TaskId,
+    pub session_id: SessionId,
+    pub goal_id: Option<GoalId>,
+    pub title: String,
+    pub status: TaskStatus,
+    pub due_at: Option<DateTime<Utc>>,
+    pub priority: Priority,
+    pub metadata: serde_json::Value,
+}
+
+/// Lifecycle status of a task.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskStatus {
+    Todo,
+    InProgress,
+    Done,
+    Cancelled,
+}
+
+/// Task priority.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+    Urgent,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Event  (ADR-005: kind is String, not enum)
+// ════════════════════════════════════════════════════════════════════
+
+/// A domain event emitted by engines and adapters.
+///
+/// `kind` is a **free-form string** (ADR-005) so that rusvel-core does
+/// not need to know every possible event type. Engines define their own
+/// constants, e.g. `forge::events::AGENT_CREATED`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Event {
+    pub id: EventId,
+    pub session_id: Option<SessionId>,
+    pub run_id: Option<RunId>,
+    pub source: EngineKind,
+    pub kind: String,
+    pub payload: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
+/// Filter used when querying events.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EventFilter {
+    pub session_id: Option<SessionId>,
+    pub run_id: Option<RunId>,
+    pub source: Option<EngineKind>,
+    pub kind: Option<String>,
+    pub since: Option<DateTime<Utc>>,
+    pub limit: Option<u32>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Code intelligence references
+// ════════════════════════════════════════════════════════════════════
+
+/// Reference to a local (or remote) repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoRef {
+    pub local_path: PathBuf,
+    pub remote_url: Option<String>,
+}
+
+/// Reference to a point-in-time code snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeSnapshotRef {
+    pub id: SnapshotId,
+    pub repo: RepoRef,
+    pub analyzed_at: DateTime<Utc>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Human-in-the-loop approval model  (ADR-008)
+// ════════════════════════════════════════════════════════════════════
+
+/// Status of a human approval gate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ApprovalStatus {
+    NotRequired,
+    Pending,
+    Approved,
+    Rejected,
+    AutoApproved,
+}
+
+/// Policy that controls whether an action requires human approval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalPolicy {
+    pub engine: EngineKind,
+    /// Action key, e.g. `"publish"`, `"send_outreach"`, `"spend > $1"`.
+    pub action: String,
+    pub requires_approval: bool,
+    /// Auto-approve if estimated cost is below this threshold.
+    pub auto_approve_below: Option<f64>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Tool types (used by ToolPort)
+// ════════════════════════════════════════════════════════════════════
+
+/// Describes a tool that agents can invoke.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    pub name: String,
+    pub description: String,
+    /// JSON Schema for the tool's parameters.
+    pub parameters: serde_json::Value,
+    pub metadata: serde_json::Value,
+}
+
+/// The result of executing a tool.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResult {
+    pub success: bool,
+    pub output: Content,
+    pub metadata: serde_json::Value,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Memory types (used by MemoryPort)
+// ════════════════════════════════════════════════════════════════════
+
+/// An entry stored in the memory system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryEntry {
+    pub id: Option<uuid::Uuid>,
+    pub session_id: SessionId,
+    pub kind: MemoryKind,
+    pub content: String,
+    pub embedding: Option<Vec<f32>>,
+    pub created_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
+/// What type of knowledge a memory entry represents.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MemoryKind {
+    Fact,
+    Conversation,
+    Decision,
+    Preference,
+    Custom(String),
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Credential type (used by AuthPort)
+// ════════════════════════════════════════════════════════════════════
+
+/// An opaque credential handle. Engines never see the raw secret.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Credential {
+    pub provider: String,
+    pub kind: CredentialKind,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+/// What form the credential takes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CredentialKind {
+    ApiKey,
+    OAuth2,
+    Bearer,
+    Basic,
+    Custom(String),
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Health status (used by Engine trait)
+// ════════════════════════════════════════════════════════════════════
+
+/// Health check result returned by [`Engine::health`](crate::engine::Engine::health).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthStatus {
+    pub healthy: bool,
+    pub message: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Storage sub-store query types  (ADR-004)
+// ════════════════════════════════════════════════════════════════════
+
+/// Filter for querying the object store.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ObjectFilter {
+    pub session_id: Option<SessionId>,
+    pub tags: Vec<String>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+/// A single time-series metric data point.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricPoint {
+    pub name: String,
+    pub value: f64,
+    pub tags: Vec<String>,
+    pub recorded_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
+/// Filter for querying the metric store.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MetricFilter {
+    pub name: Option<String>,
+    pub tags: Vec<String>,
+    pub since: Option<DateTime<Utc>>,
+    pub until: Option<DateTime<Utc>>,
+    pub limit: Option<u32>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Tests
+// ════════════════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_text_shorthand() {
+        let c = Content::text("hello");
+        assert!(!c.is_empty());
+        match &c.parts[0] {
+            Part::Text(s) => assert_eq!(s, "hello"),
+            _ => panic!("expected text part"),
+        }
+    }
+
+    #[test]
+    fn event_kind_is_free_string() {
+        let e = Event {
+            id: EventId::new(),
+            session_id: None,
+            run_id: None,
+            source: EngineKind::Forge,
+            kind: "agent.created".into(),
+            payload: serde_json::json!({}),
+            created_at: Utc::now(),
+            metadata: serde_json::json!({}),
+        };
+        assert_eq!(e.kind, "agent.created");
+    }
+
+    #[test]
+    fn domain_types_roundtrip_serde() {
+        let opp = Opportunity {
+            id: OpportunityId::new(),
+            session_id: SessionId::new(),
+            source: OpportunitySource::Upwork,
+            title: "Rust CLI tool".into(),
+            url: Some("https://example.com".into()),
+            description: "Build a CLI".into(),
+            score: 0.85,
+            stage: OpportunityStage::Cold,
+            value_estimate: Some(5000.0),
+            metadata: serde_json::json!({"skills": ["rust"]}),
+        };
+        let json = serde_json::to_string(&opp).unwrap();
+        let back: Opportunity = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.title, "Rust CLI tool");
+    }
+
+    #[test]
+    fn engine_kind_display() {
+        assert_eq!(EngineKind::GoToMarket.to_string(), "gtm");
+        assert_eq!(EngineKind::Forge.to_string(), "forge");
+    }
+
+    #[test]
+    fn priority_ordering() {
+        assert!(Priority::Urgent > Priority::High);
+        assert!(Priority::High > Priority::Medium);
+        assert!(Priority::Medium > Priority::Low);
+    }
+}
