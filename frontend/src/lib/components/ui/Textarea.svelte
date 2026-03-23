@@ -34,6 +34,8 @@
 		}
 	}
 
+	const textareaId = `textarea-${Math.random().toString(36).slice(2, 9)}`;
+
 	const base = cn(
 		'w-full rounded-[var(--radius-lg)] border bg-[var(--r-bg-raised)] text-[var(--r-fg-default)]',
 		'placeholder:text-[var(--r-fg-subtle)] text-sm px-3 py-2',
@@ -44,10 +46,11 @@
 
 <div class={cn('flex flex-col gap-1.5', className)}>
 	{#if label}
-		<label class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
+		<label for={textareaId} class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
 	{/if}
 
 	<textarea
+		id={textareaId}
 		bind:this={textareaEl}
 		bind:value
 		{placeholder}

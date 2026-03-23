@@ -31,6 +31,8 @@
 		lg: 'text-base px-4 py-2.5',
 	};
 
+	const selectId = `select-${Math.random().toString(36).slice(2, 9)}`;
+
 	const base = cn(
 		'w-full rounded-[var(--radius-lg)] border bg-[var(--r-bg-raised)] text-[var(--r-fg-default)]',
 		'r-focus-ring transition-colors appearance-none cursor-pointer',
@@ -40,11 +42,12 @@
 
 <div class={cn('flex flex-col gap-1.5', className)}>
 	{#if label}
-		<label class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
+		<label for={selectId} class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
 	{/if}
 
 	<div class="relative">
 		<select
+			id={selectId}
 			bind:value
 			{disabled}
 			class={cn(

@@ -36,6 +36,8 @@
 		lg: 'text-base px-4 py-2.5',
 	};
 
+	const inputId = `input-${Math.random().toString(36).slice(2, 9)}`;
+
 	const inputBase = cn(
 		'w-full rounded-[var(--radius-lg)] border bg-[var(--r-bg-raised)] text-[var(--r-fg-default)]',
 		'placeholder:text-[var(--r-fg-subtle)]',
@@ -46,7 +48,7 @@
 
 <div class={cn('flex flex-col gap-1.5', className)}>
 	{#if label}
-		<label class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
+		<label for={inputId} class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
 	{/if}
 
 	<div class="relative">
@@ -57,6 +59,7 @@
 		{/if}
 
 		<input
+			id={inputId}
 			{type}
 			{placeholder}
 			{disabled}

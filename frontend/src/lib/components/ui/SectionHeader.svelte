@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { cn } from '$lib/utils/cn';
 	import type { Snippet } from 'svelte';
 
 	let {
@@ -14,11 +15,11 @@
 	} = $props();
 </script>
 
-<div class="mb-4 flex items-center justify-between {className}">
+<div class={cn('mb-4 flex items-center justify-between', className)}>
 	<div>
-		<h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400">{title}</h3>
+		<h3 class="text-sm font-semibold uppercase tracking-wider text-[var(--r-fg-muted)]">{title}</h3>
 		{#if description}
-			<p class="mt-0.5 text-xs text-gray-600">{description}</p>
+			<p class="mt-0.5 text-xs text-[var(--r-fg-subtle)]">{description}</p>
 		{/if}
 	</div>
 	{#if actions}

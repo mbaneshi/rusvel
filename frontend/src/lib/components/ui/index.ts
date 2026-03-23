@@ -12,3 +12,5 @@ export { default as Modal } from './Modal.svelte';
 export { default as Tabs } from './Tabs.svelte';
 export { default as ProgressBar } from './ProgressBar.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
+export { default as SectionHeader } from './SectionHeader.svelte';
+export * from './tokens';
