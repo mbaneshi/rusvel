@@ -26,16 +26,24 @@
 ┌─────────────────── SURFACES ───────────────────┐
 │  CLI (Clap)  │  TUI (Ratatui)  │  Web (Svelte) │
 │                  MCP Server                      │
+│           rust-embed serves SPA at /             │
 └──────────────────────┬─────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│              DOMAIN ENGINES (5)                  │
-│                                                 │
-│  Forge         │ Code       │ Harvest           │
-│  (+ Mission)   │            │                   │
-│                │            │                   │
-│  Content       │ GoToMarket                     │
-│                │ (Ops+Connect+Outreach)          │
+│         DEPARTMENT REGISTRY (12 depts)           │
+│  DepartmentDef → EngineKind routing              │
+│  6 parameterized /api/dept/{dept}/* routes        │
+│  replace 72 hardcoded routes                      │
+└──────────────────────┬─────────────────────────┘
+                       │
+┌──────────────────────┴─────────────────────────┐
+│          DOMAIN ENGINES (12: 5 core + 7 ext)     │
+│                                                  │
+│  Core:     Forge  │ Code  │ Harvest │ Content    │
+│            GoToMarket                            │
+│                                                  │
+│  Extended: Finance │ Product │ Growth │ Distro   │
+│            Legal   │ Support │ Infra             │
 └──────────────────────┬─────────────────────────┘
                        │ uses (traits only)
 ┌──────────────────────┴─────────────────────────┐
@@ -43,6 +51,7 @@
 │                                                 │
 │  ┌──────────── rusvel-core ──────────────┐      │
 │  │  Port Traits + Shared Domain Types    │      │
+│  │  DepartmentRegistry + DepartmentDef   │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
 │  ┌──────────── Adapters ─────────────────┐      │
@@ -56,57 +65,92 @@
 │  │  rusvel-auth    (credentials)         │      │
 │  │  rusvel-config  (settings)            │      │
 │  └───────────────────────────────────────┘      │
+│                                                 │
+│  ┌──────────── Cross-cutting ────────────┐      │
+│  │  Hook dispatch (command/http/prompt)  │      │
+│  │  Capability Engine (AI entity builder)│      │
+│  │  Approval flow (human-in-the-loop)    │      │
+│  └───────────────────────────────────────┘      │
 └─────────────────────────────────────────────────┘
 ```
 
-## The 5 Engines (was 7)
+## The 12 Departments (was 5 engines)
 
-### 1. Forge Engine (Agent Orchestration + Mission)
-The meta-engine. Orchestrates agents across all other engines.
-Now includes Mission (goals, daily planning, reviews) as "mission agents."
+Each department maps to an `EngineKind` variant and a `DepartmentDef` in the registry.
+The registry defines name, icon, color, system prompt, capabilities, tabs, and quick actions.
 
-- Agent personas, workflows (Sequential/Parallel/Loop/Graph)
-- Safety: circuit breaker, rate limiter, budget, loop detection
-- Mission: `forge mission today` → agent reads goals + engine states → daily plan
-- Goals, reviews, decisions all managed by mission agents
-- Git worktree isolation for code-modifying agents
+### Core (5 — original engines, each has its own crate)
 
-### 2. Code Engine (Code Intelligence)
-**v0 scope:** Rust only + symbol graph + BM25 search.
-Expand to 12+ languages later.
+1. **Forge** (`forge-engine`) — Agent orchestration + Mission (goals, daily planning, reviews). The meta-engine.
+2. **Code** (`code-engine`) — Code intelligence: parsing, symbol graph, BM25 search, metrics.
+3. **Harvest** (`harvest-engine`) — Opportunity discovery: source scanning, scoring, proposal generation.
+4. **Content** (`content-engine`) — Content creation, platform adaptation, publishing. Human approval gate.
+5. **GoToMarket** (`gtm-engine`) — CRM, outreach sequences, deal pipeline, invoicing. Human approval gate.
 
-- tree-sitter parsing (Rust first)
-- Symbol graph + dependency detection
-- BM25 full-text search
-- Complexity metrics
-- LLM-powered narration (explain code)
+### Extended (7 — added to cover full business operations)
 
-### 3. Harvest Engine (Opportunity Discovery)
-Find gigs, jobs, opportunities.
+6. **Finance** (`finance-engine`) — Revenue tracking, expenses, tax, runway forecasting, P&L.
+7. **Product** (`product-engine`) — Roadmaps, feature prioritization, pricing strategy, user feedback.
+8. **Growth** (`growth-engine`) — Funnel optimization, conversion tracking, cohort analysis, KPI dashboards.
+9. **Distribution** (`distro-engine`) — Marketplace listings, SEO, affiliate programs, partnerships.
+10. **Legal** (`legal-engine`) — Contracts, IP protection, compliance, licensing, privacy policies.
+11. **Support** (`support-engine`) — Customer support tickets, knowledge base, NPS tracking, auto-triage.
+12. **Infra** (`infra-engine`) — CI/CD pipelines, deployments, monitoring, incident response.
 
-- CDP-based passive scraping
-- Source adapters (Upwork first, then expand)
-- AI scoring + proposal generation
-- Pipeline: discover → score → qualify → propose → track
+### Department Registry
 
-### 4. Content Engine (Creation & Publishing)
-Write once, publish everywhere.
+`DepartmentRegistry` in `rusvel-core::registry` holds all 12 `DepartmentDef` structs.
+Loaded from TOML file or falls back to built-in defaults. Each definition includes:
 
-- Markdown-first authoring
-- AI pipeline: generate → adapt → review → approve → publish
-- Platform adapters (DEV.to first, then Twitter/LinkedIn)
-- Scheduling, analytics
-- **Human approval gate** before publishing
+```rust
+pub struct DepartmentDef {
+    pub id: String,           // URL slug: "forge", "code", "gtm", etc.
+    pub name: String,         // Display name
+    pub title: String,        // Full title
+    pub engine_kind: EngineKind,
+    pub icon: String,
+    pub color: String,        // oklch color token
+    pub system_prompt: String,
+    pub capabilities: Vec<String>,
+    pub tabs: Vec<String>,    // UI tabs shown for this department
+    pub quick_actions: Vec<QuickAction>,
+    pub default_config: LayeredConfig,
+}
+```
 
-### 5. GoToMarket Engine (Ops + Connect + Outreach)
-Everything about running the business and building relationships.
+### Parameterized Department Routing
 
-- CRM: contacts, leads, deals, pipeline
-- Outreach: email sequences, follow-ups
-- Invoicing and payment tracking
-- SOPs and knowledge base
-- AI spend tracking
-- **Human approval gate** before sending outreach
+6 parameterized API routes replace what would be 72 hardcoded routes:
+
+```
+/api/dept/{dept}/chat                  — department-scoped chat
+/api/dept/{dept}/chat/conversations    — list conversations
+/api/dept/{dept}/chat/conversations/{id} — get history
+/api/dept/{dept}/config               — GET/PUT department config
+/api/dept/{dept}/events               — department event stream
+```
+
+The `{dept}` parameter is resolved against `DepartmentRegistry` to load the correct
+system prompt, capabilities, and config. Adding a new department requires zero route changes.
+
+### Hook Dispatch System
+
+Hooks fire when events occur (e.g., `code.chat.completed`). Three hook types:
+- `command` — runs a shell command via `sh -c`
+- `http` — POSTs event payload to a URL
+- `prompt` — sends action text to `claude -p`
+
+Hooks are stored in ObjectStore and matched by event kind. Fire-and-forget via tokio tasks.
+
+### Capability Engine
+
+`POST /api/capability/build` takes a natural language description and:
+1. Uses Claude with WebSearch/WebFetch to discover resources online
+2. Generates a bundle of entities (agents, skills, rules, MCP servers, hooks, workflows)
+3. Persists all entities to ObjectStore
+4. Returns what was installed
+
+Also available in department chat via `!build <description>` prefix.
 
 ---
 
@@ -244,7 +288,10 @@ pub struct Thread {
 }
 
 pub enum ThreadChannel { User, Agent, System, Event }
-pub enum EngineKind { Forge, Code, Harvest, Content, GoToMarket }
+pub enum EngineKind {
+    Forge, Code, Harvest, Content, GoToMarket,
+    Finance, Product, Growth, Distribution, Legal, Support, Infra,
+}
 ```
 
 ---
@@ -407,15 +454,22 @@ pub struct Event {
 ```
 rusvel-app (binary, composition root)
 ├── rusvel-cli
-├── rusvel-api (Axum)
+├── rusvel-api (Axum) ── serves SPA via fallback when frontend/ build exists
 ├── rusvel-tui (Ratatui)
 ├── rusvel-mcp (rmcp)
 │
 ├── forge-engine ─────┐
 ├── code-engine ──────┤
-├── harvest-engine ───┤── depend on rusvel-core ONLY
-├── content-engine ───┤
-├── gtm-engine ───────┘
+├── harvest-engine ───┤
+├── content-engine ───┤── depend on rusvel-core ONLY
+├── gtm-engine ───────┤
+├── finance-engine ───┤
+├── product-engine ───┤
+├── growth-engine ────┤
+├── distro-engine ────┤
+├── legal-engine ─────┤
+├── support-engine ───┤
+├── infra-engine ─────┘
 │
 ├── rusvel-llm ───────┐
 ├── rusvel-agent ─────┤
@@ -433,9 +487,9 @@ rusvel-app (binary, composition root)
 ```
 all-in-one-rusvel/
 ├── crates/
-│   ├── rusvel-core/        ← 10 port traits + shared domain types
+│   ├── rusvel-core/        ← 10 port traits + shared domain types + DepartmentRegistry
 │   ├── rusvel-db/          ← SQLite WAL + 5 canonical stores
-│   ├── rusvel-llm/         ← LlmPort adapters (Ollama first)
+│   ├── rusvel-llm/         ← LlmPort adapters (Ollama, OpenAI, Claude API, Claude CLI)
 │   ├── rusvel-agent/       ← AgentPort runtime (wraps LLM+Tool+Memory)
 │   ├── rusvel-event/       ← EventPort bus + persistence
 │   ├── rusvel-memory/      ← MemoryPort + session-namespaced search
@@ -449,16 +503,23 @@ all-in-one-rusvel/
 │   ├── harvest-engine/     ← Opportunity discovery
 │   ├── content-engine/     ← Content creation + publishing
 │   ├── gtm-engine/         ← GoToMarket (CRM + outreach + ops)
+│   ├── finance-engine/     ← Revenue, expenses, tax, runway, P&L
+│   ├── product-engine/     ← Roadmaps, pricing, feature prioritization
+│   ├── growth-engine/      ← Funnels, cohorts, KPIs, retention
+│   ├── distro-engine/      ← Marketplace, SEO, affiliates, partnerships
+│   ├── legal-engine/       ← Contracts, IP, compliance, licensing
+│   ├── support-engine/     ← Tickets, knowledge base, NPS, auto-triage
+│   ├── infra-engine/       ← CI/CD, deployments, monitoring, incidents
 │   │
-│   ├── rusvel-api/         ← Axum HTTP + WebSocket + SSE
+│   ├── rusvel-api/         ← Axum HTTP + SSE + dept routing + hook dispatch + capability
 │   ├── rusvel-cli/         ← Clap CLI
 │   ├── rusvel-tui/         ← Ratatui TUI
 │   ├── rusvel-mcp/         ← MCP server (stdio + SSE)
 │   └── rusvel-app/         ← Binary entry point (composition root)
 │
-├── frontend/               ← SvelteKit 5 + Tailwind 4
+├── frontend/               ← SvelteKit 5 + Tailwind 4 + shadcn/ui (oklch tokens)
 ├── Cargo.toml
 └── CLAUDE.md
 ```
 
-20 crates (was 22). Cleaner.
+27 crates (was 20). 12 department engines + 9 adapters + 4 surfaces + rusvel-core + rusvel-app.

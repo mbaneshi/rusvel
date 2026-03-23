@@ -107,6 +107,68 @@
 | voicebox | `~/cod/dir7/voicebox` | Voice communication patterns |
 | moltbot | `~/cod/dir7/moltbot` | Bot interaction patterns |
 
+## RAG, Knowledge Graph, Search & Memory
+
+> See full analysis: `docs/research/rag-knowledge-search.md`
+
+### RAG Frameworks (Rust-native)
+
+| Repo | Stars | What to study |
+|------|-------|---------------|
+| `0xPlaygrounds/rig` | 6.4k | RAG pipelines, agent abstractions, VectorStore trait, LanceDB companion |
+| `bosun-ai/swiftide` | 630 | Streaming indexing, tree-sitter code chunking, query pipelines |
+| `automataIA/graphrag-rs` | new | Full GraphRAG: entity extraction → knowledge graph → multi-hop retrieval |
+| `raphaelmansuy/edgequake` | new | LightRAG in Rust — 6000x token reduction |
+
+### Knowledge Graph (Rust-native)
+
+| Repo | Stars | What to study |
+|------|-------|---------------|
+| `cozodb/cozo` | 3.3k | **Top pick.** Graph + vector + relational. Datalog, HNSW, PageRank. Embedded like SQLite |
+| `oxigraph/oxigraph` | 1.5k | SPARQL 1.1 RDF store. Standards-based knowledge representation |
+| `indradb/indradb` | 1.5k | Simple property graph DB. Embeddable |
+
+### Vector Search & Embeddings (Rust-native)
+
+| Repo | Stars | What to study |
+|------|-------|---------------|
+| `lancedb/lancedb` | 5.5k | **Already cloned.** Embedded vector DB, auto-indexing, SQL filtering |
+| `Anush008/fastembed-rs` | 300+ | Local embeddings via ONNX. BGE/MiniLM. No Python |
+| `StarlightSearch/EmbedAnything` | 1.2k | Multimodal embedding (text, images, audio, PDF) |
+| `pykeio/ort` | 1k | ONNX Runtime Rust bindings. Foundation for local inference |
+
+### Workflow / Planning (Rust-native)
+
+| Repo | Stars | What to study |
+|------|-------|---------------|
+| `petgraph/petgraph` | 3k+ | Standard Rust graph lib. DAG, toposort, DFS/BFS. Use for mission planning |
+| `mitchmindtree/daggy` | small | Thin petgraph wrapper enforcing DAG invariants |
+| `excsn/orka` | new | Async workflow engine with typed steps, shared context |
+| `sayiir/sayiir` | new | Durable workflow engine with checkpoint recovery |
+
+### Memory Patterns (Python — steal patterns only)
+
+| Repo | Stars | What to study |
+|------|-------|---------------|
+| `khoj-ai/khoj` | 25k | Self-hosted AI assistant, document indexing, search |
+| `gusye1234/nano-graphrag` | — | Minimal GraphRAG impl, good reference for Rust port |
+| `microsoft/graphrag` | — | Original GraphRAG paper implementation |
+
+### Already Cloned (good-repo/)
+
+| Repo | Relevant for |
+|------|-------------|
+| `meilisearch` | Hybrid full-text + vector search, composable ranking rules |
+| `qdrant` | Payload-filtered vector search, segment architecture |
+| `lancedb` | Embedded vector DB, SQL filtering, auto-indexing |
+| `sonic` | Lightweight keyword search, FST autocomplete |
+| `ast-grep` | Tree-sitter pattern matching, code search |
+| `tree-sitter` | Incremental parsing, error-tolerant AST |
+| `dify` | RAG pipeline (extract → chunk → embed → retrieve → rerank) |
+| `n8n` | Workflow DAG, node execution, approval flows |
+
+---
+
 ## Infrastructure & Tooling
 
 | Repo | Path | What to study |

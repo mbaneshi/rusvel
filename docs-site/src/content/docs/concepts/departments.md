@@ -1,0 +1,80 @@
+---
+title: Departments
+description: RUSVEL's 12 AI-powered departments that form your virtual agency.
+---
+
+## Overview
+
+RUSVEL organizes work into 12 departments, each with its own specialized AI agent. Together they form a virtual agency that a solo founder can command from a single interface.
+
+Departments are defined declaratively in a TOML registry. Adding a new department requires zero code changes -- just a new TOML block.
+
+## The 12 Departments
+
+| Department | Engine | Focus |
+|-----------|--------|-------|
+| [Forge](/departments/forge/) | Forge | Agent orchestration, goal planning, mission management |
+| [Code](/departments/code/) | Code | Code intelligence, implementation, testing |
+| [Content](/departments/content/) | Content | Content creation, publishing, calendar |
+| [Harvest](/departments/harvest/) | Harvest | Opportunity discovery, proposals, pipeline |
+| [GTM](/departments/gtm/) | GoToMarket | CRM, outreach, deals, invoicing |
+| [Finance](/departments/finance/) | Finance | Revenue, expenses, runway, tax |
+| [Product](/departments/product/) | Product | Roadmap, pricing, feedback |
+| [Growth](/departments/growth/) | Growth | Funnels, cohorts, KPIs, retention |
+| [Distro](/departments/distro/) | Distribution | Marketplace, SEO, affiliates |
+| [Legal](/departments/legal/) | Legal | Contracts, compliance, IP |
+| [Support](/departments/support/) | Support | Tickets, knowledge base, NPS |
+| [Infra](/departments/infra/) | Infra | Deployments, monitoring, incidents |
+
+## Department UI Structure
+
+Each department page has two panels:
+
+### Chat Panel (right side)
+
+The AI agent for this department. Send messages, get responses, use quick actions. The agent has access to department-specific tools and knowledge.
+
+### Department Panel (left side)
+
+A tabbed panel with up to 9 tabs depending on the department:
+
+| Tab | Purpose |
+|-----|---------|
+| **Actions** | Quick-action buttons for common tasks |
+| **Agents** | Custom agent profiles for this department |
+| **Workflows** | Multi-step agent chains (sequential, parallel, loop, graph) |
+| **Skills** | Reusable prompt templates with variables |
+| **Rules** | Constraints injected into the system prompt |
+| **MCP** | MCP server connections (Code department) |
+| **Hooks** | Event-triggered automations |
+| **Dirs** | Working directories for code operations |
+| **Events** | Event log for this department |
+
+## The God Agent
+
+The main **Chat** page (not tied to any department) runs the God Agent. This agent has full authority and visibility over all departments. Use it for cross-cutting tasks:
+
+- "What is the status across all departments?"
+- "Move the proposal from Harvest to Content for editing"
+- "Generate a weekly summary of all activity"
+
+## Quick Actions
+
+Each department has predefined quick-action buttons that send a prompt to the agent with one click. These are defined in the department registry and can be customized.
+
+## Department Configuration
+
+Each department inherits global config and can override:
+
+- **Model** -- which LLM to use for this department's agent
+- **Effort** -- low, medium, or high (controls response depth)
+- **Permission mode** -- what tools the agent can use
+- **Working directories** -- for code-operating departments
+
+Configure via the Settings page or the API:
+
+```bash
+curl -X PUT http://localhost:3000/api/dept/code/config \
+  -H "Content-Type: application/json" \
+  -d '{"model": "claude-sonnet-4-20250514", "effort": "high"}'
+```

@@ -99,3 +99,33 @@
 **Context:** Hexagonal architecture rule. Engines must not import concrete adapter types.
 **Decision:** Engines depend on rusvel-core. They receive port implementations via constructor injection. rusvel-app (composition root) wires concrete adapters to engines.
 **Consequence:** Any adapter can be swapped without touching engine code. Engines are testable with mock ports.
+
+---
+
+## ADR-011: Department Registry — Dynamic Departments Replace Hardcoded Routing
+
+**Date:** 2026-03-23
+**Status:** Accepted
+**Context:** The original 5-engine model hardcoded routes per department. Scaling to 12 departments meant 72+ routes and touching 7 files to add one department. Config was scattered across 4 separate systems.
+**Decision:** `DepartmentRegistry` in `rusvel-core::registry` holds 12 `DepartmentDef` structs, each mapping an id to an `EngineKind`, system prompt, capabilities, tabs, quick actions, and default config. Loaded from TOML or built-in defaults. 6 parameterized `/api/dept/{dept}/*` routes replace all per-department routes. Frontend uses a single dynamic `[dept]` route.
+**Consequence:** Adding a department = adding a `DepartmentDef` entry and an `EngineKind` variant. Zero route changes. Three-layer config cascade (Global -> Department -> Session) eliminates duplication.
+
+---
+
+## ADR-012: shadcn/ui Design Tokens — oklch Color System
+
+**Date:** 2026-03-23
+**Status:** Accepted
+**Context:** Frontend needed a consistent design system. Tailwind 4 supports oklch natively. shadcn/ui provides accessible component primitives with a `--background`/`--foreground` convention for light/dark theming.
+**Decision:** Adopt shadcn/ui design tokens with oklch color values. CSS variables follow `--background`/`--foreground` naming. Each department gets a color token from the registry (indigo, emerald, amber, etc.).
+**Consequence:** Consistent theming across all 12 department UIs. Dark mode is a CSS variable swap. Department colors are data-driven from the registry.
+
+---
+
+## ADR-013: Capability Engine — AI-Driven Entity Creation
+
+**Date:** 2026-03-23
+**Status:** Accepted
+**Context:** Users need to extend the system with new agents, skills, rules, MCP servers, hooks, and workflows. Manually configuring each entity is tedious.
+**Decision:** `POST /api/capability/build` accepts a natural language description, uses Claude with WebSearch/WebFetch to discover resources, generates a bundle of entities, and persists them to ObjectStore. Also available in department chat via `!build <description>`.
+**Consequence:** One-shot system extension. "Install a GitHub code review agent" creates the agent, skills, hooks, and MCP server config in one call. Reduces configuration from minutes to seconds.
