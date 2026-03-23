@@ -31,18 +31,29 @@
 	marked.setOptions({ breaks: true, gfm: true });
 	function md(text: string): string { return text ? marked.parse(text) as string : ''; }
 
-	onMount(async () => {
-		try {
-			const [convs, cfg, mdls, tls] = await Promise.all([
-				getDeptConversations(dept), getDeptConfig(dept), getModels(), getTools()
-			]);
+	onMount(() => {
+		// Load data
+		Promise.all([
+			getDeptConversations(dept), getDeptConfig(dept), getModels(), getTools()
+		]).then(([convs, cfg, mdls, tls]) => {
 			conversations = convs;
 			config = cfg;
 			models = mdls;
 			tools = tls;
-		} catch { /* defaults are fine */ }
-		// Auto-focus the input
+		}).catch(() => { /* defaults are fine */ });
+
 		textareaEl?.focus();
+
+		// Listen for quick action dispatches from the parent page
+		const handler = (e: globalThis.Event) => {
+			const detail = (e as CustomEvent).detail;
+			if (detail?.prompt) {
+				inputText = detail.prompt;
+				send();
+			}
+		};
+		document.addEventListener('dept-quick-action', handler);
+		return () => document.removeEventListener('dept-quick-action', handler);
 	});
 
 	async function scroll() { await tick(); if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight; }

@@ -83,18 +83,28 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.
-    // Static assets (_app/*, favicon) are served directly.
-    // All other non-API routes get index.html (SPA client-side routing).
     let app = if let Some(dir) = frontend_dir.filter(|d| d.exists()) {
         let index_html = std::fs::read_to_string(dir.join("index.html"))
             .unwrap_or_else(|_| "<h1>Frontend not found</h1>".into());
-        let spa_fallback = move || {
+        let spa_fallback = {
             let html = index_html.clone();
-            async move { axum::response::Html(html).into_response() }
+            move |req: axum::extract::Request| {
+                let html = html.clone();
+                async move {
+                    // Serve static assets directly
+                    let path = req.uri().path();
+                    if path.starts_with("/_app") || path == "/favicon.png" {
+                        // Handled by nest_service below
+                        axum::response::Html("").into_response()
+                    } else {
+                        axum::response::Html(html).into_response()
+                    }
+                }
+            }
         };
         api.nest_service("/_app", ServeDir::new(dir.join("_app")))
             .nest_service("/favicon.png", ServeDir::new(dir.join("favicon.png")))
-            .fallback(get(spa_fallback))
+            .fallback(spa_fallback)
     } else {
         api
     };

@@ -22,7 +22,8 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use rusvel_core::domain::{EventFilter, EngineKind, UserProfile};
-use rusvel_core::ports::StoragePort;
+use rusvel_core::id::EventId;
+use rusvel_core::ports::{EventPort, StoragePort};
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
 use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
@@ -230,12 +231,22 @@ pub async fn department_chat_handler(
     // Build prompt with department system prompt
     let prompt = build_dept_prompt(&config.system_prompt, &history, &body.message);
 
+    // Resolve engine kind for event emission
+    let engine_kind = match engine {
+        "code" => EngineKind::Code,
+        "content" => EngineKind::Content,
+        "harvest" => EngineKind::Harvest,
+        "gtm" => EngineKind::GoToMarket,
+        _ => EngineKind::Forge,
+    };
+
     // Stream with department-specific flags
     let streamer = ClaudeCliStreamer::new();
     let cli_args = config.to_claude_args();
     let rx = streamer.stream_with_args(&prompt, &cli_args);
 
     let storage = state.storage.clone();
+    let events_port = state.events.clone();
     let conv_id = conversation_id.clone();
     let ns = namespace.clone();
 
@@ -246,18 +257,36 @@ pub async fn department_chat_handler(
                 .data(serde_json::json!({"text": text, "conversation_id": conv_id}).to_string()),
             StreamEvent::Done { full_text, cost_usd } => {
                 let storage = storage.clone();
+                let events_port = events_port.clone();
                 let conv_id_inner = conv_id.clone();
                 let ns_inner = ns.clone();
                 let text = full_text.clone();
+                let eng = engine_kind;
+                let cost = *cost_usd;
                 tokio::spawn(async move {
                     let msg = ChatMessage {
                         id: uuid::Uuid::now_v7().to_string(),
-                        conversation_id: conv_id_inner,
+                        conversation_id: conv_id_inner.clone(),
                         role: "assistant".into(),
                         content: text,
                         created_at: Utc::now().to_rfc3339(),
                     };
                     let _ = store_namespaced_message(&storage, &ns_inner, &msg).await;
+                    // Emit event so department Events tab shows activity
+                    let _ = events_port.emit(rusvel_core::domain::Event {
+                        id: EventId::new(),
+                        session_id: None,
+                        run_id: None,
+                        source: eng,
+                        kind: format!("{}.chat.completed", eng.to_string()),
+                        payload: serde_json::json!({
+                            "conversation_id": conv_id_inner,
+                            "cost_usd": cost,
+                            "response_length": msg.content.len(),
+                        }),
+                        created_at: Utc::now(),
+                        metadata: serde_json::json!({}),
+                    }).await;
                 });
                 Event::default().event("done").data(
                     serde_json::json!({
