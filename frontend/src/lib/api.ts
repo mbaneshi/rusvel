@@ -315,6 +315,66 @@ export async function deleteRule(id: string): Promise<void> {
 	await fetch(`${BASE}/api/rules/${id}`, { method: 'DELETE' });
 }
 
+// ── MCP Servers CRUD ─────────────────────────────────────────
+
+export interface McpServer {
+	id: string;
+	name: string;
+	description: string;
+	server_type: string;
+	command: string | null;
+	args: string[];
+	url: string | null;
+	env: Record<string, unknown>;
+	enabled: boolean;
+	metadata: Record<string, unknown>;
+}
+
+export async function getMcpServers(engine?: string): Promise<McpServer[]> {
+	return request(`/api/mcp-servers${engine ? `?engine=${engine}` : ''}`);
+}
+
+export async function createMcpServer(server: Partial<McpServer>): Promise<McpServer> {
+	return request('/api/mcp-servers', { method: 'POST', body: JSON.stringify(server) });
+}
+
+export async function deleteMcpServer(id: string): Promise<void> {
+	await fetch(`${BASE}/api/mcp-servers/${id}`, { method: 'DELETE' });
+}
+
+// ── Hooks CRUD ───────────────────────────────────────────────
+
+export interface Hook {
+	id: string;
+	name: string;
+	event: string;
+	matcher: string;
+	hook_type: string;
+	action: string;
+	enabled: boolean;
+	metadata: Record<string, unknown>;
+}
+
+export async function getHooks(engine?: string): Promise<Hook[]> {
+	return request(`/api/hooks${engine ? `?engine=${engine}` : ''}`);
+}
+
+export async function createHook(hook: Partial<Hook>): Promise<Hook> {
+	return request('/api/hooks', { method: 'POST', body: JSON.stringify(hook) });
+}
+
+export async function updateHook(id: string, hook: Partial<Hook>): Promise<Hook> {
+	return request(`/api/hooks/${id}`, { method: 'PUT', body: JSON.stringify(hook) });
+}
+
+export async function deleteHook(id: string): Promise<void> {
+	await fetch(`${BASE}/api/hooks/${id}`, { method: 'DELETE' });
+}
+
+export async function getHookEvents(): Promise<string[]> {
+	return request('/api/hooks/events');
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {

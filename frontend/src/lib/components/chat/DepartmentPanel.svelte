@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule, getDeptEvents, getDeptConfig, updateDeptConfig } from '$lib/api';
-	import type { Agent, Skill, Rule, Event, DepartmentConfig } from '$lib/api';
+	import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule, getMcpServers, createMcpServer, deleteMcpServer, getHooks, createHook, updateHook, deleteHook, getDeptEvents, getDeptConfig, updateDeptConfig } from '$lib/api';
+	import type { Agent, Skill, Rule, McpServer, Hook, Event, DepartmentConfig } from '$lib/api';
 
 	let {
 		dept,
@@ -21,6 +21,8 @@
 	let agents: Agent[] = $state([]);
 	let skills: Skill[] = $state([]);
 	let rules: Rule[] = $state([]);
+	let mcpServers: McpServer[] = $state([]);
+	let hooks: Hook[] = $state([]);
 	let events: Event[] = $state([]);
 	let config: DepartmentConfig | null = $state(null);
 
@@ -40,16 +42,30 @@
 	let newRuleName = $state('');
 	let newRuleContent = $state('');
 
+	let showCreateMcp = $state(false);
+	let newMcpName = $state('');
+	let newMcpType = $state('stdio');
+	let newMcpCommand = $state('');
+
+	let showCreateHook = $state(false);
+	let newHookName = $state('');
+	let newHookEvent = $state('PostToolUse');
+	let newHookAction = $state('');
+
 	onMount(() => {
 		loadAgents();
 		loadSkills();
 		loadRules();
+		loadMcp();
+		loadHooks();
 		loadConfig();
 	});
 
 	async function loadAgents() { try { agents = await getAgents(dept); } catch { agents = []; } }
 	async function loadSkills() { try { skills = await getSkills(dept); } catch { skills = []; } }
 	async function loadRules() { try { rules = await getRules(dept); } catch { rules = []; } }
+	async function loadMcp() { try { mcpServers = await getMcpServers(dept); } catch { mcpServers = []; } }
+	async function loadHooks() { try { hooks = await getHooks(dept); } catch { hooks = []; } }
 	async function loadEvents() { try { events = await getDeptEvents(dept); } catch { events = []; } }
 	async function loadConfig() { try { config = await getDeptConfig(dept); } catch {} }
 
@@ -98,6 +114,25 @@
 		await loadRules();
 	}
 
+	async function handleCreateMcp() {
+		if (!newMcpName.trim()) return;
+		await createMcpServer({ id: '', name: newMcpName.trim(), description: '', server_type: newMcpType, command: newMcpCommand || null, args: [], url: null, env: {}, enabled: true, metadata: { engine: dept } });
+		newMcpName = ''; newMcpCommand = ''; showCreateMcp = false;
+		await loadMcp();
+	}
+
+	async function handleDeleteMcp(id: string) { await deleteMcpServer(id); await loadMcp(); }
+
+	async function handleCreateHook() {
+		if (!newHookName.trim()) return;
+		await createHook({ id: '', name: newHookName.trim(), event: newHookEvent, matcher: '', hook_type: 'command', action: newHookAction, enabled: true, metadata: { engine: dept } });
+		newHookName = ''; newHookAction = ''; showCreateHook = false;
+		await loadHooks();
+	}
+
+	async function handleToggleHook(hook: Hook) { await updateHook(hook.id, { ...hook, enabled: !hook.enabled }); await loadHooks(); }
+	async function handleDeleteHook(id: string) { await deleteHook(id); await loadHooks(); }
+
 	async function addDir() {
 		if (!config) return;
 		const dir = prompt('Add directory path:');
@@ -138,6 +173,8 @@
 			{ id: 'agents', label: `Agents (${agents.length})` },
 			{ id: 'skills', label: `Skills (${skills.length})` },
 			{ id: 'rules', label: `Rules (${rules.length})` },
+			{ id: 'mcp', label: `MCP (${mcpServers.length})` },
+			{ id: 'hooks', label: `Hooks (${hooks.length})` },
 			{ id: 'projects', label: 'Dirs' },
 			{ id: 'events', label: 'Events' },
 		] as tab}
@@ -258,6 +295,82 @@
 				{/each}
 				{#if rules.length === 0 && !showCreateRule}
 					<p class="text-center text-[10px] text-[var(--r-fg-subtle)] py-2">No rules. Rules get injected into system prompts.</p>
+				{/if}
+			</div>
+
+		<!-- MCP SERVERS -->
+		{:else if activeTab === 'mcp'}
+			<div class="p-3 space-y-2">
+				<button onclick={() => showCreateMcp = !showCreateMcp} class="w-full rounded-lg border border-dashed border-[var(--r-border-default)] py-1.5 text-xs text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)]">
+					+ Add MCP Server
+				</button>
+				{#if showCreateMcp}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-3 space-y-2">
+						<input bind:value={newMcpName} placeholder="Server name" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+						<select bind:value={newMcpType} class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)]">
+							<option value="stdio">stdio</option>
+							<option value="http">HTTP</option>
+							<option value="sse">SSE</option>
+							<option value="ws">WebSocket</option>
+						</select>
+						<input bind:value={newMcpCommand} placeholder="Command (e.g. npx @server/mcp)" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+						<button onclick={handleCreateMcp} class="w-full rounded-md bg-[var(--r-brand-default)] py-1 text-xs font-medium text-white">Create</button>
+					</div>
+				{/if}
+				{#each mcpServers as server}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-2.5 group">
+						<div class="flex items-center justify-between mb-1">
+							<span class="text-xs font-medium text-[var(--r-fg-default)]">{server.name}</span>
+							<div class="flex items-center gap-1">
+								<span class="rounded bg-[var(--r-bg-surface)] px-1.5 py-0.5 text-[9px] text-[var(--r-fg-subtle)]">{server.server_type}</span>
+								<button onclick={() => handleDeleteMcp(server.id)} class="hidden group-hover:block text-[var(--r-fg-subtle)] hover:text-danger-400 text-[10px]">x</button>
+							</div>
+						</div>
+						<p class="text-[10px] font-mono text-[var(--r-fg-muted)]">{server.command || server.url || '—'}</p>
+					</div>
+				{/each}
+				{#if mcpServers.length === 0 && !showCreateMcp}
+					<p class="text-center text-[10px] text-[var(--r-fg-subtle)] py-2">No MCP servers. Add one to extend capabilities.</p>
+				{/if}
+			</div>
+
+		<!-- HOOKS -->
+		{:else if activeTab === 'hooks'}
+			<div class="p-3 space-y-2">
+				<button onclick={() => showCreateHook = !showCreateHook} class="w-full rounded-lg border border-dashed border-[var(--r-border-default)] py-1.5 text-xs text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)]">
+					+ Add Hook
+				</button>
+				{#if showCreateHook}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-3 space-y-2">
+						<input bind:value={newHookName} placeholder="Hook name" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+						<select bind:value={newHookEvent} class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)]">
+							<option value="PreToolUse">PreToolUse</option>
+							<option value="PostToolUse">PostToolUse</option>
+							<option value="SessionStart">SessionStart</option>
+							<option value="Stop">Stop</option>
+							<option value="TaskCompleted">TaskCompleted</option>
+							<option value="UserPromptSubmit">UserPromptSubmit</option>
+						</select>
+						<input bind:value={newHookAction} placeholder="Shell command to run" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+						<button onclick={handleCreateHook} class="w-full rounded-md bg-[var(--r-brand-default)] py-1 text-xs font-medium text-white">Create</button>
+					</div>
+				{/if}
+				{#each hooks as hook}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-2.5 group">
+						<div class="flex items-center justify-between mb-1">
+							<span class="text-xs font-medium text-[var(--r-fg-default)] {!hook.enabled ? 'line-through opacity-50' : ''}">{hook.name}</span>
+							<div class="flex items-center gap-1">
+								<button onclick={() => handleToggleHook(hook)} class="rounded px-1.5 py-0.5 text-[9px] {hook.enabled ? 'bg-success-900/30 text-success-400' : 'bg-[var(--r-bg-surface)] text-[var(--r-fg-subtle)]'}">
+									{hook.enabled ? 'on' : 'off'}
+								</button>
+								<button onclick={() => handleDeleteHook(hook.id)} class="hidden group-hover:block text-[var(--r-fg-subtle)] hover:text-danger-400 text-[10px]">x</button>
+							</div>
+						</div>
+						<p class="text-[10px] text-[var(--r-fg-muted)]"><span class="font-mono">{hook.event}</span> → {hook.action.slice(0, 50)}</p>
+					</div>
+				{/each}
+				{#if hooks.length === 0 && !showCreateHook}
+					<p class="text-center text-[10px] text-[var(--r-fg-subtle)] py-2">No hooks. Hooks automate lifecycle events.</p>
 				{/if}
 			</div>
 

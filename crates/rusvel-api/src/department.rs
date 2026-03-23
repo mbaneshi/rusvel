@@ -268,9 +268,18 @@ pub async fn department_chat_handler(
         _ => EngineKind::Forge,
     };
 
+    // Load MCP server config for this department
+    let mcp_config = crate::mcp_servers::build_mcp_config_for_engine(&state, engine).await;
+
+    // Build CLI args, add MCP config if present
+    let mut cli_args = config.to_claude_args();
+    if let Some(ref mcp_json) = mcp_config {
+        cli_args.push("--mcp-config".into());
+        cli_args.push(mcp_json.clone());
+    }
+
     // Stream with department-specific flags
     let streamer = ClaudeCliStreamer::new();
-    let cli_args = config.to_claude_args();
     let rx = streamer.stream_with_args(&prompt, &cli_args);
 
     let storage = state.storage.clone();

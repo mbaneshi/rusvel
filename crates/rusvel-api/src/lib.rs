@@ -10,6 +10,8 @@ pub mod agents;
 pub mod chat;
 pub mod config;
 pub mod department;
+pub mod hooks;
+pub mod mcp_servers;
 pub mod routes;
 pub mod rules;
 pub mod skills;
@@ -116,6 +118,13 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         // Rules CRUD
         .route("/api/rules", get(rules::list_rules).post(rules::create_rule))
         .route("/api/rules/{id}", get(rules::get_rule).put(rules::update_rule).delete(rules::delete_rule))
+        // MCP Servers CRUD
+        .route("/api/mcp-servers", get(mcp_servers::list_mcp_servers).post(mcp_servers::create_mcp_server))
+        .route("/api/mcp-servers/{id}", axum::routing::put(mcp_servers::update_mcp_server).delete(mcp_servers::delete_mcp_server))
+        // Hooks CRUD
+        .route("/api/hooks", get(hooks::list_hooks).post(hooks::create_hook))
+        .route("/api/hooks/{id}", axum::routing::put(hooks::update_hook).delete(hooks::delete_hook))
+        .route("/api/hooks/events", get(hooks::list_hook_events))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.
