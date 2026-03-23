@@ -41,6 +41,8 @@
 			models = mdls;
 			tools = tls;
 		} catch { /* defaults are fine */ }
+		// Auto-focus the input
+		textareaEl?.focus();
 	});
 
 	async function scroll() { await tick(); if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight; }

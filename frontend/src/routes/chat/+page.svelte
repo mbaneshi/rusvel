@@ -34,6 +34,7 @@
 		} catch {
 			// No conversations yet
 		}
+		textareaEl?.focus();
 	});
 
 	async function scrollToBottom() {
