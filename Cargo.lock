@@ -1947,6 +1947,7 @@ dependencies = [
  "chrono",
  "forge-engine",
  "futures",
+ "paste",
  "rusvel-core",
  "rusvel-llm",
  "serde",

@@ -1,241 +1,205 @@
 <script lang="ts">
 	import { activeSession } from '$lib/stores';
-	import { getGoals, createGoal, getMissionToday } from '$lib/api';
-	import type { Goal, DailyPlan } from '$lib/api';
-
-	let goals: Goal[] = $state([]);
-	let plan: DailyPlan | null = $state(null);
-	let loading = $state(false);
-	let planLoading = $state(false);
-	let error = $state('');
-
-	let showAddGoal = $state(false);
-	let goalTitle = $state('');
-	let goalDescription = $state('');
-	let goalTimeframe = $state('Week');
+	import { getDeptEvents, getDeptConfig, updateDeptConfig } from '$lib/api';
+	import type { Event, DepartmentConfig } from '$lib/api';
+	import DepartmentChat from '$lib/components/chat/DepartmentChat.svelte';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
+	let events: Event[] = $state([]);
+	let config: DepartmentConfig | null = $state(null);
+	let activeTab = $state('actions');
+	let chatRef: DepartmentChat | undefined = $state(undefined);
+
+	// Pre-built agents from strategy doc 04
+	const prebuiltAgents = [
+		{ name: 'mission-planner', model: 'opus', desc: 'Generate daily plans and align tasks with strategic goals.' },
+		{ name: 'persona-manager', model: 'sonnet', desc: 'Hire and configure agent personas for specific tasks.' },
+		{ name: 'system-monitor', model: 'haiku', desc: 'Monitor system health, resource usage, and performance.' },
+	];
+
+	// Pre-built skills from strategy doc 05
+	const prebuiltSkills = [
+		{ name: '/daily-plan', desc: 'Generate today\'s mission plan' },
+		{ name: '/goal-review', desc: 'Review progress on active goals' },
+		{ name: '/hire-persona', desc: 'Hire an agent persona for a task' },
+		{ name: '/weekly-review', desc: 'Run weekly review and retrospective' },
+	];
+
+	// Quick actions that send as chat messages
+	const quickActions = [
+		{ label: 'Generate daily plan', prompt: 'Generate a daily plan for today. Prioritize tasks by impact, check active goals, and suggest focus areas.' },
+		{ label: 'Review goals progress', prompt: 'Review progress on all active goals. Show completion percentage, blockers, and recommended next steps.' },
+		{ label: 'Hire persona for task', prompt: 'I need to hire an agent persona for a specific task. Ask me what the task is and suggest the best persona configuration.' },
+		{ label: 'System health check', prompt: 'Run a system health check. Report on database size, active sessions, job queue status, and any issues.' },
+		{ label: 'Weekly review', prompt: 'Run the weekly review. Summarize what was accomplished, what was missed, lessons learned, and plan for next week.' },
+		{ label: 'What should I focus on?', prompt: 'Based on active goals, pending tasks, and current priorities, what should I focus on right now? Give me the single most impactful thing.' },
+	];
 
 	activeSession.subscribe((v) => {
 		currentSession = v;
-		if (v) loadGoals(v.id);
+		if (v) {
+			loadEvents();
+			loadConfig();
+		}
 	});
 
-	async function loadGoals(sessionId: string) {
-		loading = true;
-		error = '';
-		try {
-			goals = await getGoals(sessionId);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load goals';
-		} finally {
-			loading = false;
+	async function loadEvents() {
+		try { events = await getDeptEvents('forge'); } catch { events = []; }
+	}
+
+	async function loadConfig() {
+		try { config = await getDeptConfig('forge'); } catch { /* defaults */ }
+	}
+
+	function sendQuickAction(prompt: string) {
+		const event = new CustomEvent('dept-quick-action', { detail: { prompt }, bubbles: true });
+		document.dispatchEvent(event);
+	}
+
+	function formatTime(iso: string): string {
+		try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+		catch { return iso; }
+	}
+
+	async function addDir() {
+		if (!config) return;
+		const dir = prompt('Add project directory (relative or absolute path):');
+		if (dir && !config.add_dirs.includes(dir)) {
+			config.add_dirs = [...config.add_dirs, dir];
+			config = await updateDeptConfig('forge', config);
 		}
 	}
 
-	async function handleAddGoal() {
-		if (!currentSession || !goalTitle.trim()) return;
-		try {
-			const goal = await createGoal(currentSession.id, {
-				title: goalTitle.trim(),
-				description: goalDescription.trim(),
-				timeframe: goalTimeframe
-			});
-			goals = [...goals, goal];
-			goalTitle = '';
-			goalDescription = '';
-			showAddGoal = false;
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create goal';
-		}
-	}
-
-	async function generatePlan() {
-		if (!currentSession) return;
-		planLoading = true;
-		error = '';
-		try {
-			plan = await getMissionToday(currentSession.id);
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to generate plan';
-		} finally {
-			planLoading = false;
-		}
-	}
-
-	function statusColor(status: string): string {
-		switch (status) {
-			case 'Active':
-				return 'bg-green-900/50 text-green-300';
-			case 'Completed':
-				return 'bg-blue-900/50 text-blue-300';
-			case 'Abandoned':
-				return 'bg-red-900/50 text-red-300';
-			case 'Deferred':
-				return 'bg-yellow-900/50 text-yellow-300';
-			default:
-				return 'bg-gray-800 text-gray-400';
-		}
-	}
-
-	function progressWidth(progress: number): string {
-		return `${Math.round(progress * 100)}%`;
+	async function removeDir(dir: string) {
+		if (!config) return;
+		config.add_dirs = config.add_dirs.filter(d => d !== dir);
+		config = await updateDeptConfig('forge', config);
 	}
 </script>
 
-<div class="p-6">
-	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-gray-100">Forge / Mission</h1>
-		{#if currentSession}
-			<button
-				onclick={generatePlan}
-				disabled={planLoading}
-				class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-500 disabled:opacity-50"
-			>
-				{planLoading ? 'Generating...' : 'Generate Daily Plan'}
-			</button>
-		{/if}
-	</div>
-
+<div class="flex h-full">
 	{#if !currentSession}
-		<div class="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
-			<p class="text-lg text-gray-400">No session selected</p>
-			<p class="mt-2 text-sm text-gray-600">Select a session from the sidebar.</p>
+		<div class="flex flex-1 items-center justify-center">
+			<p class="text-sm text-[var(--r-fg-muted)]">Select a session to begin.</p>
 		</div>
-	{:else if error}
-		<div class="mb-4 rounded-xl border border-red-900 bg-red-950 p-4 text-red-400">{error}</div>
-	{/if}
-
-	{#if currentSession}
-		<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-			<!-- Goals -->
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
-				<div class="mb-4 flex items-center justify-between">
-					<h3 class="text-sm font-semibold uppercase tracking-wider text-gray-400">Goals</h3>
-					<button
-						onclick={() => (showAddGoal = !showAddGoal)}
-						class="rounded-md bg-gray-800 px-3 py-1 text-xs text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-					>
-						+ Add Goal
-					</button>
+	{:else}
+		<!-- Left panel -->
+		<div class="flex w-72 flex-shrink-0 flex-col border-r border-[var(--r-border-default)] bg-[var(--r-bg-surface)]">
+			<!-- Header -->
+			<div class="border-b border-[var(--r-border-default)] px-4 py-3">
+				<div class="flex items-center gap-2">
+					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-sm font-bold text-indigo-400">=</div>
+					<div>
+						<h2 class="text-sm font-semibold text-[var(--r-fg-default)]">Forge Department</h2>
+						<p class="text-[10px] text-[var(--r-fg-subtle)]">Planning, goals, and orchestration</p>
+					</div>
 				</div>
+			</div>
 
-				{#if showAddGoal}
-					<div class="mb-4 space-y-2 rounded-lg bg-gray-800/50 p-3">
-						<input
-							bind:value={goalTitle}
-							placeholder="Goal title"
-							class="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 focus:border-indigo-500 focus:outline-none"
-						/>
-						<textarea
-							bind:value={goalDescription}
-							placeholder="Description"
-							rows="2"
-							class="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200 focus:border-indigo-500 focus:outline-none"
-						></textarea>
-						<div class="flex gap-2">
-							<select
-								bind:value={goalTimeframe}
-								class="flex-1 rounded-md border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-200"
-							>
-								<option>Day</option>
-								<option>Week</option>
-								<option>Month</option>
-								<option>Quarter</option>
-							</select>
+			<!-- Tabs -->
+			<div class="flex border-b border-[var(--r-border-default)] overflow-x-auto">
+				{#each [
+					{ id: 'actions', label: 'Actions' },
+					{ id: 'agents', label: 'Agents' },
+					{ id: 'skills', label: 'Skills' },
+					{ id: 'projects', label: 'Projects' },
+					{ id: 'events', label: 'Events' },
+				] as tab}
+					<button
+						onclick={() => { activeTab = tab.id; if (tab.id === 'events') loadEvents(); }}
+						class="flex-shrink-0 px-3 py-2 text-[10px] font-medium transition-colors border-b-2
+							{activeTab === tab.id
+							? 'border-indigo-500 text-indigo-300'
+							: 'border-transparent text-[var(--r-fg-muted)] hover:text-[var(--r-fg-default)]'}"
+					>
+						{tab.label}
+					</button>
+				{/each}
+			</div>
+
+			<!-- Tab content -->
+			<div class="flex-1 overflow-y-auto">
+				{#if activeTab === 'actions'}
+					<div class="p-3 space-y-1">
+						{#each quickActions as action}
 							<button
-								onclick={handleAddGoal}
-								class="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium hover:bg-indigo-500"
+								onclick={() => sendQuickAction(action.prompt)}
+								class="w-full rounded-lg bg-[var(--r-bg-raised)] px-3 py-2 text-left transition-colors hover:bg-indigo-900/15 group"
 							>
-								Save
+								<p class="text-xs font-medium text-[var(--r-fg-default)] group-hover:text-indigo-300">{action.label}</p>
 							</button>
-						</div>
-					</div>
-				{/if}
-
-				{#if loading}
-					<div class="flex items-center gap-2 text-gray-400">
-						<div
-							class="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-indigo-500"
-						></div>
-						Loading...
-					</div>
-				{:else if goals.length === 0}
-					<p class="text-sm text-gray-500">No goals set. Add one to get started.</p>
-				{:else}
-					<ul class="space-y-3">
-						{#each goals as goal}
-							<li class="rounded-lg bg-gray-800/50 p-3">
-								<div class="mb-1 flex items-center justify-between">
-									<h4 class="text-sm font-medium text-gray-200">{goal.title}</h4>
-									<span class={`rounded-full px-2 py-0.5 text-xs ${statusColor(goal.status)}`}>
-										{goal.status}
-									</span>
-								</div>
-								<p class="mb-2 text-xs text-gray-400">{goal.description}</p>
-								<div class="flex items-center gap-2">
-									<span class="text-xs text-gray-500">{goal.timeframe}</span>
-									<div class="h-1.5 flex-1 rounded-full bg-gray-700">
-										<div
-											class="h-1.5 rounded-full bg-indigo-500"
-											style="width: {progressWidth(goal.progress)}"
-										></div>
-									</div>
-									<span class="text-xs text-gray-500"
-										>{Math.round(goal.progress * 100)}%</span
-									>
-								</div>
-							</li>
 						{/each}
-					</ul>
-				{/if}
-			</div>
-
-			<!-- Today's Plan -->
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
-				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
-					Today's Plan
-				</h3>
-
-				{#if planLoading}
-					<div class="flex items-center gap-2 text-gray-400">
-						<div
-							class="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-indigo-500"
-						></div>
-						Generating plan...
 					</div>
-				{:else if plan}
-					{#if plan.focus_areas.length > 0}
-						<div class="mb-3 flex flex-wrap gap-2">
-							{#each plan.focus_areas as area}
-								<span class="rounded-full bg-indigo-900/30 px-2 py-0.5 text-xs text-indigo-300"
-									>{area}</span
-								>
+
+				{:else if activeTab === 'agents'}
+					<div class="p-3 space-y-2">
+						<p class="text-[10px] text-[var(--r-fg-subtle)] mb-2">Pre-built agents from strategy reports. These can be dispatched as sub-agents.</p>
+						{#each prebuiltAgents as agent}
+							<div class="rounded-lg bg-[var(--r-bg-raised)] p-2.5">
+								<div class="flex items-center justify-between mb-1">
+									<span class="text-xs font-medium text-[var(--r-fg-default)]">{agent.name}</span>
+									<span class="rounded bg-indigo-900/30 px-1.5 py-0.5 text-[9px] text-indigo-400">{agent.model}</span>
+								</div>
+								<p class="text-[10px] text-[var(--r-fg-muted)]">{agent.desc}</p>
+							</div>
+						{/each}
+					</div>
+
+				{:else if activeTab === 'skills'}
+					<div class="p-3 space-y-2">
+						<p class="text-[10px] text-[var(--r-fg-subtle)] mb-2">Custom skills for planning and orchestration workflows.</p>
+						{#each prebuiltSkills as skill}
+							<button
+								onclick={() => sendQuickAction(`Run skill: ${skill.name}. ${skill.desc}`)}
+								class="w-full rounded-lg bg-[var(--r-bg-raised)] p-2.5 text-left transition-colors hover:bg-indigo-900/15 group"
+							>
+								<span class="text-xs font-mono font-medium text-indigo-400">{skill.name}</span>
+								<p class="text-[10px] text-[var(--r-fg-muted)] group-hover:text-[var(--r-fg-default)]">{skill.desc}</p>
+							</button>
+						{/each}
+					</div>
+
+				{:else if activeTab === 'projects'}
+					<div class="p-3 space-y-2">
+						<p class="text-[10px] text-[var(--r-fg-subtle)] mb-2">Working directories passed as --add-dir to Claude.</p>
+						{#if config}
+							{#each config.add_dirs as dir}
+								<div class="flex items-center justify-between rounded-lg bg-[var(--r-bg-raised)] px-3 py-2">
+									<span class="text-xs font-mono text-[var(--r-fg-default)]">{dir}</span>
+									<button onclick={() => removeDir(dir)} class="text-[var(--r-fg-subtle)] hover:text-danger-400 text-xs">x</button>
+								</div>
 							{/each}
-						</div>
-					{/if}
-					<ul class="space-y-2">
-						{#each plan.tasks as task}
-							<li class="flex items-start gap-3 rounded-lg bg-gray-800/50 p-3">
-								<input type="checkbox" class="mt-1 accent-indigo-500" />
-								<div class="flex-1">
-									<p class="text-sm text-gray-200">{task.title}</p>
-									<span class="text-xs text-gray-500">{task.priority}</span>
+							<button onclick={addDir} class="w-full rounded-lg border border-dashed border-[var(--r-border-default)] py-2 text-xs text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)] hover:border-indigo-500/30">
+								+ Add directory
+							</button>
+						{:else}
+							<p class="text-xs text-[var(--r-fg-subtle)]">Loading...</p>
+						{/if}
+					</div>
+
+				{:else if activeTab === 'events'}
+					<div class="p-3 space-y-2">
+						{#if events.length === 0}
+							<p class="text-xs text-[var(--r-fg-subtle)] text-center py-4">No events yet. Chat with the Forge department to generate events.</p>
+						{:else}
+							{#each events as event}
+								<div class="rounded-lg bg-[var(--r-bg-raised)] p-2">
+									<div class="flex items-center gap-1.5">
+										<span class="rounded bg-indigo-900/30 px-1 py-0.5 text-[9px] font-mono text-indigo-400">{event.kind}</span>
+										<span class="text-[9px] text-[var(--r-fg-subtle)]">{formatTime(event.created_at)}</span>
+									</div>
 								</div>
-							</li>
-						{/each}
-					</ul>
-					{#if plan.notes}
-						<div class="mt-3 rounded-lg bg-gray-800/30 p-2 text-xs text-gray-500">
-							{plan.notes}
-						</div>
-					{/if}
-				{:else}
-					<p class="text-sm text-gray-500">
-						Click "Generate Daily Plan" to create a prioritized task list from your goals.
-					</p>
+							{/each}
+						{/if}
+						<button onclick={loadEvents} class="w-full rounded-md bg-[var(--r-bg-raised)] py-1.5 text-[10px] text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)]">Refresh</button>
+					</div>
 				{/if}
 			</div>
+		</div>
+
+		<!-- Main: Department Chat -->
+		<div class="flex-1">
+			<DepartmentChat dept="forge" title="Forge Department" icon="=" />
 		</div>
 	{/if}
 </div>
