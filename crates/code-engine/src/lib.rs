@@ -7,9 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 
-use rusvel_core::domain::{
-    Capability, CodeSnapshotRef, EngineKind, Event, HealthStatus, RepoRef,
-};
+use rusvel_core::domain::{Capability, CodeSnapshotRef, EngineKind, Event, HealthStatus, RepoRef};
 use rusvel_core::engine::Engine;
 use rusvel_core::id::{EventId, SnapshotId};
 use rusvel_core::ports::{EventPort, StoragePort};
@@ -41,10 +39,7 @@ pub struct CodeEngine {
 }
 
 impl CodeEngine {
-    pub fn new(
-        storage: Arc<dyn StoragePort>,
-        event_port: Arc<dyn EventPort>,
-    ) -> Self {
+    pub fn new(storage: Arc<dyn StoragePort>, event_port: Arc<dyn EventPort>) -> Self {
         Self {
             storage,
             event_port,
@@ -53,10 +48,7 @@ impl CodeEngine {
     }
 
     /// Analyze a repository: parse, build graph, compute metrics, index.
-    pub async fn analyze(
-        &self,
-        repo_path: &Path,
-    ) -> rusvel_core::error::Result<CodeAnalysis> {
+    pub async fn analyze(&self, repo_path: &Path) -> rusvel_core::error::Result<CodeAnalysis> {
         let symbols = parser::parse_directory(repo_path)?;
 
         // Collect file metrics for all unique files
@@ -64,13 +56,13 @@ impl CodeEngine {
         let mut file_metrics = Vec::new();
         for sym in &symbols {
             if seen.insert(sym.file_path.clone())
-                && let Ok(fm) = metrics::count_lines(&sym.file_path) {
-                    file_metrics.push(fm);
-                }
+                && let Ok(fm) = metrics::count_lines(&sym.file_path)
+            {
+                file_metrics.push(fm);
+            }
         }
 
-        let project_metrics =
-            metrics::compute_project_metrics(&symbols, &file_metrics);
+        let project_metrics = metrics::compute_project_metrics(&symbols, &file_metrics);
         let sym_graph = graph::SymbolGraph::build(symbols.clone());
 
         // Build search index
@@ -186,19 +178,50 @@ mod tests {
     struct FakeObjectStore;
     #[async_trait]
     impl ObjectStore for FakeObjectStore {
-        async fn put(&self, _: &str, _: &str, _: serde_json::Value) -> rusvel_core::error::Result<()> { Ok(()) }
-        async fn get(&self, _: &str, _: &str) -> rusvel_core::error::Result<Option<serde_json::Value>> { Ok(None) }
-        async fn delete(&self, _: &str, _: &str) -> rusvel_core::error::Result<()> { Ok(()) }
-        async fn list(&self, _: &str, _: rusvel_core::domain::ObjectFilter) -> rusvel_core::error::Result<Vec<serde_json::Value>> { Ok(vec![]) }
+        async fn put(
+            &self,
+            _: &str,
+            _: &str,
+            _: serde_json::Value,
+        ) -> rusvel_core::error::Result<()> {
+            Ok(())
+        }
+        async fn get(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> rusvel_core::error::Result<Option<serde_json::Value>> {
+            Ok(None)
+        }
+        async fn delete(&self, _: &str, _: &str) -> rusvel_core::error::Result<()> {
+            Ok(())
+        }
+        async fn list(
+            &self,
+            _: &str,
+            _: rusvel_core::domain::ObjectFilter,
+        ) -> rusvel_core::error::Result<Vec<serde_json::Value>> {
+            Ok(vec![])
+        }
     }
 
     struct FakeStorage;
     impl StoragePort for FakeStorage {
-        fn events(&self) -> &dyn EventStore { panic!("not used in tests") }
-        fn objects(&self) -> &dyn ObjectStore { &FakeObjectStore }
-        fn sessions(&self) -> &dyn SessionStore { panic!("not used in tests") }
-        fn jobs(&self) -> &dyn JobStore { panic!("not used in tests") }
-        fn metrics(&self) -> &dyn MetricStore { panic!("not used in tests") }
+        fn events(&self) -> &dyn EventStore {
+            panic!("not used in tests")
+        }
+        fn objects(&self) -> &dyn ObjectStore {
+            &FakeObjectStore
+        }
+        fn sessions(&self) -> &dyn SessionStore {
+            panic!("not used in tests")
+        }
+        fn jobs(&self) -> &dyn JobStore {
+            panic!("not used in tests")
+        }
+        fn metrics(&self) -> &dyn MetricStore {
+            panic!("not used in tests")
+        }
     }
 
     struct FakeEventPort(Mutex<Vec<Event>>);
@@ -209,8 +232,12 @@ mod tests {
             self.0.lock().unwrap().push(event);
             Ok(id)
         }
-        async fn get(&self, _: &EventId) -> rusvel_core::error::Result<Option<Event>> { Ok(None) }
-        async fn query(&self, _: EventFilter) -> rusvel_core::error::Result<Vec<Event>> { Ok(vec![]) }
+        async fn get(&self, _: &EventId) -> rusvel_core::error::Result<Option<Event>> {
+            Ok(None)
+        }
+        async fn query(&self, _: EventFilter) -> rusvel_core::error::Result<Vec<Event>> {
+            Ok(vec![])
+        }
     }
 
     #[tokio::test]

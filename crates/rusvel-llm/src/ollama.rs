@@ -69,17 +69,12 @@ impl LlmPort for OllamaProvider {
             return Err(map_ollama_http_error(status.as_u16(), &body));
         }
 
-        let ollama_resp: OllamaChatResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let ollama_resp: OllamaChatResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(from_ollama_chat(ollama_resp))
     }
 
-    async fn embed(
-        &self,
-        model: &ModelRef,
-        text: &str,
-    ) -> rusvel_core::error::Result<Vec<f32>> {
+    async fn embed(&self, model: &ModelRef, text: &str) -> rusvel_core::error::Result<Vec<f32>> {
         let url = format!("{}/api/embed", self.base_url);
         let body = serde_json::json!({
             "model": model.model,
@@ -102,8 +97,7 @@ impl LlmPort for OllamaProvider {
             return Err(map_ollama_http_error(status.as_u16(), &body));
         }
 
-        let resp: OllamaEmbedResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let resp: OllamaEmbedResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         // Ollama returns `embeddings: [[f32]]`; take the first vector.
         resp.embeddings
@@ -130,8 +124,7 @@ impl LlmPort for OllamaProvider {
             return Err(map_ollama_http_error(status.as_u16(), &body));
         }
 
-        let resp: OllamaTagsResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let resp: OllamaTagsResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(resp
             .models
@@ -273,9 +266,7 @@ fn extract_text(content: &Content) -> String {
 
 fn map_reqwest_error(e: reqwest::Error) -> RusvelError {
     if e.is_connect() {
-        RusvelError::Llm(format!(
-            "cannot connect to Ollama — is it running? ({e})"
-        ))
+        RusvelError::Llm(format!("cannot connect to Ollama — is it running? ({e})"))
     } else if e.is_timeout() {
         RusvelError::Llm(format!("Ollama request timed out: {e}"))
     } else {
@@ -387,7 +378,10 @@ mod tests {
             prompt_eval_count: 0,
         };
         let llm_resp = from_ollama_chat(resp);
-        assert_eq!(llm_resp.finish_reason, FinishReason::Other("incomplete".into()));
+        assert_eq!(
+            llm_resp.finish_reason,
+            FinishReason::Other("incomplete".into())
+        );
     }
 
     #[test]

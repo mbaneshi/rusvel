@@ -133,8 +133,7 @@ fn parse_cli_output(stdout: &str) -> std::result::Result<CliResult, String> {
         return Err("no result entry found in CLI output".into());
     }
     // Fall back to single JSON object
-    serde_json::from_str(stdout)
-        .map_err(|e| format!("failed to parse CLI output: {e}"))
+    serde_json::from_str(stdout).map_err(|e| format!("failed to parse CLI output: {e}"))
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -227,7 +226,7 @@ impl LlmPort for ClaudeCliProvider {
             content: Content::text(cli_result.result),
             finish_reason: FinishReason::Stop,
             usage: LlmUsage {
-                input_tokens: 0,  // CLI doesn't report token counts
+                input_tokens: 0, // CLI doesn't report token counts
                 output_tokens: 0,
             },
             metadata: serde_json::json!({
@@ -248,12 +247,10 @@ impl LlmPort for ClaudeCliProvider {
     }
 
     async fn list_models(&self) -> Result<Vec<ModelRef>> {
-        Ok(vec![
-            ModelRef {
-                provider: ModelProvider::Claude,
-                model: self.model.clone(),
-            },
-        ])
+        Ok(vec![ModelRef {
+            provider: ModelProvider::Claude,
+            model: self.model.clone(),
+        }])
     }
 }
 

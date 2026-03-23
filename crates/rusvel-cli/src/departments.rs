@@ -200,7 +200,10 @@ async fn dept_list(
     limit: usize,
 ) -> Result<()> {
     let objects = storage.objects();
-    let filter = ObjectFilter { limit: Some(limit as u32), ..Default::default() };
+    let filter = ObjectFilter {
+        limit: Some(limit as u32),
+        ..Default::default()
+    };
 
     // If a specific kind was given, list that; otherwise list all collections
     let collections: Vec<&str> = match &kind {
@@ -212,16 +215,18 @@ async fn dept_list(
     println!("│");
 
     for collection in collections {
-        let items = objects.list(collection, filter.clone()).await.unwrap_or_default();
+        let items = objects
+            .list(collection, filter.clone())
+            .await
+            .unwrap_or_default();
         println!("├─ {} ({} items)", collection, items.len());
         for item in items.iter().take(limit) {
-            let name = item.get("name")
+            let name = item
+                .get("name")
                 .or_else(|| item.get("title"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("(unnamed)");
-            let id = item.get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("?");
+            let id = item.get("id").and_then(|v| v.as_str()).unwrap_or("?");
             let short_id = if id.len() > 8 { &id[..8] } else { id };
             println!("│  {short_id} {name}");
         }
@@ -240,7 +245,9 @@ async fn dept_status(meta: DeptMeta, storage: Arc<dyn StoragePort>) -> Result<()
 
     let mut total = 0usize;
     for collection in meta.collections {
-        let count = objects.list(collection, filter.clone()).await
+        let count = objects
+            .list(collection, filter.clone())
+            .await
             .map(|v| v.len())
             .unwrap_or(0);
         total += count;
@@ -255,13 +262,19 @@ async fn dept_status(meta: DeptMeta, storage: Arc<dyn StoragePort>) -> Result<()
 async fn dept_events(meta: DeptMeta, storage: Arc<dyn StoragePort>, limit: usize) -> Result<()> {
     let objects = storage.objects();
     // Events are stored in the "events" collection; filter by prefix
-    let filter = ObjectFilter { limit: Some((limit * 5) as u32), ..Default::default() };
+    let filter = ObjectFilter {
+        limit: Some((limit * 5) as u32),
+        ..Default::default()
+    };
     let all_events = objects.list("events", filter).await.unwrap_or_default();
 
     let prefix = meta.event_prefix;
-    let matching: Vec<_> = all_events.iter()
+    let matching: Vec<_> = all_events
+        .iter()
         .filter(|e| {
-            e.get("kind").and_then(|v| v.as_str()).is_some_and(|k| k.starts_with(prefix))
+            e.get("kind")
+                .and_then(|v| v.as_str())
+                .is_some_and(|k| k.starts_with(prefix))
         })
         .take(limit)
         .collect();
@@ -274,7 +287,10 @@ async fn dept_events(meta: DeptMeta, storage: Arc<dyn StoragePort>, limit: usize
     } else {
         for event in &matching {
             let kind = event.get("kind").and_then(|v| v.as_str()).unwrap_or("?");
-            let time = event.get("created_at").and_then(|v| v.as_str()).unwrap_or("?");
+            let time = event
+                .get("created_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
             let short_time = if time.len() > 16 { &time[..16] } else { time };
             println!("│  {short_time} {kind}");
         }
@@ -287,7 +303,7 @@ async fn dept_events(meta: DeptMeta, storage: Arc<dyn StoragePort>, limit: usize
 /// List all available department names (used by REPL completer).
 pub fn department_names() -> &'static [&'static str] {
     &[
-        "finance", "growth", "distro", "legal", "support",
-        "infra", "product", "code", "harvest", "content", "gtm",
+        "finance", "growth", "distro", "legal", "support", "infra", "product", "code", "harvest",
+        "content", "gtm",
     ]
 }

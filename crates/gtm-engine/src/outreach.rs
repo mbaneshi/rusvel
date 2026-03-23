@@ -24,7 +24,9 @@ impl Default for SequenceId {
 }
 
 impl SequenceId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for SequenceId {
@@ -44,7 +46,9 @@ impl Default for FollowUpId {
 }
 
 impl FollowUpId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for FollowUpId {
@@ -108,7 +112,11 @@ impl OutreachManager {
         agent: Arc<dyn AgentPort>,
         jobs: Arc<dyn JobPort>,
     ) -> Self {
-        Self { storage, agent, jobs }
+        Self {
+            storage,
+            agent,
+            jobs,
+        }
     }
 
     pub async fn create_sequence(
@@ -128,7 +136,10 @@ impl OutreachManager {
         };
         let id = seq.id;
         let json = serde_json::to_value(&seq)?;
-        self.storage.objects().put(KIND_SEQUENCE, &id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND_SEQUENCE, &id.to_string(), json)
+            .await?;
         Ok(id)
     }
 
@@ -138,7 +149,9 @@ impl OutreachManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND_SEQUENCE, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 
     pub async fn schedule_followup(
@@ -158,7 +171,10 @@ impl OutreachManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&fu)?;
-        self.storage.objects().put(KIND_FOLLOWUP, &fu.id.to_string(), json).await
+        self.storage
+            .objects()
+            .put(KIND_FOLLOWUP, &fu.id.to_string(), json)
+            .await
     }
 
     pub async fn list_followups(&self, session_id: SessionId) -> Result<Vec<FollowUp>> {
@@ -167,7 +183,9 @@ impl OutreachManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND_FOLLOWUP, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 
     pub async fn generate_message(

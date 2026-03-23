@@ -814,15 +814,16 @@ pub struct ProfilePreferences {
     pub style: String,
 }
 
-fn default_style() -> String { "Direct and technical".into() }
+fn default_style() -> String {
+    "Direct and technical".into()
+}
 
 impl UserProfile {
     /// Load from a TOML file.
     pub fn load(path: impl AsRef<std::path::Path>) -> std::result::Result<Self, String> {
         let content = std::fs::read_to_string(path.as_ref())
             .map_err(|e| format!("cannot read profile: {e}"))?;
-        toml::from_str(&content)
-            .map_err(|e| format!("invalid profile TOML: {e}"))
+        toml::from_str(&content).map_err(|e| format!("invalid profile TOML: {e}"))
     }
 
     /// Generate the system prompt preamble that gives agents full context about the user.

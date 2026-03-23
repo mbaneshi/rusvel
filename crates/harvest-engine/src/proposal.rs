@@ -26,11 +26,7 @@ impl ProposalGenerator {
     }
 
     /// Generate a proposal for the given opportunity and freelancer profile.
-    pub async fn generate(
-        &self,
-        opportunity: &Opportunity,
-        profile: &str,
-    ) -> Result<Proposal> {
+    pub async fn generate(&self, opportunity: &Opportunity, profile: &str) -> Result<Proposal> {
         let prompt = format!(
             "Write a tailored freelance proposal for this opportunity.\n\n\
              ## Opportunity\n\
@@ -50,7 +46,8 @@ impl ProposalGenerator {
             opportunity.description,
             opportunity.url.as_deref().unwrap_or("N/A"),
             opportunity
-                .value_estimate.map_or_else(|| "not specified".into(), |v| format!("${v}")),
+                .value_estimate
+                .map_or_else(|| "not specified".into(), |v| format!("${v}")),
             profile,
         );
 
@@ -69,10 +66,7 @@ impl ProposalGenerator {
         };
 
         let run_id = self.agent.create(config).await?;
-        let output = self
-            .agent
-            .run(&run_id, Content::text(prompt))
-            .await?;
+        let output = self.agent.run(&run_id, Content::text(prompt)).await?;
 
         let text = output
             .content
@@ -86,10 +80,7 @@ impl ProposalGenerator {
 
         // Try to parse structured JSON response
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
-            let body = parsed["body"]
-                .as_str()
-                .unwrap_or(&text)
-                .to_string();
+            let body = parsed["body"].as_str().unwrap_or(&text).to_string();
             let estimated_value = parsed["estimated_value"].as_f64();
             let tone = parsed["tone"]
                 .as_str()

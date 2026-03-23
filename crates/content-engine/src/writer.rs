@@ -54,9 +54,10 @@ impl ContentWriter {
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
 
         let body = extract_text(&output.content);
-        let title = body
-            .lines()
-            .find(|l| l.starts_with("# ")).map_or_else(|| topic.to_string(), |l| l.trim_start_matches("# ").to_string());
+        let title = body.lines().find(|l| l.starts_with("# ")).map_or_else(
+            || topic.to_string(),
+            |l| l.trim_start_matches("# ").to_string(),
+        );
 
         Ok(ContentItem {
             id: ContentId::new(),
@@ -127,17 +128,22 @@ impl ContentWriter {
         let score = text
             .lines()
             .find_map(|l| {
-                l.split_whitespace()
-                    .find_map(|w| w.trim_matches(|c: char| !c.is_ascii_digit() && c != '.')
+                l.split_whitespace().find_map(|w| {
+                    w.trim_matches(|c: char| !c.is_ascii_digit() && c != '.')
                         .parse::<f64>()
                         .ok()
-                        .filter(|&v| (0.0..=1.0).contains(&v)))
+                        .filter(|&v| (0.0..=1.0).contains(&v))
+                })
             })
             .unwrap_or(0.7);
 
         Ok(ContentReview {
             score,
-            suggestions: text.lines().filter(|l| l.starts_with("- ")).map(String::from).collect(),
+            suggestions: text
+                .lines()
+                .filter(|l| l.starts_with("- "))
+                .map(String::from)
+                .collect(),
             approved: score >= 0.6,
         })
     }

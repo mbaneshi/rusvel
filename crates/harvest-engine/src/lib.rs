@@ -369,40 +369,84 @@ mod tests {
     struct StubEventStore;
     #[async_trait]
     impl EventStore for StubEventStore {
-        async fn append(&self, _: &Event) -> Result<()> { Ok(()) }
-        async fn get(&self, _: &EventId) -> Result<Option<Event>> { Ok(None) }
-        async fn query(&self, _: rusvel_core::EventFilter) -> Result<Vec<Event>> { Ok(vec![]) }
+        async fn append(&self, _: &Event) -> Result<()> {
+            Ok(())
+        }
+        async fn get(&self, _: &EventId) -> Result<Option<Event>> {
+            Ok(None)
+        }
+        async fn query(&self, _: rusvel_core::EventFilter) -> Result<Vec<Event>> {
+            Ok(vec![])
+        }
     }
 
     struct StubMetricStore;
     #[async_trait]
     impl MetricStore for StubMetricStore {
-        async fn record(&self, _: &rusvel_core::MetricPoint) -> Result<()> { Ok(()) }
-        async fn query(&self, _: rusvel_core::MetricFilter) -> Result<Vec<rusvel_core::MetricPoint>> { Ok(vec![]) }
+        async fn record(&self, _: &rusvel_core::MetricPoint) -> Result<()> {
+            Ok(())
+        }
+        async fn query(
+            &self,
+            _: rusvel_core::MetricFilter,
+        ) -> Result<Vec<rusvel_core::MetricPoint>> {
+            Ok(vec![])
+        }
     }
 
     struct StubSessionStore;
     #[async_trait]
     impl SessionStore for StubSessionStore {
-        async fn put_session(&self, _: &rusvel_core::Session) -> Result<()> { Ok(()) }
-        async fn get_session(&self, _: &SessionId) -> Result<Option<rusvel_core::Session>> { Ok(None) }
-        async fn list_sessions(&self) -> Result<Vec<rusvel_core::SessionSummary>> { Ok(vec![]) }
-        async fn put_run(&self, _: &rusvel_core::Run) -> Result<()> { Ok(()) }
-        async fn get_run(&self, _: &rusvel_core::RunId) -> Result<Option<rusvel_core::Run>> { Ok(None) }
-        async fn list_runs(&self, _: &SessionId) -> Result<Vec<rusvel_core::Run>> { Ok(vec![]) }
-        async fn put_thread(&self, _: &rusvel_core::Thread) -> Result<()> { Ok(()) }
-        async fn get_thread(&self, _: &rusvel_core::ThreadId) -> Result<Option<rusvel_core::Thread>> { Ok(None) }
-        async fn list_threads(&self, _: &rusvel_core::RunId) -> Result<Vec<rusvel_core::Thread>> { Ok(vec![]) }
+        async fn put_session(&self, _: &rusvel_core::Session) -> Result<()> {
+            Ok(())
+        }
+        async fn get_session(&self, _: &SessionId) -> Result<Option<rusvel_core::Session>> {
+            Ok(None)
+        }
+        async fn list_sessions(&self) -> Result<Vec<rusvel_core::SessionSummary>> {
+            Ok(vec![])
+        }
+        async fn put_run(&self, _: &rusvel_core::Run) -> Result<()> {
+            Ok(())
+        }
+        async fn get_run(&self, _: &rusvel_core::RunId) -> Result<Option<rusvel_core::Run>> {
+            Ok(None)
+        }
+        async fn list_runs(&self, _: &SessionId) -> Result<Vec<rusvel_core::Run>> {
+            Ok(vec![])
+        }
+        async fn put_thread(&self, _: &rusvel_core::Thread) -> Result<()> {
+            Ok(())
+        }
+        async fn get_thread(
+            &self,
+            _: &rusvel_core::ThreadId,
+        ) -> Result<Option<rusvel_core::Thread>> {
+            Ok(None)
+        }
+        async fn list_threads(&self, _: &rusvel_core::RunId) -> Result<Vec<rusvel_core::Thread>> {
+            Ok(vec![])
+        }
     }
 
     struct StubJobStore;
     #[async_trait]
     impl JobStore for StubJobStore {
-        async fn enqueue(&self, _: &rusvel_core::Job) -> Result<()> { Ok(()) }
-        async fn dequeue(&self, _: &[rusvel_core::JobKind]) -> Result<Option<rusvel_core::Job>> { Ok(None) }
-        async fn update(&self, _: &rusvel_core::Job) -> Result<()> { Ok(()) }
-        async fn get(&self, _: &rusvel_core::JobId) -> Result<Option<rusvel_core::Job>> { Ok(None) }
-        async fn list(&self, _: rusvel_core::JobFilter) -> Result<Vec<rusvel_core::Job>> { Ok(vec![]) }
+        async fn enqueue(&self, _: &rusvel_core::Job) -> Result<()> {
+            Ok(())
+        }
+        async fn dequeue(&self, _: &[rusvel_core::JobKind]) -> Result<Option<rusvel_core::Job>> {
+            Ok(None)
+        }
+        async fn update(&self, _: &rusvel_core::Job) -> Result<()> {
+            Ok(())
+        }
+        async fn get(&self, _: &rusvel_core::JobId) -> Result<Option<rusvel_core::Job>> {
+            Ok(None)
+        }
+        async fn list(&self, _: rusvel_core::JobFilter) -> Result<Vec<rusvel_core::Job>> {
+            Ok(vec![])
+        }
     }
 
     // ── TestStorage ───────────────────────────────────────────────
@@ -428,11 +472,21 @@ mod tests {
     }
 
     impl StoragePort for TestStorage {
-        fn events(&self) -> &dyn EventStore { &self.events }
-        fn objects(&self) -> &dyn ObjectStore { &self.objects }
-        fn metrics(&self) -> &dyn MetricStore { &self.metrics }
-        fn sessions(&self) -> &dyn SessionStore { &self.sessions }
-        fn jobs(&self) -> &dyn JobStore { &self.jobs }
+        fn events(&self) -> &dyn EventStore {
+            &self.events
+        }
+        fn objects(&self) -> &dyn ObjectStore {
+            &self.objects
+        }
+        fn metrics(&self) -> &dyn MetricStore {
+            &self.metrics
+        }
+        fn sessions(&self) -> &dyn SessionStore {
+            &self.sessions
+        }
+        fn jobs(&self) -> &dyn JobStore {
+            &self.jobs
+        }
     }
 
     // ── Tests ─────────────────────────────────────────────────────

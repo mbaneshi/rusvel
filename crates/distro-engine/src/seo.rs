@@ -26,7 +26,9 @@ impl Default for KeywordId {
 }
 
 impl KeywordId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for KeywordId {
@@ -75,7 +77,10 @@ impl SeoManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&keyword)?;
-        self.storage.objects().put(KIND, &keyword.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &keyword.id.to_string(), json)
+            .await?;
         Ok(keyword)
     }
 
@@ -85,6 +90,8 @@ impl SeoManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 }

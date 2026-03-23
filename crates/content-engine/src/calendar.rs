@@ -55,7 +55,11 @@ impl ContentCalendar {
         }
         self.storage
             .objects()
-            .put("content", &content_id.to_string(), serde_json::to_value(&item)?)
+            .put(
+                "content",
+                &content_id.to_string(),
+                serde_json::to_value(&item)?,
+            )
             .await?;
 
         // Enqueue a job for the publish worker.
@@ -120,7 +124,11 @@ impl ContentCalendar {
         item.scheduled_at = None;
         self.storage
             .objects()
-            .put("content", &content_id.to_string(), serde_json::to_value(&item)?)
+            .put(
+                "content",
+                &content_id.to_string(),
+                serde_json::to_value(&item)?,
+            )
             .await
     }
 }

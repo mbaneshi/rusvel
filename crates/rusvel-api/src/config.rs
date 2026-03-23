@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -95,8 +95,8 @@ pub async fn update_config(
     State(state): State<Arc<AppState>>,
     Json(config): Json<ChatConfig>,
 ) -> Result<Json<ChatConfig>, (StatusCode, String)> {
-    let value = serde_json::to_value(&config)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let value =
+        serde_json::to_value(&config).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     state
         .storage
@@ -148,15 +148,55 @@ pub struct ToolOption {
 /// `GET /api/config/tools` — list all available tools.
 pub async fn list_tools() -> Json<Vec<ToolOption>> {
     Json(vec![
-        ToolOption { name: "Read".into(), description: "Read file contents".into(), category: "Files".into() },
-        ToolOption { name: "Write".into(), description: "Create/overwrite files".into(), category: "Files".into() },
-        ToolOption { name: "Edit".into(), description: "Edit specific parts of files".into(), category: "Files".into() },
-        ToolOption { name: "Bash".into(), description: "Execute shell commands".into(), category: "System".into() },
-        ToolOption { name: "Glob".into(), description: "Find files by pattern".into(), category: "Search".into() },
-        ToolOption { name: "Grep".into(), description: "Search file contents".into(), category: "Search".into() },
-        ToolOption { name: "WebSearch".into(), description: "Search the web".into(), category: "Web".into() },
-        ToolOption { name: "WebFetch".into(), description: "Fetch URL content".into(), category: "Web".into() },
-        ToolOption { name: "Agent".into(), description: "Spawn sub-agents".into(), category: "Agents".into() },
-        ToolOption { name: "NotebookEdit".into(), description: "Edit Jupyter notebooks".into(), category: "Files".into() },
+        ToolOption {
+            name: "Read".into(),
+            description: "Read file contents".into(),
+            category: "Files".into(),
+        },
+        ToolOption {
+            name: "Write".into(),
+            description: "Create/overwrite files".into(),
+            category: "Files".into(),
+        },
+        ToolOption {
+            name: "Edit".into(),
+            description: "Edit specific parts of files".into(),
+            category: "Files".into(),
+        },
+        ToolOption {
+            name: "Bash".into(),
+            description: "Execute shell commands".into(),
+            category: "System".into(),
+        },
+        ToolOption {
+            name: "Glob".into(),
+            description: "Find files by pattern".into(),
+            category: "Search".into(),
+        },
+        ToolOption {
+            name: "Grep".into(),
+            description: "Search file contents".into(),
+            category: "Search".into(),
+        },
+        ToolOption {
+            name: "WebSearch".into(),
+            description: "Search the web".into(),
+            category: "Web".into(),
+        },
+        ToolOption {
+            name: "WebFetch".into(),
+            description: "Fetch URL content".into(),
+            category: "Web".into(),
+        },
+        ToolOption {
+            name: "Agent".into(),
+            description: "Spawn sub-agents".into(),
+            category: "Agents".into(),
+        },
+        ToolOption {
+            name: "NotebookEdit".into(),
+            description: "Edit Jupyter notebooks".into(),
+            category: "Files".into(),
+        },
     ])
 }

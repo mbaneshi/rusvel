@@ -61,10 +61,13 @@ impl ToolRegistry {
     ) -> Result<()> {
         let name = definition.name.clone();
         let mut map = self.tools.write().unwrap();
-        map.insert(name, RegisteredTool {
-            definition,
-            handler,
-        });
+        map.insert(
+            name,
+            RegisteredTool {
+                definition,
+                handler,
+            },
+        );
         Ok(())
     }
 }
@@ -97,11 +100,12 @@ fn validate_args(schema: &serde_json::Value, args: &serde_json::Value) -> Result
     if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
         for req in required {
             if let Some(key) = req.as_str()
-                && !args_obj.contains_key(key) {
-                    return Err(RusvelError::Validation(format!(
-                        "missing required parameter: {key}"
-                    )));
-                }
+                && !args_obj.contains_key(key)
+            {
+                return Err(RusvelError::Validation(format!(
+                    "missing required parameter: {key}"
+                )));
+            }
         }
     }
 
@@ -130,10 +134,13 @@ impl ToolPort for ToolRegistry {
             let handler: ToolHandler = Arc::new(|_args| {
                 Box::pin(async { Err(RusvelError::Tool("no handler registered".into())) })
             });
-            map.insert(name, RegisteredTool {
-                definition: tool,
-                handler,
-            });
+            map.insert(
+                name,
+                RegisteredTool {
+                    definition: tool,
+                    handler,
+                },
+            );
         }
         Ok(())
     }
@@ -146,7 +153,10 @@ impl ToolPort for ToolRegistry {
                 kind: "tool".into(),
                 id: name.into(),
             })?;
-            (Arc::clone(&entry.handler), entry.definition.parameters.clone())
+            (
+                Arc::clone(&entry.handler),
+                entry.definition.parameters.clone(),
+            )
         };
 
         validate_args(&schema, &args)?;
@@ -280,7 +290,12 @@ mod tests {
 
         let schema = registry.schema("echo").unwrap();
         assert_eq!(schema["type"], "object");
-        assert!(schema["required"].as_array().unwrap().contains(&json!("message")));
+        assert!(
+            schema["required"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("message"))
+        );
 
         assert!(registry.schema("nonexistent").is_none());
     }

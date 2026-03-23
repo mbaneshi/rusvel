@@ -6,9 +6,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use rusvel_core::domain::{AgentProfile, ObjectFilter};
@@ -147,8 +147,8 @@ pub async fn get_workflow(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "workflow not found".into()))?;
 
-    let wf: WorkflowDefinition =
-        serde_json::from_value(val).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let wf: WorkflowDefinition = serde_json::from_value(val)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(wf))
 }
@@ -262,10 +262,7 @@ pub async fn run_workflow(
         };
 
         // Build CLI args from agent config
-        let mut cli_args: Vec<String> = vec![
-            "--model".into(),
-            agent.default_model.model.clone(),
-        ];
+        let mut cli_args: Vec<String> = vec!["--model".into(), agent.default_model.model.clone()];
         if !agent.allowed_tools.is_empty() {
             cli_args.push("--allowedTools".into());
             cli_args.push(agent.allowed_tools.join(" "));
@@ -299,8 +296,8 @@ async fn execute_claude_step(
     prompt: &str,
     cli_args: &[String],
 ) -> Result<(String, f64), (StatusCode, String)> {
-    use tokio_stream::wrappers::ReceiverStream;
     use tokio_stream::StreamExt;
+    use tokio_stream::wrappers::ReceiverStream;
 
     let streamer = ClaudeCliStreamer::new();
     let rx = streamer.stream_with_args(prompt, cli_args);

@@ -74,10 +74,7 @@ pub fn count_lines_str(content: &str, path_label: &str) -> FileMetrics {
 }
 
 /// Compute project-level metrics from symbols and file metrics.
-pub fn compute_project_metrics(
-    symbols: &[Symbol],
-    file_metrics: &[FileMetrics],
-) -> ProjectMetrics {
+pub fn compute_project_metrics(symbols: &[Symbol], file_metrics: &[FileMetrics]) -> ProjectMetrics {
     use crate::parser::SymbolKind;
 
     let functions: Vec<&Symbol> = symbols

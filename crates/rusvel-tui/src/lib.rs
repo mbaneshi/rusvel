@@ -6,11 +6,11 @@ use std::io;
 
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event as CtEvent, KeyCode},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event as CtEvent, KeyCode},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use rusvel_core::domain::{Event, Goal, Opportunity, Task};
 
 use crate::layout::dashboard_layout;
@@ -70,9 +70,10 @@ impl TuiApp {
 
             if event::poll(std::time::Duration::from_millis(100))?
                 && let CtEvent::Key(key) = event::read()?
-                    && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
-                        break;
-                    }
+                && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc)
+            {
+                break;
+            }
         }
 
         disable_raw_mode()?;

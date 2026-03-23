@@ -56,7 +56,10 @@ impl Default for InMemoryAuthAdapter {
 #[async_trait]
 impl AuthPort for InMemoryAuthAdapter {
     async fn store_credential(&self, key: &str, credential: Credential) -> Result<()> {
-        self.store.lock().unwrap().insert(key.to_owned(), credential);
+        self.store
+            .lock()
+            .unwrap()
+            .insert(key.to_owned(), credential);
         Ok(())
     }
 

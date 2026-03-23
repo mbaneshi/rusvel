@@ -12,10 +12,10 @@ use std::convert::Infallible;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
-use axum::Json;
 use chrono::Utc;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,8 @@ use tokio_stream::StreamExt;
 use rusvel_core::ports::StoragePort;
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
-use crate::build_cmd::extract_json;
 use crate::AppState;
+use crate::build_cmd::extract_json;
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -120,23 +120,30 @@ pub async fn build_capability(
 
     let streamer = ClaudeCliStreamer::new();
     let args = vec![
-        "--model".into(), "sonnet".to_string(),
-        "--effort".into(), "high".to_string(),
-        "--max-turns".into(), "5".to_string(),
-        "--permission-mode".into(), "default".to_string(),
+        "--model".into(),
+        "sonnet".to_string(),
+        "--effort".into(),
+        "high".to_string(),
+        "--max-turns".into(),
+        "5".to_string(),
+        "--permission-mode".into(),
+        "default".to_string(),
     ];
     let rx = streamer.stream_with_args(&prompt, &args);
 
     let storage = state.storage.clone();
     let engine_owned = engine.clone();
 
-    let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
-        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx).map(move |event| {
+    let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> = Box::pin(
+        tokio_stream::wrappers::ReceiverStream::new(rx).map(move |event| {
             let sse = match &event {
                 StreamEvent::Delta { text } => Event::default()
                     .event("delta")
                     .data(serde_json::json!({"text": text}).to_string()),
-                StreamEvent::Done { full_text, cost_usd } => {
+                StreamEvent::Done {
+                    full_text,
+                    cost_usd,
+                } => {
                     let storage = storage.clone();
                     let engine = engine_owned.clone();
                     let text = full_text.clone();
@@ -159,7 +166,8 @@ pub async fn build_capability(
                         serde_json::json!({
                             "text": full_text,
                             "cost_usd": cost_usd,
-                        }).to_string(),
+                        })
+                        .to_string(),
                     )
                 }
                 StreamEvent::Error { message } => Event::default()
@@ -167,7 +175,8 @@ pub async fn build_capability(
                     .data(serde_json::json!({"message": message}).to_string()),
             };
             Ok(sse)
-        }));
+        }),
+    );
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
@@ -199,20 +208,28 @@ pub async fn build_capability_inline(
     let conv_id = conversation_id.to_string();
 
     tokio::spawn(async move {
-        let _ = tx.send(Event::default()
-            .event("delta")
-            .data(serde_json::json!({
-                "text": "Searching online and building capabilities...\n\n",
-                "conversation_id": conv_id,
-            }).to_string())
-        ).await;
+        let _ = tx
+            .send(
+                Event::default().event("delta").data(
+                    serde_json::json!({
+                        "text": "Searching online and building capabilities...\n\n",
+                        "conversation_id": conv_id,
+                    })
+                    .to_string(),
+                ),
+            )
+            .await;
 
         let streamer = ClaudeCliStreamer::new();
         let args = vec![
-            "--model".into(), "sonnet".to_string(),
-            "--effort".into(), "high".to_string(),
-            "--max-turns".into(), "5".to_string(),
-            "--permission-mode".into(), "default".to_string(),
+            "--model".into(),
+            "sonnet".to_string(),
+            "--effort".into(),
+            "high".to_string(),
+            "--max-turns".into(),
+            "5".to_string(),
+            "--permission-mode".into(),
+            "default".to_string(),
         ];
         let stream_rx = streamer.stream_with_args(&prompt, &args);
 
@@ -224,26 +241,34 @@ pub async fn build_capability_inline(
         while let Some(event) = stream.next().await {
             match event {
                 StreamEvent::Delta { text } => {
-                    let _ = tx.send(Event::default()
-                        .event("delta")
-                        .data(serde_json::json!({
-                            "text": text,
-                            "conversation_id": conv_id,
-                        }).to_string())
-                    ).await;
+                    let _ = tx
+                        .send(
+                            Event::default().event("delta").data(
+                                serde_json::json!({
+                                    "text": text,
+                                    "conversation_id": conv_id,
+                                })
+                                .to_string(),
+                            ),
+                        )
+                        .await;
                 }
-                StreamEvent::Done { full_text, cost_usd } => {
+                StreamEvent::Done {
+                    full_text,
+                    cost_usd,
+                } => {
                     _full_response = full_text.clone();
 
                     // Parse and install the bundle
-                    let install_summary = match parse_and_install(&full_text, &engine_owned, &storage_clone).await {
-                        Ok(result) => format!(
-                            "\n\n---\n**Installed:** {}\n\n{}",
-                            result.installed.join(", "),
-                            result.explanation,
-                        ),
-                        Err(e) => format!("\n\n---\n**Install note:** {e}"),
-                    };
+                    let install_summary =
+                        match parse_and_install(&full_text, &engine_owned, &storage_clone).await {
+                            Ok(result) => format!(
+                                "\n\n---\n**Installed:** {}\n\n{}",
+                                result.installed.join(", "),
+                                result.explanation,
+                            ),
+                            Err(e) => format!("\n\n---\n**Install note:** {e}"),
+                        };
 
                     let final_text = format!("{full_text}{install_summary}");
 
@@ -255,34 +280,42 @@ pub async fn build_capability_inline(
                         content: final_text.clone(),
                         created_at: Utc::now().to_rfc3339(),
                     };
-                    let _ = storage_clone.objects()
+                    let _ = storage_clone
+                        .objects()
                         .put(&ns, &msg.id, serde_json::to_value(&msg).unwrap_or_default())
                         .await;
 
-                    let _ = tx.send(Event::default()
-                        .event("done")
-                        .data(serde_json::json!({
-                            "text": final_text,
-                            "cost_usd": cost_usd,
-                            "conversation_id": conv_id,
-                        }).to_string())
-                    ).await;
+                    let _ = tx
+                        .send(
+                            Event::default().event("done").data(
+                                serde_json::json!({
+                                    "text": final_text,
+                                    "cost_usd": cost_usd,
+                                    "conversation_id": conv_id,
+                                })
+                                .to_string(),
+                            ),
+                        )
+                        .await;
                 }
                 StreamEvent::Error { message } => {
-                    let _ = tx.send(Event::default()
-                        .event("error")
-                        .data(serde_json::json!({
-                            "message": message,
-                        }).to_string())
-                    ).await;
+                    let _ = tx
+                        .send(
+                            Event::default().event("error").data(
+                                serde_json::json!({
+                                    "message": message,
+                                })
+                                .to_string(),
+                            ),
+                        )
+                        .await;
                 }
             }
         }
     });
 
     let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
-        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
-            .map(Ok::<_, Infallible>));
+        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx).map(Ok::<_, Infallible>));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
@@ -308,10 +341,14 @@ async fn parse_and_install(
         inject_metadata(&mut val, engine);
         val.as_object_mut().map(|m| {
             m.insert("id".into(), serde_json::Value::String(id.clone()));
-            m.entry("created_by".to_string()).or_insert("capability-engine".into());
+            m.entry("created_by".to_string())
+                .or_insert("capability-engine".into());
         });
         if storage.objects().put("agents", &id, val).await.is_ok() {
-            let name = agent.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let name = agent
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
             installed.push(format!("agent:{name}"));
         }
     }
@@ -321,9 +358,14 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = skill.clone();
         inject_metadata(&mut val, engine);
-        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
+        if let Some(m) = val.as_object_mut() {
+            m.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
         if storage.objects().put("skills", &id, val).await.is_ok() {
-            let name = skill.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let name = skill
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
             installed.push(format!("skill:{name}"));
         }
     }
@@ -333,9 +375,14 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = rule.clone();
         inject_metadata(&mut val, engine);
-        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
+        if let Some(m) = val.as_object_mut() {
+            m.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
         if storage.objects().put("rules", &id, val).await.is_ok() {
-            let name = rule.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let name = rule
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
             installed.push(format!("rule:{name}"));
         }
     }
@@ -345,9 +392,14 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = mcp.clone();
         inject_metadata(&mut val, engine);
-        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
+        if let Some(m) = val.as_object_mut() {
+            m.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
         if storage.objects().put("mcp_servers", &id, val).await.is_ok() {
-            let name = mcp.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let name = mcp
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
             installed.push(format!("mcp:{name}"));
         }
     }
@@ -357,9 +409,14 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = hook.clone();
         inject_metadata(&mut val, engine);
-        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
+        if let Some(m) = val.as_object_mut() {
+            m.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
         if storage.objects().put("hooks", &id, val).await.is_ok() {
-            let name = hook.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
+            let name = hook
+                .get("name")
+                .and_then(|n| n.as_str())
+                .unwrap_or("unnamed");
             installed.push(format!("hook:{name}"));
         }
     }
@@ -369,7 +426,9 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = wf.clone();
         inject_metadata(&mut val, engine);
-        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
+        if let Some(m) = val.as_object_mut() {
+            m.insert("id".into(), serde_json::Value::String(id.clone()));
+        }
         if storage.objects().put("workflows", &id, val).await.is_ok() {
             let name = wf.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("workflow:{name}"));
@@ -385,7 +444,9 @@ async fn parse_and_install(
 /// Inject engine metadata into a JSON value's metadata field.
 fn inject_metadata(val: &mut serde_json::Value, engine: &str) {
     if let Some(obj) = val.as_object_mut() {
-        let meta = obj.entry("metadata").or_insert_with(|| serde_json::json!({}));
+        let meta = obj
+            .entry("metadata")
+            .or_insert_with(|| serde_json::json!({}));
         if let Some(meta_obj) = meta.as_object_mut() {
             meta_obj.insert("engine".into(), engine.into());
             meta_obj.insert("created_by".into(), "capability-engine".into());

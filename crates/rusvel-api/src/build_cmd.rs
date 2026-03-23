@@ -49,7 +49,6 @@ impl BuildEntityType {
             Self::Hook => "hook",
         }
     }
-
 }
 
 /// Parsed !build command.
@@ -107,9 +106,12 @@ pub async fn execute_build(
     // Use ClaudeCliStreamer to get Claude's response (collect full text)
     let streamer = ClaudeCliStreamer::new();
     let args = vec![
-        "--model".to_string(), "sonnet".to_string(),
-        "--max-turns".to_string(), "1".to_string(),
-        "--permission-mode".to_string(), "plan".to_string(),
+        "--model".to_string(),
+        "sonnet".to_string(),
+        "--max-turns".to_string(),
+        "1".to_string(),
+        "--permission-mode".to_string(),
+        "plan".to_string(),
     ];
     let mut rx = streamer.stream_with_args(&prompt, &args);
 
@@ -119,7 +121,9 @@ pub async fn execute_build(
             StreamEvent::Delta { text } => {
                 full_text.push_str(&text);
             }
-            StreamEvent::Done { full_text: text, .. } => {
+            StreamEvent::Done {
+                full_text: text, ..
+            } => {
                 full_text = text;
                 break;
             }
@@ -152,7 +156,8 @@ pub async fn execute_build(
 /// Build the prompt that asks Claude to generate the entity JSON.
 fn build_generation_prompt(cmd: &BuildCommand, engine: &str) -> String {
     let schema_hint = match cmd.entity_type {
-        BuildEntityType::Agent => r#"Generate a JSON object with these exact fields:
+        BuildEntityType::Agent => {
+            r#"Generate a JSON object with these exact fields:
 {
   "name": "short-kebab-case-name",
   "role": "one-line role description",
@@ -165,27 +170,33 @@ fn build_generation_prompt(cmd: &BuildCommand, engine: &str) -> String {
 
 For model, choose: "opus" for complex/expert tasks, "sonnet" for general tasks, "haiku" for simple/fast tasks.
 For allowed_tools, choose from: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, Agent.
-Think carefully about which tools this agent needs."#,
+Think carefully about which tools this agent needs."#
+        }
 
-        BuildEntityType::Skill => r#"Generate a JSON object with these exact fields:
+        BuildEntityType::Skill => {
+            r#"Generate a JSON object with these exact fields:
 {
   "name": "short-kebab-case-name",
   "description": "what this skill does",
   "prompt_template": "The full prompt template. Use {{input}} as placeholder for user input."
 }
 
-The prompt_template should be a detailed, well-crafted prompt that produces high-quality results."#,
+The prompt_template should be a detailed, well-crafted prompt that produces high-quality results."#
+        }
 
-        BuildEntityType::Rule => r#"Generate a JSON object with these exact fields:
+        BuildEntityType::Rule => {
+            r#"Generate a JSON object with these exact fields:
 {
   "name": "short-kebab-case-name",
   "content": "The rule text that will be injected into the system prompt.",
   "enabled": true
 }
 
-The content should be clear, actionable, and specific."#,
+The content should be clear, actionable, and specific."#
+        }
 
-        BuildEntityType::Mcp => r#"Generate a JSON object with these exact fields:
+        BuildEntityType::Mcp => {
+            r#"Generate a JSON object with these exact fields:
 {
   "name": "short-kebab-case-name",
   "description": "what this MCP server provides",
@@ -198,9 +209,11 @@ The content should be clear, actionable, and specific."#,
 }
 
 For server_type, choose: "stdio" for local processes, "http"/"sse" for remote servers.
-If stdio, provide command and args. If http/sse, provide url instead."#,
+If stdio, provide command and args. If http/sse, provide url instead."#
+        }
 
-        BuildEntityType::Hook => r#"Generate a JSON object with these exact fields:
+        BuildEntityType::Hook => {
+            r#"Generate a JSON object with these exact fields:
 {
   "name": "short-kebab-case-name",
   "event": "PreToolUse",
@@ -212,7 +225,8 @@ If stdio, provide command and args. If http/sse, provide url instead."#,
 
 For event, choose from: SessionStart, SessionEnd, PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification, SubagentStart, SubagentStop, TaskCompleted, ConfigChange, PreCompact, PostCompact, UserPromptSubmit, Stop, StopFailure.
 For hook_type, choose: "command" (shell), "http" (webhook), or "prompt" (LLM prompt).
-For matcher, use a regex/glob pattern (e.g., "Bash" for PreToolUse to match bash commands, "*" for all)."#,
+For matcher, use a regex/glob pattern (e.g., "Bash" for PreToolUse to match bash commands, "*" for all)."#
+        }
     };
 
     format!(
@@ -306,8 +320,13 @@ async fn persist_agent(
     };
 
     let id = agent.id.to_string();
-    storage.objects()
-        .put("agents", &id, serde_json::to_value(&agent).map_err(|e| e.to_string())?)
+    storage
+        .objects()
+        .put(
+            "agents",
+            &id,
+            serde_json::to_value(&agent).map_err(|e| e.to_string())?,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -319,9 +338,17 @@ async fn persist_agent(
          - **Tools:** {}\n\
          - **Department:** {}\n\n\
          You can now mention this agent with `@{}` in chat.",
-        agent.name, id, agent.role, agent.default_model.model,
-        if agent.allowed_tools.is_empty() { "all".into() } else { agent.allowed_tools.join(", ") },
-        engine, agent.name,
+        agent.name,
+        id,
+        agent.role,
+        agent.default_model.model,
+        if agent.allowed_tools.is_empty() {
+            "all".into()
+        } else {
+            agent.allowed_tools.join(", ")
+        },
+        engine,
+        agent.name,
     ))
 }
 
@@ -349,8 +376,13 @@ async fn persist_skill(
         metadata: serde_json::json!({ "engine": engine, "created_by": "!build" }),
     };
 
-    storage.objects()
-        .put("skills", &id, serde_json::to_value(&skill).map_err(|e| e.to_string())?)
+    storage
+        .objects()
+        .put(
+            "skills",
+            &id,
+            serde_json::to_value(&skill).map_err(|e| e.to_string())?,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -360,7 +392,11 @@ async fn persist_skill(
          - **Description:** {}\n\
          - **Department:** {}\n\n\
          Prompt template length: {} chars",
-        skill.name, id, skill.description, engine, skill.prompt_template.len(),
+        skill.name,
+        id,
+        skill.description,
+        engine,
+        skill.prompt_template.len(),
     ))
 }
 
@@ -388,8 +424,13 @@ async fn persist_rule(
         metadata: serde_json::json!({ "engine": engine, "created_by": "!build" }),
     };
 
-    storage.objects()
-        .put("rules", &id, serde_json::to_value(&rule).map_err(|e| e.to_string())?)
+    storage
+        .objects()
+        .put(
+            "rules",
+            &id,
+            serde_json::to_value(&rule).map_err(|e| e.to_string())?,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -400,8 +441,15 @@ async fn persist_rule(
          - **Department:** {}\n\
          - **Content:** {}\n\n\
          This rule is now {} in the {} department system prompt.",
-        rule.name, id, rule.enabled, engine,
-        if rule.content.len() > 100 { format!("{}...", &rule.content[..97]) } else { rule.content.clone() },
+        rule.name,
+        id,
+        rule.enabled,
+        engine,
+        if rule.content.len() > 100 {
+            format!("{}...", &rule.content[..97])
+        } else {
+            rule.content.clone()
+        },
         if rule.enabled { "active" } else { "disabled" },
         engine,
     ))
@@ -441,8 +489,13 @@ async fn persist_mcp(
         metadata: serde_json::json!({ "engine": engine, "created_by": "!build" }),
     };
 
-    storage.objects()
-        .put("mcp_servers", &id, serde_json::to_value(&server).map_err(|e| e.to_string())?)
+    storage
+        .objects()
+        .put(
+            "mcp_servers",
+            &id,
+            serde_json::to_value(&server).map_err(|e| e.to_string())?,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -454,9 +507,12 @@ async fn persist_mcp(
          - **Enabled:** {}\n\
          - **Department:** {}\n\n\
          This MCP server will be available in the next chat session.",
-        server.name, id, server.server_type,
+        server.name,
+        id,
+        server.server_type,
         server.command.as_deref().unwrap_or("N/A"),
-        server.enabled, engine,
+        server.enabled,
+        engine,
     ))
 }
 
@@ -490,8 +546,13 @@ async fn persist_hook(
         metadata: serde_json::json!({ "engine": engine, "created_by": "!build" }),
     };
 
-    storage.objects()
-        .put("hooks", &id, serde_json::to_value(&hook).map_err(|e| e.to_string())?)
+    storage
+        .objects()
+        .put(
+            "hooks",
+            &id,
+            serde_json::to_value(&hook).map_err(|e| e.to_string())?,
+        )
         .await
         .map_err(|e| e.to_string())?;
 
@@ -503,8 +564,7 @@ async fn persist_hook(
          - **Type:** {}\n\
          - **Enabled:** {}\n\
          - **Department:** {}",
-        hook.name, id, hook.event, hook.matcher,
-        hook.hook_type, hook.enabled, engine,
+        hook.name, id, hook.event, hook.matcher, hook.hook_type, hook.enabled, engine,
     ))
 }
 
@@ -542,7 +602,8 @@ mod tests {
 
     #[test]
     fn parse_build_hook() {
-        let cmd = parse_build_command("!build hook: validate bash commands before execution").unwrap();
+        let cmd =
+            parse_build_command("!build hook: validate bash commands before execution").unwrap();
         assert_eq!(cmd.entity_type, BuildEntityType::Hook);
         assert_eq!(cmd.description, "validate bash commands before execution");
     }

@@ -65,10 +65,20 @@ struct JsonRpcError {
 
 impl JsonRpcResponse {
     fn success(id: serde_json::Value, result: serde_json::Value) -> Self {
-        Self { jsonrpc: "2.0".into(), id, result: Some(result), error: None }
+        Self {
+            jsonrpc: "2.0".into(),
+            id,
+            result: Some(result),
+            error: None,
+        }
     }
     fn error(id: serde_json::Value, code: i32, message: String) -> Self {
-        Self { jsonrpc: "2.0".into(), id, result: None, error: Some(JsonRpcError { code, message }) }
+        Self {
+            jsonrpc: "2.0".into(),
+            id,
+            result: None,
+            error: Some(JsonRpcError { code, message }),
+        }
     }
 }
 
@@ -150,7 +160,9 @@ impl RusvelMcp {
 
     /// Handle an MCP method call and return a JSON result.
     pub async fn handle_method(
-        &self, method: &str, params: serde_json::Value,
+        &self,
+        method: &str,
+        params: serde_json::Value,
     ) -> Result<serde_json::Value, McpError> {
         match method {
             "initialize" => Ok(serde_json::json!({
@@ -160,17 +172,17 @@ impl RusvelMcp {
             })),
             "tools/list" => Ok(serde_json::json!({ "tools": tool_definitions() })),
             "tools/call" => self.handle_tool_call(params).await,
-            "notifications/initialized" | "notifications/cancelled" => {
-                Ok(serde_json::Value::Null)
-            }
+            "notifications/initialized" | "notifications/cancelled" => Ok(serde_json::Value::Null),
             _ => Err(McpError::UnknownTool(method.into())),
         }
     }
 
     async fn handle_tool_call(
-        &self, params: serde_json::Value,
+        &self,
+        params: serde_json::Value,
     ) -> Result<serde_json::Value, McpError> {
-        let name = params["name"].as_str()
+        let name = params["name"]
+            .as_str()
             .ok_or_else(|| McpError::InvalidParams("missing tool name".into()))?;
         let args = &params["arguments"];
 
@@ -180,14 +192,19 @@ impl RusvelMcp {
                 serde_json::to_value(&sessions)?
             }
             "session_create" => {
-                let name = args["name"].as_str()
+                let name = args["name"]
+                    .as_str()
                     .ok_or_else(|| McpError::InvalidParams("missing name".into()))?;
                 let kind: SessionKind = serde_json::from_value(args["kind"].clone())
                     .map_err(|e| McpError::InvalidParams(e.to_string()))?;
                 let session = Session {
-                    id: SessionId::new(), name: name.into(), kind,
-                    tags: vec![], config: SessionConfig::default(),
-                    created_at: Utc::now(), updated_at: Utc::now(),
+                    id: SessionId::new(),
+                    name: name.into(),
+                    kind,
+                    tags: vec![],
+                    config: SessionConfig::default(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
                     metadata: serde_json::json!({}),
                 };
                 let id = self.session.create(session).await?;
@@ -205,10 +222,14 @@ impl RusvelMcp {
             }
             "mission_add_goal" => {
                 let sid = parse_session_id(args)?;
-                let title = args["title"].as_str()
-                    .ok_or_else(|| McpError::InvalidParams("missing title".into()))?.to_string();
-                let desc = args["description"].as_str()
-                    .ok_or_else(|| McpError::InvalidParams("missing description".into()))?.to_string();
+                let title = args["title"]
+                    .as_str()
+                    .ok_or_else(|| McpError::InvalidParams("missing title".into()))?
+                    .to_string();
+                let desc = args["description"]
+                    .as_str()
+                    .ok_or_else(|| McpError::InvalidParams("missing description".into()))?
+                    .to_string();
                 let timeframe: Timeframe = serde_json::from_value(args["timeframe"].clone())
                     .map_err(|e| McpError::InvalidParams(e.to_string()))?;
                 let goal = self.engine.set_goal(&sid, title, desc, timeframe).await?;
@@ -224,9 +245,11 @@ impl RusvelMcp {
 }
 
 fn parse_session_id(args: &serde_json::Value) -> Result<SessionId, McpError> {
-    let raw = args["session_id"].as_str()
+    let raw = args["session_id"]
+        .as_str()
         .ok_or_else(|| McpError::InvalidParams("missing session_id".into()))?;
-    let uuid: uuid::Uuid = raw.parse()
+    let uuid: uuid::Uuid = raw
+        .parse()
         .map_err(|e| McpError::InvalidParams(format!("invalid session_id: {e}")))?;
     Ok(SessionId::from_uuid(uuid))
 }
@@ -243,13 +266,16 @@ pub async fn run_stdio(mcp: Arc<RusvelMcp>) -> Result<(), McpError> {
 
     while let Some(line) = lines.next_line().await? {
         let line = line.trim().to_string();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
 
         let req: JsonRpcRequest = match serde_json::from_str(&line) {
             Ok(r) => r,
             Err(e) => {
                 let resp = JsonRpcResponse::error(
-                    serde_json::Value::Null, -32700,
+                    serde_json::Value::Null,
+                    -32700,
                     format!("parse error: {e}"),
                 );
                 let mut out = serde_json::to_string(&resp)?;

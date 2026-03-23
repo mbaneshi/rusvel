@@ -24,7 +24,9 @@ impl Default for InvoiceId {
 }
 
 impl InvoiceId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for InvoiceId {
@@ -102,7 +104,10 @@ impl InvoiceManager {
         };
         let id = inv.id;
         let json = serde_json::to_value(&inv)?;
-        self.storage.objects().put(KIND_INVOICE, &id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND_INVOICE, &id.to_string(), json)
+            .await?;
         Ok(id)
     }
 
@@ -127,14 +132,21 @@ impl InvoiceManager {
     }
 
     pub async fn mark_paid(&self, id: &InvoiceId) -> Result<()> {
-        let val = self.storage.objects().get(KIND_INVOICE, &id.to_string()).await?;
+        let val = self
+            .storage
+            .objects()
+            .get(KIND_INVOICE, &id.to_string())
+            .await?;
         match val {
             Some(v) => {
                 let mut inv: Invoice = serde_json::from_value(v)?;
                 inv.status = InvoiceStatus::Paid;
                 inv.paid_at = Some(Utc::now());
                 let json = serde_json::to_value(&inv)?;
-                self.storage.objects().put(KIND_INVOICE, &id.to_string(), json).await
+                self.storage
+                    .objects()
+                    .put(KIND_INVOICE, &id.to_string(), json)
+                    .await
             }
             None => Err(RusvelError::NotFound {
                 kind: KIND_INVOICE.into(),
@@ -144,7 +156,9 @@ impl InvoiceManager {
     }
 
     pub async fn total_revenue(&self, session_id: SessionId) -> Result<f64> {
-        let paid = self.list_invoices(session_id, Some(InvoiceStatus::Paid)).await?;
+        let paid = self
+            .list_invoices(session_id, Some(InvoiceStatus::Paid))
+            .await?;
         Ok(paid.iter().map(|i| i.total).sum())
     }
 }

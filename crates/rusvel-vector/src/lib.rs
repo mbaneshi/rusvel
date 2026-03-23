@@ -46,7 +46,9 @@ impl LanceVectorStore {
 
     /// Create the knowledge table if it does not exist.
     async fn ensure_table(&self) -> Result<()> {
-        let names = self.db.table_names()
+        let names = self
+            .db
+            .table_names()
             .execute()
             .await
             .map_err(|e| RusvelError::Internal(format!("LanceDB table_names: {e}")))?;
@@ -60,7 +62,10 @@ impl LanceVectorStore {
                 .execute()
                 .await
                 .map_err(|e| RusvelError::Internal(format!("LanceDB create_table: {e}")))?;
-            tracing::info!("Created LanceDB table '{TABLE_NAME}' with {dim}d vectors", dim = self.dimensions);
+            tracing::info!(
+                "Created LanceDB table '{TABLE_NAME}' with {dim}d vectors",
+                dim = self.dimensions
+            );
         }
         Ok(())
     }
@@ -145,7 +150,8 @@ impl LanceVectorStore {
 
                 let created_at = created_ats
                     .map(|c| c.value(i).to_string())
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok()).map_or_else(Utc::now, |dt| dt.with_timezone(&Utc));
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+                    .map_or_else(Utc::now, |dt| dt.with_timezone(&Utc));
 
                 entries.push(VectorEntry {
                     id: ids.value(i).to_string(),
@@ -272,7 +278,8 @@ impl VectorStorePort for LanceVectorStore {
 
                 let created_at = created_ats
                     .map(|c| c.value(i).to_string())
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok()).map_or_else(Utc::now, |dt| dt.with_timezone(&Utc));
+                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+                    .map_or_else(Utc::now, |dt| dt.with_timezone(&Utc));
 
                 let distance = distances.map_or(0.0, |d| f64::from(d.value(i)));
                 // Convert distance to similarity score (1 / (1 + distance))

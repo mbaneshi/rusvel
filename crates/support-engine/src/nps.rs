@@ -26,7 +26,9 @@ impl Default for NpsResponseId {
 }
 
 impl NpsResponseId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for NpsResponseId {
@@ -74,7 +76,10 @@ impl NpsManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&response)?;
-        self.storage.objects().put(KIND, &response.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &response.id.to_string(), json)
+            .await?;
         Ok(response)
     }
 
@@ -84,7 +89,9 @@ impl NpsManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 
     /// Calculate NPS score: (promoters - detractors) / total * 100

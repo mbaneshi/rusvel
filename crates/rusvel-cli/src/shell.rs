@@ -7,10 +7,10 @@
 use std::sync::Arc;
 
 use reedline::{
-    default_emacs_keybindings, ColumnarMenu, Completer, DefaultHinter, EditCommand, Emacs,
-    FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Prompt, PromptEditMode,
-    PromptHistorySearch, PromptHistorySearchStatus, Reedline, ReedlineEvent, ReedlineMenu, Signal,
-    Span, Suggestion,
+    ColumnarMenu, Completer, DefaultHinter, EditCommand, Emacs, FileBackedHistory, KeyCode,
+    KeyModifiers, MenuBuilder, Prompt, PromptEditMode, PromptHistorySearch,
+    PromptHistorySearchStatus, Reedline, ReedlineEvent, ReedlineMenu, Signal, Span, Suggestion,
+    default_emacs_keybindings,
 };
 use rusvel_core::error::Result;
 use rusvel_core::ports::{SessionPort, StoragePort};
@@ -65,11 +65,28 @@ struct RusvelCompleter {
 impl RusvelCompleter {
     fn top_level_commands() -> Vec<&'static str> {
         vec![
-            "help", "exit", "quit", "use", "status", "list", "events",
-            "session", "forge", "dashboard",
+            "help",
+            "exit",
+            "quit",
+            "use",
+            "status",
+            "list",
+            "events",
+            "session",
+            "forge",
+            "dashboard",
             // departments
-            "finance", "growth", "distro", "legal", "support",
-            "infra", "product", "code", "harvest", "content", "gtm",
+            "finance",
+            "growth",
+            "distro",
+            "legal",
+            "support",
+            "infra",
+            "product",
+            "code",
+            "harvest",
+            "content",
+            "gtm",
         ]
     }
 
@@ -94,15 +111,17 @@ impl Completer for RusvelCompleter {
                 "session" => vec!["create", "list", "switch"],
                 "forge" => vec!["mission"],
                 "use" => departments::department_names().to_vec(),
-                d if departments::department_names().contains(&d) => {
-                    Self::dept_subcommands()
-                }
+                d if departments::department_names().contains(&d) => Self::dept_subcommands(),
                 _ => vec![],
             }
         };
 
         let partial = words.last().copied().unwrap_or("");
-        let start = if partial.is_empty() { pos } else { pos - partial.len() };
+        let start = if partial.is_empty() {
+            pos
+        } else {
+            pos - partial.len()
+        };
 
         candidates
             .into_iter()
@@ -136,16 +155,13 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
     // Build reedline with completions, history, hints
     let history_path = crate::rusvel_dir().join("shell_history.txt");
     let history = Box::new(
-        FileBackedHistory::with_file(500, history_path)
-            .expect("Failed to create shell history"),
+        FileBackedHistory::with_file(500, history_path).expect("Failed to create shell history"),
     );
 
     let completer = Box::new(RusvelCompleter {
         department: department.clone(),
     });
-    let completion_menu = Box::new(
-        ColumnarMenu::default().with_name("completion_menu"),
-    );
+    let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
     let hinter = Box::new(DefaultHinter::default());
 
@@ -251,7 +267,10 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                                 line_editor = line_editor.with_completer(c);
                             } else {
                                 println!("Unknown department: {dept_name}");
-                                println!("Available: {}", departments::department_names().join(", "));
+                                println!(
+                                    "Available: {}",
+                                    departments::department_names().join(", ")
+                                );
                             }
                         } else {
                             println!("Usage: use <department>");
@@ -267,33 +286,33 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             }
                         }
                     }
-                    "session" => {
-                        match words.get(1).copied() {
-                            Some("list") => {
-                                let cmd = crate::SessionCmd::List;
+                    "session" => match words.get(1).copied() {
+                        Some("list") => {
+                            let cmd = crate::SessionCmd::List;
+                            let _ = crate::handle_session(cmd, ctx.sessions.clone()).await;
+                        }
+                        Some("create") => {
+                            if let Some(&name) = words.get(2) {
+                                let cmd = crate::SessionCmd::Create {
+                                    name: name.to_string(),
+                                };
                                 let _ = crate::handle_session(cmd, ctx.sessions.clone()).await;
-                            }
-                            Some("create") => {
-                                if let Some(&name) = words.get(2) {
-                                    let cmd = crate::SessionCmd::Create { name: name.to_string() };
-                                    let _ = crate::handle_session(cmd, ctx.sessions.clone()).await;
-                                } else {
-                                    println!("Usage: session create <name>");
-                                }
-                            }
-                            Some("switch") => {
-                                if let Some(&id) = words.get(2) {
-                                    let cmd = crate::SessionCmd::Switch { id: id.to_string() };
-                                    let _ = crate::handle_session(cmd, ctx.sessions.clone()).await;
-                                } else {
-                                    println!("Usage: session switch <id>");
-                                }
-                            }
-                            _ => {
-                                println!("Usage: session [list|create <name>|switch <id>]");
+                            } else {
+                                println!("Usage: session create <name>");
                             }
                         }
-                    }
+                        Some("switch") => {
+                            if let Some(&id) = words.get(2) {
+                                let cmd = crate::SessionCmd::Switch { id: id.to_string() };
+                                let _ = crate::handle_session(cmd, ctx.sessions.clone()).await;
+                            } else {
+                                println!("Usage: session switch <id>");
+                            }
+                        }
+                        _ => {
+                            println!("Usage: session [list|create <name>|switch <id>]");
+                        }
+                    },
                     "dashboard" => {
                         println!("Launch the TUI dashboard with: rusvel --tui");
                     }

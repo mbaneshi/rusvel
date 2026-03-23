@@ -66,17 +66,12 @@ impl LlmPort for OpenAiProvider {
             return Err(map_openai_http_error(status.as_u16(), &body));
         }
 
-        let oai_resp: OpenAiChatResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let oai_resp: OpenAiChatResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(from_openai_response(oai_resp))
     }
 
-    async fn embed(
-        &self,
-        model: &ModelRef,
-        text: &str,
-    ) -> rusvel_core::error::Result<Vec<f32>> {
+    async fn embed(&self, model: &ModelRef, text: &str) -> rusvel_core::error::Result<Vec<f32>> {
         let url = format!("{}/embeddings", self.base_url);
         let body = serde_json::json!({
             "model": model.model,
@@ -100,8 +95,7 @@ impl LlmPort for OpenAiProvider {
             return Err(map_openai_http_error(status.as_u16(), &body));
         }
 
-        let resp: OpenAiEmbedResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let resp: OpenAiEmbedResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         resp.data
             .into_iter()
@@ -129,8 +123,7 @@ impl LlmPort for OpenAiProvider {
             return Err(map_openai_http_error(status.as_u16(), &body));
         }
 
-        let resp: OpenAiModelsResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let resp: OpenAiModelsResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(resp
             .data
@@ -426,7 +419,8 @@ mod tests {
 
     #[test]
     fn embed_response_deserialize() {
-        let json = r#"{"data":[{"embedding":[0.1,0.2,0.3],"index":0}],"model":"text-embedding-3-small"}"#;
+        let json =
+            r#"{"data":[{"embedding":[0.1,0.2,0.3],"index":0}],"model":"text-embedding-3-small"}"#;
         let resp: OpenAiEmbedResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.data.len(), 1);
         assert_eq!(resp.data[0].embedding, vec![0.1, 0.2, 0.3]);

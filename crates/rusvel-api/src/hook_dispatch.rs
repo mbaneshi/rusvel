@@ -106,7 +106,10 @@ async fn execute_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Res
 }
 
 /// Run a shell command. The event payload is available as $`HOOK_PAYLOAD` env var.
-async fn execute_command_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Result<(), String> {
+async fn execute_command_hook(
+    hook: &HookDefinition,
+    payload: &serde_json::Value,
+) -> Result<(), String> {
     let payload_str = serde_json::to_string(payload).unwrap_or_default();
 
     let output = tokio::process::Command::new("sh")
@@ -119,14 +122,21 @@ async fn execute_command_hook(hook: &HookDefinition, payload: &serde_json::Value
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        tracing::warn!("Hook '{}' command exited {}: {stderr}", hook.name, output.status);
+        tracing::warn!(
+            "Hook '{}' command exited {}: {stderr}",
+            hook.name,
+            output.status
+        );
     }
 
     Ok(())
 }
 
 /// POST the event payload to the hook's action URL.
-async fn execute_http_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Result<(), String> {
+async fn execute_http_hook(
+    hook: &HookDefinition,
+    payload: &serde_json::Value,
+) -> Result<(), String> {
     let client = reqwest::Client::new();
     let resp = client
         .post(&hook.action)
@@ -144,9 +154,12 @@ async fn execute_http_hook(hook: &HookDefinition, payload: &serde_json::Value) -
 }
 
 /// Send the hook's action text as a prompt to claude -p (fire-and-forget).
-async fn execute_prompt_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Result<(), String> {
-    use tokio_stream::wrappers::ReceiverStream;
+async fn execute_prompt_hook(
+    hook: &HookDefinition,
+    payload: &serde_json::Value,
+) -> Result<(), String> {
     use tokio_stream::StreamExt;
+    use tokio_stream::wrappers::ReceiverStream;
 
     // Interpolate {{payload}} in the action text
     let prompt = hook.action.replace(
@@ -156,9 +169,12 @@ async fn execute_prompt_hook(hook: &HookDefinition, payload: &serde_json::Value)
 
     let streamer = ClaudeCliStreamer::new();
     let args = vec![
-        "--model".into(), "haiku".to_string(),
-        "--max-turns".into(), "1".to_string(),
-        "--permission-mode".into(), "plan".to_string(),
+        "--model".into(),
+        "haiku".to_string(),
+        "--max-turns".into(),
+        "1".to_string(),
+        "--permission-mode".into(),
+        "plan".to_string(),
     ];
     let rx = streamer.stream_with_args(&prompt, &args);
 

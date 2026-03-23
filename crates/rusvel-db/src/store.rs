@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use rusvel_core::error::RusvelError;
 use rusvel_core::ports::*;
@@ -118,9 +118,7 @@ impl EventStore for Database {
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let result = stmt
-            .query_row(params![id.to_string()], |row| {
-                Ok(row_to_event(row))
-            })
+            .query_row(params![id.to_string()], |row| Ok(row_to_event(row)))
             .optional()
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
@@ -132,8 +130,9 @@ impl EventStore for Database {
 
     async fn query(&self, filter: EventFilter) -> rusvel_core::Result<Vec<Event>> {
         let conn = self.conn();
-        let mut sql =
-            String::from("SELECT id, session_id, run_id, source, kind, payload, created_at, metadata FROM events WHERE 1=1");
+        let mut sql = String::from(
+            "SELECT id, session_id, run_id, source, kind, payload, created_at, metadata FROM events WHERE 1=1",
+        );
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         let mut idx = 1;
 
@@ -175,8 +174,10 @@ impl EventStore for Database {
             .prepare(&sql)
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(std::convert::AsRef::as_ref).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| Ok(row_to_event(row)))
@@ -219,8 +220,7 @@ fn row_to_event(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Event> {
 
     Ok(Event {
         id: EventId::from_uuid(
-            uuid::Uuid::parse_str(&id_str)
-                .map_err(|e| RusvelError::Storage(e.to_string()))?,
+            uuid::Uuid::parse_str(&id_str).map_err(|e| RusvelError::Storage(e.to_string()))?,
         ),
         session_id: session_str
             .map(|s| {
@@ -329,8 +329,10 @@ impl ObjectStore for Database {
             .prepare(&sql)
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(std::convert::AsRef::as_ref).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| {
@@ -403,7 +405,9 @@ impl SessionStore for Database {
     async fn list_sessions(&self) -> rusvel_core::Result<Vec<SessionSummary>> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT id, name, kind, tags, updated_at FROM sessions ORDER BY updated_at DESC")
+            .prepare(
+                "SELECT id, name, kind, tags, updated_at FROM sessions ORDER BY updated_at DESC",
+            )
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let rows = stmt
@@ -540,7 +544,9 @@ impl SessionStore for Database {
     async fn list_threads(&self, run_id: &RunId) -> rusvel_core::Result<Vec<Thread>> {
         let conn = self.conn();
         let mut stmt = conn
-            .prepare("SELECT id, run_id, channel, messages, metadata FROM threads WHERE run_id = ?1")
+            .prepare(
+                "SELECT id, run_id, channel, messages, metadata FROM threads WHERE run_id = ?1",
+            )
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let rows = stmt
@@ -557,14 +563,30 @@ impl SessionStore for Database {
 }
 
 fn row_to_session(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Session> {
-    let id_str: String = row.get(0).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let name: String = row.get(1).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let kind_str: String = row.get(2).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let tags_str: String = row.get(3).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let config_str: String = row.get(4).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let created_str: String = row.get(5).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let updated_str: String = row.get(6).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let meta_str: String = row.get(7).map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let id_str: String = row
+        .get(0)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let name: String = row
+        .get(1)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let kind_str: String = row
+        .get(2)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let tags_str: String = row
+        .get(3)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let config_str: String = row
+        .get(4)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let created_str: String = row
+        .get(5)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let updated_str: String = row
+        .get(6)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let meta_str: String = row
+        .get(7)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
     Ok(Session {
         id: SessionId::from_uuid(
@@ -585,16 +607,36 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Session> {
 }
 
 fn row_to_run(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Run> {
-    let id_str: String = row.get(0).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let session_str: String = row.get(1).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let engine_str: String = row.get(2).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let input_summary: String = row.get(3).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let status_str: String = row.get(4).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let llm_budget_used: f64 = row.get(5).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let tool_calls_count: u32 = row.get(6).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let started_str: String = row.get(7).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let completed_str: Option<String> = row.get(8).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let meta_str: String = row.get(9).map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let id_str: String = row
+        .get(0)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let session_str: String = row
+        .get(1)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let engine_str: String = row
+        .get(2)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let input_summary: String = row
+        .get(3)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let status_str: String = row
+        .get(4)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let llm_budget_used: f64 = row
+        .get(5)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let tool_calls_count: u32 = row
+        .get(6)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let started_str: String = row
+        .get(7)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let completed_str: Option<String> = row
+        .get(8)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let meta_str: String = row
+        .get(9)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
     Ok(Run {
         id: RunId::from_uuid(
@@ -623,11 +665,21 @@ fn row_to_run(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Run> {
 }
 
 fn row_to_thread(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Thread> {
-    let id_str: String = row.get(0).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let run_str: String = row.get(1).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let channel_str: String = row.get(2).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let messages_str: String = row.get(3).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let meta_str: String = row.get(4).map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let id_str: String = row
+        .get(0)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let run_str: String = row
+        .get(1)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let channel_str: String = row
+        .get(2)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let messages_str: String = row
+        .get(3)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let meta_str: String = row
+        .get(4)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
     Ok(Thread {
         id: ThreadId::from_uuid(
@@ -702,8 +754,10 @@ impl JobStore for Database {
         for ks in &kind_strings {
             param_values.push(Box::new(ks.clone()));
         }
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(std::convert::AsRef::as_ref).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect();
 
         let mut stmt = conn
             .prepare(&sql)
@@ -835,8 +889,10 @@ impl JobStore for Database {
             .prepare(&sql)
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(std::convert::AsRef::as_ref).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| Ok(row_to_job(row)))
@@ -852,18 +908,42 @@ impl JobStore for Database {
 }
 
 fn row_to_job(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Job> {
-    let id_str: String = row.get(0).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let session_str: String = row.get(1).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let kind_str: String = row.get(2).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let payload_str: String = row.get(3).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let status_str: String = row.get(4).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let scheduled_str: Option<String> = row.get(5).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let started_str: Option<String> = row.get(6).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let completed_str: Option<String> = row.get(7).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let retries: u32 = row.get(8).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let max_retries: u32 = row.get(9).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let error: Option<String> = row.get(10).map_err(|e| RusvelError::Storage(e.to_string()))?;
-    let meta_str: String = row.get(11).map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let id_str: String = row
+        .get(0)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let session_str: String = row
+        .get(1)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let kind_str: String = row
+        .get(2)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let payload_str: String = row
+        .get(3)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let status_str: String = row
+        .get(4)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let scheduled_str: Option<String> = row
+        .get(5)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let started_str: Option<String> = row
+        .get(6)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let completed_str: Option<String> = row
+        .get(7)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let retries: u32 = row
+        .get(8)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let max_retries: u32 = row
+        .get(9)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let error: Option<String> = row
+        .get(10)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
+    let meta_str: String = row
+        .get(11)
+        .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
     fn parse_opt_dt(s: Option<String>) -> rusvel_core::Result<Option<DateTime<Utc>>> {
         match s {
@@ -954,8 +1034,10 @@ impl MetricStore for Database {
             .prepare(&sql)
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(std::convert::AsRef::as_ref).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| {
@@ -1077,7 +1159,10 @@ mod tests {
         ObjectStore::put(&db, "product", "p1", obj.clone())
             .await
             .unwrap();
-        let got = ObjectStore::get(&db, "product", "p1").await.unwrap().unwrap();
+        let got = ObjectStore::get(&db, "product", "p1")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(got["name"], "Widget");
 
         ObjectStore::delete(&db, "product", "p1").await.unwrap();
@@ -1089,14 +1174,9 @@ mod tests {
     async fn object_list() {
         let db = test_db();
         for i in 0..5 {
-            ObjectStore::put(
-                &db,
-                "item",
-                &format!("i{i}"),
-                serde_json::json!({"n": i}),
-            )
-            .await
-            .unwrap();
+            ObjectStore::put(&db, "item", &format!("i{i}"), serde_json::json!({"n": i}))
+                .await
+                .unwrap();
         }
 
         let all = ObjectStore::list(&db, "item", ObjectFilter::default())
@@ -1309,7 +1389,9 @@ mod tests {
         .unwrap();
         assert_eq!(limited.len(), 2);
 
-        let all = MetricStore::query(&db, MetricFilter::default()).await.unwrap();
+        let all = MetricStore::query(&db, MetricFilter::default())
+            .await
+            .unwrap();
         assert_eq!(all.len(), 6);
     }
 
@@ -1338,11 +1420,7 @@ mod tests {
         let sessions = storage.sessions().list_sessions().await.unwrap();
         assert!(sessions.is_empty());
 
-        let jobs = storage
-            .jobs()
-            .list(JobFilter::default())
-            .await
-            .unwrap();
+        let jobs = storage.jobs().list(JobFilter::default()).await.unwrap();
         assert!(jobs.is_empty());
 
         let metrics = storage

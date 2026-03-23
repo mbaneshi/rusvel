@@ -22,8 +22,7 @@ pub struct MemoryStore {
 impl MemoryStore {
     /// Open an in-memory `SQLite` database (useful for tests).
     pub fn in_memory() -> std::result::Result<Self, RusvelError> {
-        let conn = Connection::open_in_memory()
-            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let conn = Connection::open_in_memory().map_err(|e| RusvelError::Storage(e.to_string()))?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -33,8 +32,7 @@ impl MemoryStore {
 
     /// Open (or create) a `SQLite` database at the given path.
     pub fn open(path: &str) -> std::result::Result<Self, RusvelError> {
-        let conn = Connection::open(path)
-            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let conn = Connection::open(path).map_err(|e| RusvelError::Storage(e.to_string()))?;
         let store = Self {
             conn: Mutex::new(conn),
         };
@@ -56,7 +54,10 @@ impl MemoryStore {
 
     /// Create the main table and FTS5 virtual table if they do not exist.
     fn init_tables(&self) -> std::result::Result<(), RusvelError> {
-        let conn = self.conn.lock().map_err(|e| RusvelError::Internal(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RusvelError::Internal(e.to_string()))?;
 
         conn.execute_batch(
             "
@@ -144,18 +145,20 @@ impl MemoryStore {
         let created_at_str: String = row.get(5)?;
         let metadata_str: String = row.get(6)?;
 
-        let id = Uuid::parse_str(&id_str)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+        let id = Uuid::parse_str(&id_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-        let session_uuid = Uuid::parse_str(&session_id_str)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e)))?;
+        let session_uuid = Uuid::parse_str(&session_id_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-        let created_at: DateTime<Utc> = created_at_str
-            .parse::<DateTime<Utc>>()
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e)))?;
+        let created_at: DateTime<Utc> = created_at_str.parse::<DateTime<Utc>>().map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+        })?;
 
-        let metadata: serde_json::Value = serde_json::from_str(&metadata_str)
-            .unwrap_or_else(|_| serde_json::json!({}));
+        let metadata: serde_json::Value =
+            serde_json::from_str(&metadata_str).unwrap_or_else(|_| serde_json::json!({}));
 
         let embedding = embedding_blob.map(|blob| {
             blob.chunks_exact(4)
@@ -192,7 +195,10 @@ impl MemoryPort for MemoryStore {
             .map_err(|e| RusvelError::Serialization(e.to_string()))?;
         let embedding_blob = entry.embedding.as_deref().map(Self::embedding_to_blob);
 
-        let conn = self.conn.lock().map_err(|e| RusvelError::Internal(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RusvelError::Internal(e.to_string()))?;
         conn.execute(
             "INSERT OR REPLACE INTO memory_entries (id, session_id, kind, content, embedding, created_at, metadata)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -212,7 +218,10 @@ impl MemoryPort for MemoryStore {
     }
 
     async fn recall(&self, id: &Uuid) -> Result<Option<MemoryEntry>> {
-        let conn = self.conn.lock().map_err(|e| RusvelError::Internal(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RusvelError::Internal(e.to_string()))?;
         let mut stmt = conn
             .prepare(
                 "SELECT id, session_id, kind, content, embedding, created_at, metadata
@@ -234,7 +243,10 @@ impl MemoryPort for MemoryStore {
         query: &str,
         limit: usize,
     ) -> Result<Vec<MemoryEntry>> {
-        let conn = self.conn.lock().map_err(|e| RusvelError::Internal(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RusvelError::Internal(e.to_string()))?;
 
         // Use FTS5 MATCH to find relevant entries, filtered by session_id.
         let mut stmt = conn
@@ -265,7 +277,10 @@ impl MemoryPort for MemoryStore {
     }
 
     async fn forget(&self, id: &Uuid) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| RusvelError::Internal(e.to_string()))?;
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| RusvelError::Internal(e.to_string()))?;
 
         // The trigger on DELETE will remove the FTS5 entry automatically.
         conn.execute(
@@ -347,15 +362,27 @@ mod tests {
         let session = SessionId::new();
 
         store
-            .store(make_entry(session, "The quick brown fox jumps", MemoryKind::Fact))
+            .store(make_entry(
+                session,
+                "The quick brown fox jumps",
+                MemoryKind::Fact,
+            ))
             .await
             .unwrap();
         store
-            .store(make_entry(session, "Lazy dog sleeps all day", MemoryKind::Conversation))
+            .store(make_entry(
+                session,
+                "Lazy dog sleeps all day",
+                MemoryKind::Conversation,
+            ))
             .await
             .unwrap();
         store
-            .store(make_entry(session, "Fox hunting is controversial", MemoryKind::Decision))
+            .store(make_entry(
+                session,
+                "Fox hunting is controversial",
+                MemoryKind::Decision,
+            ))
             .await
             .unwrap();
 
@@ -373,11 +400,19 @@ mod tests {
         let session_b = SessionId::new();
 
         store
-            .store(make_entry(session_a, "Secret plan for session A", MemoryKind::Fact))
+            .store(make_entry(
+                session_a,
+                "Secret plan for session A",
+                MemoryKind::Fact,
+            ))
             .await
             .unwrap();
         store
-            .store(make_entry(session_b, "Secret plan for session B", MemoryKind::Fact))
+            .store(make_entry(
+                session_b,
+                "Secret plan for session B",
+                MemoryKind::Fact,
+            ))
             .await
             .unwrap();
 
@@ -396,7 +431,11 @@ mod tests {
         let session = SessionId::new();
 
         let id = store
-            .store(make_entry(session, "Remember this important fact", MemoryKind::Fact))
+            .store(make_entry(
+                session,
+                "Remember this important fact",
+                MemoryKind::Fact,
+            ))
             .await
             .unwrap();
 

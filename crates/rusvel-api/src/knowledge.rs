@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use rusvel_core::domain::{VectorEntry, VectorSearchResult};
@@ -91,10 +91,16 @@ pub async fn ingest_knowledge(
     Json(body): Json<IngestRequest>,
 ) -> Result<Json<IngestResponse>, (StatusCode, String)> {
     let embed_port = state.embedding.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Embedding service not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Embedding service not available".into(),
+        )
     })?;
     let vector_store = state.vector_store.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
     })?;
 
     let chunks = chunk_text(&body.content, 500);
@@ -105,7 +111,10 @@ pub async fn ingest_knowledge(
     let mut stored = 0usize;
     for chunk in &chunks {
         let embedding = embed_port.embed_one(chunk).await.map_err(|e| {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Embedding failed: {e}"))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Embedding failed: {e}"),
+            )
         })?;
 
         let id = uuid::Uuid::now_v7().to_string();
@@ -117,13 +126,18 @@ pub async fn ingest_knowledge(
             .upsert(&id, chunk, embedding, metadata)
             .await
             .map_err(|e| {
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("Store failed: {e}"))
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Store failed: {e}"),
+                )
             })?;
         stored += 1;
     }
 
     tracing::info!("Ingested {} chunks from source '{}'", stored, body.source);
-    Ok(Json(IngestResponse { chunks_stored: stored }))
+    Ok(Json(IngestResponse {
+        chunks_stored: stored,
+    }))
 }
 
 /// GET /api/knowledge — list all knowledge entries.
@@ -131,11 +145,17 @@ pub async fn list_knowledge(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Vec<VectorEntry>>, (StatusCode, String)> {
     let vector_store = state.vector_store.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
     })?;
 
     let entries = vector_store.list(1000).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("List failed: {e}"))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("List failed: {e}"),
+        )
     })?;
 
     Ok(Json(entries))
@@ -147,11 +167,17 @@ pub async fn delete_knowledge(
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let vector_store = state.vector_store.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
     })?;
 
     vector_store.delete(&id).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Delete failed: {e}"))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Delete failed: {e}"),
+        )
     })?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -163,20 +189,35 @@ pub async fn search_knowledge(
     Json(body): Json<SearchRequest>,
 ) -> Result<Json<Vec<VectorSearchResult>>, (StatusCode, String)> {
     let embed_port = state.embedding.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Embedding service not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Embedding service not available".into(),
+        )
     })?;
     let vector_store = state.vector_store.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
     })?;
 
     let query_embedding = embed_port.embed_one(&body.query).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Embedding failed: {e}"))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Embedding failed: {e}"),
+        )
     })?;
 
     let limit = body.limit.unwrap_or(5);
-    let results = vector_store.search(&query_embedding, limit).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {e}"))
-    })?;
+    let results = vector_store
+        .search(&query_embedding, limit)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Search failed: {e}"),
+            )
+        })?;
 
     Ok(Json(results))
 }
@@ -186,14 +227,23 @@ pub async fn knowledge_stats(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<KnowledgeStatsResponse>, (StatusCode, String)> {
     let embed_port = state.embedding.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Embedding service not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Embedding service not available".into(),
+        )
     })?;
     let vector_store = state.vector_store.as_ref().ok_or_else(|| {
-        (StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into())
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
     })?;
 
     let total_entries = vector_store.count().await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Count failed: {e}"))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Count failed: {e}"),
+        )
     })?;
 
     let model_name = embed_port.model_name().to_string();

@@ -4,10 +4,10 @@
 //! departments are defined in a TOML file and loaded at startup.
 //! Adding a department = adding a TOML block. Zero code changes.
 
-use std::path::Path;
-use serde::{Deserialize, Serialize};
-use crate::domain::EngineKind;
 use crate::config::LayeredConfig;
+use crate::domain::EngineKind;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// A quick-action button shown in the department panel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,9 +45,10 @@ impl DepartmentRegistry {
     pub fn load(path: &Path) -> Self {
         if path.exists()
             && let Ok(contents) = std::fs::read_to_string(path)
-                && let Ok(reg) = toml::from_str(&contents) {
-                    return reg;
-                }
+            && let Ok(reg) = toml::from_str(&contents)
+        {
+            return reg;
+        }
         Self::defaults()
     }
 
@@ -99,8 +100,10 @@ impl DepartmentRegistry {
                     tabs: vec!["actions".into(), "agents".into(), "workflows".into(), "skills".into(), "rules".into(), "mcp".into(), "hooks".into(), "dirs".into(), "events".into()],
                     quick_actions: vec![
                         QuickAction { label: "Analyze codebase".into(), prompt: "Analyze the codebase structure, dependencies, and code quality.".into() },
-                        QuickAction { label: "Run tests".into(), prompt: "Run the full test suite and report results with any failures.".into() },
+                        QuickAction { label: "Run tests".into(), prompt: "Run `cargo test` and report results. If any fail, show the errors.".into() },
                         QuickAction { label: "Find TODOs".into(), prompt: "Find all TODO, FIXME, and HACK comments across the codebase.".into() },
+                        QuickAction { label: "Self-improve".into(), prompt: "Read docs/status/current-state.md and docs/status/gap-analysis.md. Identify the highest-impact fix you can make right now. Implement it, run tests, and verify.".into() },
+                        QuickAction { label: "Fix build warnings".into(), prompt: "Run `cargo build` and fix any warnings. Then run `cargo test` to verify nothing broke.".into() },
                     ],
                     default_config: LayeredConfig {
                         model: None, effort: Some("high".into()),
@@ -329,7 +332,11 @@ mod tests {
     fn each_dept_has_quick_actions() {
         let reg = DepartmentRegistry::defaults();
         for dept in &reg.departments {
-            assert!(!dept.quick_actions.is_empty(), "{} has no quick actions", dept.id);
+            assert!(
+                !dept.quick_actions.is_empty(),
+                "{} has no quick actions",
+                dept.id
+            );
         }
     }
 }

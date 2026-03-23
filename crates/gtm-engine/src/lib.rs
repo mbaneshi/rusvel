@@ -15,8 +15,8 @@ pub mod outreach;
 pub use crm::{CrmManager, Deal, DealId, DealStage};
 pub use invoice::{Invoice, InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 pub use outreach::{
-    FollowUp, FollowUpId, OutreachManager, OutreachSequence, SequenceId, SequenceStep,
-    SequenceStatus,
+    FollowUp, FollowUpId, OutreachManager, OutreachSequence, SequenceId, SequenceStatus,
+    SequenceStep,
 };
 
 pub mod events {
@@ -49,18 +49,29 @@ impl GtmEngine {
         jobs: Arc<dyn JobPort>,
     ) -> Self {
         let crm = CrmManager::new(Arc::clone(&storage));
-        let outreach = OutreachManager::new(
-            Arc::clone(&storage),
-            Arc::clone(&agent),
-            Arc::clone(&jobs),
-        );
+        let outreach =
+            OutreachManager::new(Arc::clone(&storage), Arc::clone(&agent), Arc::clone(&jobs));
         let invoices = InvoiceManager::new(Arc::clone(&storage));
-        Self { storage, events, agent, jobs, crm, outreach, invoices }
+        Self {
+            storage,
+            events,
+            agent,
+            jobs,
+            crm,
+            outreach,
+            invoices,
+        }
     }
 
-    pub fn crm(&self) -> &CrmManager { &self.crm }
-    pub fn outreach(&self) -> &OutreachManager { &self.outreach }
-    pub fn invoices(&self) -> &InvoiceManager { &self.invoices }
+    pub fn crm(&self) -> &CrmManager {
+        &self.crm
+    }
+    pub fn outreach(&self) -> &OutreachManager {
+        &self.outreach
+    }
+    pub fn invoices(&self) -> &InvoiceManager {
+        &self.invoices
+    }
 
     /// Emit a domain event on the event bus.
     pub async fn emit_event(&self, kind: &str, payload: serde_json::Value) -> Result<EventId> {
@@ -80,8 +91,12 @@ impl GtmEngine {
 
 #[async_trait]
 impl rusvel_core::engine::Engine for GtmEngine {
-    fn kind(&self) -> EngineKind { EngineKind::GoToMarket }
-    fn name(&self) -> &'static str { "GoToMarket Engine" }
+    fn kind(&self) -> EngineKind {
+        EngineKind::GoToMarket
+    }
+    fn name(&self) -> &'static str {
+        "GoToMarket Engine"
+    }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![
@@ -91,8 +106,12 @@ impl rusvel_core::engine::Engine for GtmEngine {
         ]
     }
 
-    async fn initialize(&self) -> Result<()> { Ok(()) }
-    async fn shutdown(&self) -> Result<()> { Ok(()) }
+    async fn initialize(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
 
     async fn health(&self) -> Result<HealthStatus> {
         Ok(HealthStatus {
@@ -124,7 +143,9 @@ mod tests {
 
     impl StubStore {
         fn new() -> Self {
-            Self { objects: StubObjects::new() }
+            Self {
+                objects: StubObjects::new(),
+            }
         }
     }
 
@@ -139,23 +160,41 @@ mod tests {
 
     impl StubObjects {
         fn new() -> Self {
-            Self { data: Mutex::new(Vec::new()) }
+            Self {
+                data: Mutex::new(Vec::new()),
+            }
         }
     }
 
     impl StoragePort for StubStore {
-        fn events(&self) -> &dyn EventStore { &StubEvents }
-        fn objects(&self) -> &dyn ObjectStore { &self.objects }
-        fn sessions(&self) -> &dyn SessionStore { &StubSessions }
-        fn jobs(&self) -> &dyn JobStore { &StubJobStore }
-        fn metrics(&self) -> &dyn MetricStore { &StubMetrics }
+        fn events(&self) -> &dyn EventStore {
+            &StubEvents
+        }
+        fn objects(&self) -> &dyn ObjectStore {
+            &self.objects
+        }
+        fn sessions(&self) -> &dyn SessionStore {
+            &StubSessions
+        }
+        fn jobs(&self) -> &dyn JobStore {
+            &StubJobStore
+        }
+        fn metrics(&self) -> &dyn MetricStore {
+            &StubMetrics
+        }
     }
 
     #[async_trait]
     impl EventStore for StubEvents {
-        async fn append(&self, _: &Event) -> Result<()> { Ok(()) }
-        async fn get(&self, _: &EventId) -> Result<Option<Event>> { Ok(None) }
-        async fn query(&self, _: EventFilter) -> Result<Vec<Event>> { Ok(vec![]) }
+        async fn append(&self, _: &Event) -> Result<()> {
+            Ok(())
+        }
+        async fn get(&self, _: &EventId) -> Result<Option<Event>> {
+            Ok(None)
+        }
+        async fn query(&self, _: EventFilter) -> Result<Vec<Event>> {
+            Ok(vec![])
+        }
     }
 
     #[async_trait]
@@ -168,7 +207,10 @@ mod tests {
         }
         async fn get(&self, kind: &str, id: &str) -> Result<Option<serde_json::Value>> {
             let data = self.data.lock().unwrap();
-            Ok(data.iter().find(|(k, i, _)| k == kind && i == id).map(|(_, _, v)| v.clone()))
+            Ok(data
+                .iter()
+                .find(|(k, i, _)| k == kind && i == id)
+                .map(|(_, _, v)| v.clone()))
         }
         async fn delete(&self, kind: &str, id: &str) -> Result<()> {
             let mut data = self.data.lock().unwrap();
@@ -177,52 +219,96 @@ mod tests {
         }
         async fn list(&self, kind: &str, _filter: ObjectFilter) -> Result<Vec<serde_json::Value>> {
             let data = self.data.lock().unwrap();
-            Ok(data.iter().filter(|(k, _, _)| k == kind).map(|(_, _, v)| v.clone()).collect())
+            Ok(data
+                .iter()
+                .filter(|(k, _, _)| k == kind)
+                .map(|(_, _, v)| v.clone())
+                .collect())
         }
     }
 
     #[async_trait]
     impl SessionStore for StubSessions {
-        async fn put_session(&self, _: &Session) -> Result<()> { Ok(()) }
-        async fn get_session(&self, _: &SessionId) -> Result<Option<Session>> { Ok(None) }
-        async fn list_sessions(&self) -> Result<Vec<SessionSummary>> { Ok(vec![]) }
-        async fn put_run(&self, _: &Run) -> Result<()> { Ok(()) }
-        async fn get_run(&self, _: &RunId) -> Result<Option<Run>> { Ok(None) }
-        async fn list_runs(&self, _: &SessionId) -> Result<Vec<Run>> { Ok(vec![]) }
-        async fn put_thread(&self, _: &Thread) -> Result<()> { Ok(()) }
-        async fn get_thread(&self, _: &ThreadId) -> Result<Option<Thread>> { Ok(None) }
-        async fn list_threads(&self, _: &RunId) -> Result<Vec<Thread>> { Ok(vec![]) }
+        async fn put_session(&self, _: &Session) -> Result<()> {
+            Ok(())
+        }
+        async fn get_session(&self, _: &SessionId) -> Result<Option<Session>> {
+            Ok(None)
+        }
+        async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
+            Ok(vec![])
+        }
+        async fn put_run(&self, _: &Run) -> Result<()> {
+            Ok(())
+        }
+        async fn get_run(&self, _: &RunId) -> Result<Option<Run>> {
+            Ok(None)
+        }
+        async fn list_runs(&self, _: &SessionId) -> Result<Vec<Run>> {
+            Ok(vec![])
+        }
+        async fn put_thread(&self, _: &Thread) -> Result<()> {
+            Ok(())
+        }
+        async fn get_thread(&self, _: &ThreadId) -> Result<Option<Thread>> {
+            Ok(None)
+        }
+        async fn list_threads(&self, _: &RunId) -> Result<Vec<Thread>> {
+            Ok(vec![])
+        }
     }
 
     #[async_trait]
     impl JobStore for StubJobStore {
-        async fn enqueue(&self, _: &Job) -> Result<()> { Ok(()) }
-        async fn dequeue(&self, _: &[JobKind]) -> Result<Option<Job>> { Ok(None) }
-        async fn update(&self, _: &Job) -> Result<()> { Ok(()) }
-        async fn get(&self, _: &JobId) -> Result<Option<Job>> { Ok(None) }
-        async fn list(&self, _: JobFilter) -> Result<Vec<Job>> { Ok(vec![]) }
+        async fn enqueue(&self, _: &Job) -> Result<()> {
+            Ok(())
+        }
+        async fn dequeue(&self, _: &[JobKind]) -> Result<Option<Job>> {
+            Ok(None)
+        }
+        async fn update(&self, _: &Job) -> Result<()> {
+            Ok(())
+        }
+        async fn get(&self, _: &JobId) -> Result<Option<Job>> {
+            Ok(None)
+        }
+        async fn list(&self, _: JobFilter) -> Result<Vec<Job>> {
+            Ok(vec![])
+        }
     }
 
     #[async_trait]
     impl MetricStore for StubMetrics {
-        async fn record(&self, _: &MetricPoint) -> Result<()> { Ok(()) }
-        async fn query(&self, _: MetricFilter) -> Result<Vec<MetricPoint>> { Ok(vec![]) }
+        async fn record(&self, _: &MetricPoint) -> Result<()> {
+            Ok(())
+        }
+        async fn query(&self, _: MetricFilter) -> Result<Vec<MetricPoint>> {
+            Ok(vec![])
+        }
     }
 
     struct StubEventPort;
 
     #[async_trait]
     impl EventPort for StubEventPort {
-        async fn emit(&self, event: Event) -> Result<EventId> { Ok(event.id) }
-        async fn get(&self, _: &EventId) -> Result<Option<Event>> { Ok(None) }
-        async fn query(&self, _: EventFilter) -> Result<Vec<Event>> { Ok(vec![]) }
+        async fn emit(&self, event: Event) -> Result<EventId> {
+            Ok(event.id)
+        }
+        async fn get(&self, _: &EventId) -> Result<Option<Event>> {
+            Ok(None)
+        }
+        async fn query(&self, _: EventFilter) -> Result<Vec<Event>> {
+            Ok(vec![])
+        }
     }
 
     struct StubAgentPort;
 
     #[async_trait]
     impl AgentPort for StubAgentPort {
-        async fn create(&self, _: AgentConfig) -> Result<RunId> { Ok(RunId::new()) }
+        async fn create(&self, _: AgentConfig) -> Result<RunId> {
+            Ok(RunId::new())
+        }
         async fn run(&self, _: &RunId, _: Content) -> Result<AgentOutput> {
             Ok(AgentOutput {
                 run_id: RunId::new(),
@@ -233,22 +319,42 @@ mod tests {
                 metadata: serde_json::json!({}),
             })
         }
-        async fn stop(&self, _: &RunId) -> Result<()> { Ok(()) }
-        async fn status(&self, _: &RunId) -> Result<AgentStatus> { Ok(AgentStatus::Idle) }
+        async fn stop(&self, _: &RunId) -> Result<()> {
+            Ok(())
+        }
+        async fn status(&self, _: &RunId) -> Result<AgentStatus> {
+            Ok(AgentStatus::Idle)
+        }
     }
 
     struct StubJobPort;
 
     #[async_trait]
     impl JobPort for StubJobPort {
-        async fn enqueue(&self, _: NewJob) -> Result<JobId> { Ok(JobId::new()) }
-        async fn dequeue(&self, _: &[JobKind]) -> Result<Option<Job>> { Ok(None) }
-        async fn complete(&self, _: &JobId, _: JobResult) -> Result<()> { Ok(()) }
-        async fn fail(&self, _: &JobId, _: String) -> Result<()> { Ok(()) }
-        async fn schedule(&self, _: NewJob, _: &str) -> Result<JobId> { Ok(JobId::new()) }
-        async fn cancel(&self, _: &JobId) -> Result<()> { Ok(()) }
-        async fn approve(&self, _: &JobId) -> Result<()> { Ok(()) }
-        async fn list(&self, _: JobFilter) -> Result<Vec<Job>> { Ok(vec![]) }
+        async fn enqueue(&self, _: NewJob) -> Result<JobId> {
+            Ok(JobId::new())
+        }
+        async fn dequeue(&self, _: &[JobKind]) -> Result<Option<Job>> {
+            Ok(None)
+        }
+        async fn complete(&self, _: &JobId, _: JobResult) -> Result<()> {
+            Ok(())
+        }
+        async fn fail(&self, _: &JobId, _: String) -> Result<()> {
+            Ok(())
+        }
+        async fn schedule(&self, _: NewJob, _: &str) -> Result<JobId> {
+            Ok(JobId::new())
+        }
+        async fn cancel(&self, _: &JobId) -> Result<()> {
+            Ok(())
+        }
+        async fn approve(&self, _: &JobId) -> Result<()> {
+            Ok(())
+        }
+        async fn list(&self, _: JobFilter) -> Result<Vec<Job>> {
+            Ok(vec![])
+        }
     }
 
     fn make_engine() -> GtmEngine {
@@ -283,7 +389,11 @@ mod tests {
         let sid = SessionId::new();
         let contact = make_contact(sid);
 
-        let id = engine.crm().add_contact(sid, contact.clone()).await.unwrap();
+        let id = engine
+            .crm()
+            .add_contact(sid, contact.clone())
+            .await
+            .unwrap();
         let fetched = engine.crm().get_contact(&id).await.unwrap();
         assert_eq!(fetched.name, "Alice Smith");
 
@@ -313,9 +423,17 @@ mod tests {
 
         let deal_id = engine.crm().add_deal(sid, deal).await.unwrap();
 
-        engine.crm().advance_deal(&deal_id, DealStage::Qualified).await.unwrap();
+        engine
+            .crm()
+            .advance_deal(&deal_id, DealStage::Qualified)
+            .await
+            .unwrap();
 
-        let deals = engine.crm().list_deals(sid, Some(DealStage::Qualified)).await.unwrap();
+        let deals = engine
+            .crm()
+            .list_deals(sid, Some(DealStage::Qualified))
+            .await
+            .unwrap();
         assert_eq!(deals.len(), 1);
         assert_eq!(deals[0].stage, DealStage::Qualified);
     }
@@ -329,11 +447,23 @@ mod tests {
         let cid = ContactId::new();
 
         let items = vec![
-            LineItem { description: "Consulting".into(), quantity: 10.0, unit_price: 150.0 },
-            LineItem { description: "Support".into(), quantity: 1.0, unit_price: 500.0 },
+            LineItem {
+                description: "Consulting".into(),
+                quantity: 10.0,
+                unit_price: 150.0,
+            },
+            LineItem {
+                description: "Support".into(),
+                quantity: 1.0,
+                unit_price: 500.0,
+            },
         ];
 
-        let inv_id = engine.invoices().create_invoice(sid, cid, items, Utc::now()).await.unwrap();
+        let inv_id = engine
+            .invoices()
+            .create_invoice(sid, cid, items, Utc::now())
+            .await
+            .unwrap();
 
         // Before paying, revenue should be 0.
         let rev = engine.invoices().total_revenue(sid).await.unwrap();
@@ -353,11 +483,23 @@ mod tests {
         let sid = SessionId::new();
 
         let steps = vec![
-            SequenceStep { delay_days: 0, channel: "email".into(), template: "intro".into() },
-            SequenceStep { delay_days: 3, channel: "email".into(), template: "follow_up".into() },
+            SequenceStep {
+                delay_days: 0,
+                channel: "email".into(),
+                template: "intro".into(),
+            },
+            SequenceStep {
+                delay_days: 3,
+                channel: "email".into(),
+                template: "follow_up".into(),
+            },
         ];
 
-        engine.outreach().create_sequence(sid, "Welcome flow".into(), steps).await.unwrap();
+        engine
+            .outreach()
+            .create_sequence(sid, "Welcome flow".into(), steps)
+            .await
+            .unwrap();
 
         let seqs = engine.outreach().list_sequences(sid).await.unwrap();
         assert_eq!(seqs.len(), 1);

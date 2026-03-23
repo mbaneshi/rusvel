@@ -48,10 +48,7 @@ impl ContentAnalytics {
     }
 
     /// Get all per-platform metrics for a content item.
-    pub async fn get_metrics(
-        &self,
-        content_id: ContentId,
-    ) -> Result<Vec<(Platform, PostMetrics)>> {
+    pub async fn get_metrics(&self, content_id: ContentId) -> Result<Vec<(Platform, PostMetrics)>> {
         let filter = ObjectFilter {
             session_id: None,
             tags: vec![],
@@ -66,9 +63,10 @@ impl ContentAnalytics {
         let mut result = Vec::new();
         for val in all {
             if let Ok(rec) = serde_json::from_value::<ContentMetricsRecord>(val)
-                && rec.content_id == content_id {
-                    result.push((rec.platform, rec.metrics));
-                }
+                && rec.content_id == content_id
+            {
+                result.push((rec.platform, rec.metrics));
+            }
         }
         Ok(result)
     }
@@ -96,13 +94,15 @@ impl ContentAnalytics {
         let mut scored: Vec<(ContentItem, PostMetrics)> = Vec::new();
         for item in items {
             let per_platform = self.get_metrics(item.id).await?;
-            let combined = per_platform.iter().fold(PostMetrics::default(), |mut acc, (_, m)| {
-                acc.views += m.views;
-                acc.likes += m.likes;
-                acc.comments += m.comments;
-                acc.shares += m.shares;
-                acc
-            });
+            let combined = per_platform
+                .iter()
+                .fold(PostMetrics::default(), |mut acc, (_, m)| {
+                    acc.views += m.views;
+                    acc.likes += m.likes;
+                    acc.comments += m.comments;
+                    acc.shares += m.shares;
+                    acc
+                });
             scored.push((item, combined));
         }
         scored.sort_by(|a, b| {

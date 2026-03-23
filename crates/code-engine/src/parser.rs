@@ -60,12 +60,7 @@ pub fn parse_source(source: &str, path: &Path) -> Result<Vec<Symbol>> {
     Ok(symbols)
 }
 
-fn collect_symbols(
-    node: tree_sitter::Node<'_>,
-    source: &[u8],
-    path: &Path,
-    out: &mut Vec<Symbol>,
-) {
+fn collect_symbols(node: tree_sitter::Node<'_>, source: &[u8], path: &Path, out: &mut Vec<Symbol>) {
     let kind_map: &[(&str, SymbolKind)] = &[
         ("function_item", SymbolKind::Function),
         ("struct_item", SymbolKind::Struct),
@@ -109,11 +104,7 @@ fn collect_symbols(
     }
 }
 
-fn extract_name(
-    node: &tree_sitter::Node<'_>,
-    source: &[u8],
-    kind: &SymbolKind,
-) -> String {
+fn extract_name(node: &tree_sitter::Node<'_>, source: &[u8], kind: &SymbolKind) -> String {
     // For impl items, build "impl Type" or "impl Trait for Type"
     if *kind == SymbolKind::Impl {
         return build_impl_name(node, source);
@@ -121,9 +112,10 @@ fn extract_name(
     // Most items have a `name` child
     for i in 0..node.child_count() {
         if let Some(child) = node.child(i)
-            && (child.kind() == "identifier" || child.kind() == "type_identifier") {
-                return node_text(&child, source);
-            }
+            && (child.kind() == "identifier" || child.kind() == "type_identifier")
+        {
+            return node_text(&child, source);
+        }
     }
     "<anonymous>".into()
 }
@@ -139,10 +131,11 @@ fn build_impl_name(node: &tree_sitter::Node<'_>, source: &[u8]) -> String {
 fn has_visibility_modifier(node: &tree_sitter::Node<'_>, source: &[u8]) -> bool {
     for i in 0..node.child_count() {
         if let Some(child) = node.child(i)
-            && child.kind() == "visibility_modifier" {
-                let text = node_text(&child, source);
-                return text.starts_with("pub");
-            }
+            && child.kind() == "visibility_modifier"
+        {
+            let text = node_text(&child, source);
+            return text.starts_with("pub");
+        }
     }
     false
 }
@@ -161,8 +154,8 @@ pub fn parse_directory(dir: &Path) -> Result<Vec<Symbol>> {
 }
 
 fn walk_rs_files(dir: &Path, symbols: &mut Vec<Symbol>) -> Result<()> {
-    let entries = fs::read_dir(dir)
-        .map_err(|e| CodeError::Io(format!("{}: {}", dir.display(), e)))?;
+    let entries =
+        fs::read_dir(dir).map_err(|e| CodeError::Io(format!("{}: {}", dir.display(), e)))?;
     for entry in entries {
         let entry = entry.map_err(|e| CodeError::Io(e.to_string()))?;
         let path = entry.path();

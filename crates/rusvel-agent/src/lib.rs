@@ -25,8 +25,8 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::domain::*;
+use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::*;
 use rusvel_core::ports::{AgentPort, LlmPort, MemoryPort, ToolPort};
 
@@ -116,12 +116,10 @@ impl AgentPort for AgentRuntime {
         // Transition to Running.
         {
             let mut runs = self.runs.write().await;
-            let state = runs
-                .get_mut(run_id)
-                .ok_or_else(|| RusvelError::NotFound {
-                    kind: "AgentRun".into(),
-                    id: run_id.to_string(),
-                })?;
+            let state = runs.get_mut(run_id).ok_or_else(|| RusvelError::NotFound {
+                kind: "AgentRun".into(),
+                id: run_id.to_string(),
+            })?;
             if state.status == AgentStatus::Stopped {
                 return Err(RusvelError::Agent("run has been stopped".into()));
             }
@@ -164,9 +162,10 @@ impl AgentPort for AgentRuntime {
             {
                 let runs = self.runs.read().await;
                 if let Some(state) = runs.get(run_id)
-                    && state.status == AgentStatus::Stopped {
-                        return Err(RusvelError::Agent("run was stopped".into()));
-                    }
+                    && state.status == AgentStatus::Stopped
+                {
+                    return Err(RusvelError::Agent("run was stopped".into()));
+                }
             }
 
             let request = Self::build_request(&config, &messages);
@@ -249,12 +248,10 @@ impl AgentPort for AgentRuntime {
 
     async fn stop(&self, run_id: &RunId) -> Result<()> {
         let mut runs = self.runs.write().await;
-        let state = runs
-            .get_mut(run_id)
-            .ok_or_else(|| RusvelError::NotFound {
-                kind: "AgentRun".into(),
-                id: run_id.to_string(),
-            })?;
+        let state = runs.get_mut(run_id).ok_or_else(|| RusvelError::NotFound {
+            kind: "AgentRun".into(),
+            id: run_id.to_string(),
+        })?;
         state.status = AgentStatus::Stopped;
         info!(%run_id, "agent run stopped");
         Ok(())
@@ -262,12 +259,10 @@ impl AgentPort for AgentRuntime {
 
     async fn status(&self, run_id: &RunId) -> Result<AgentStatus> {
         let runs = self.runs.read().await;
-        let state = runs
-            .get(run_id)
-            .ok_or_else(|| RusvelError::NotFound {
-                kind: "AgentRun".into(),
-                id: run_id.to_string(),
-            })?;
+        let state = runs.get(run_id).ok_or_else(|| RusvelError::NotFound {
+            kind: "AgentRun".into(),
+            id: run_id.to_string(),
+        })?;
         Ok(state.status.clone())
     }
 }
@@ -447,7 +442,10 @@ mod tests {
             stop_response("Here is your answer"),
         ]);
         let run_id = rt.create(make_config()).await.unwrap();
-        let output = rt.run(&run_id, Content::text("Find something")).await.unwrap();
+        let output = rt
+            .run(&run_id, Content::text("Find something"))
+            .await
+            .unwrap();
 
         assert_eq!(output.tool_calls, 1);
         assert_eq!(output.usage.input_tokens, 20); // 10 + 10

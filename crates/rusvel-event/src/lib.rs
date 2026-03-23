@@ -108,7 +108,9 @@ mod tests {
                 .filter(|e| {
                     filter.kind.as_ref().is_none_or(|k| &e.kind == k)
                         && filter.source.as_ref().is_none_or(|s| &e.source == s)
-                        && filter.session_id.is_none_or(|sid| e.session_id == Some(sid))
+                        && filter
+                            .session_id
+                            .is_none_or(|sid| e.session_id == Some(sid))
                         && filter.since.is_none_or(|t| e.created_at >= t)
                 })
                 .cloned()

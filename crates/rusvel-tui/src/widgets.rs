@@ -5,15 +5,26 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Bar, BarChart, BarGroup, Block, Borders, List, ListItem, Paragraph, Row, Table},
 };
-use rusvel_core::domain::{Event, Goal, GoalStatus, Opportunity, OpportunityStage, Task, TaskStatus};
+use rusvel_core::domain::{
+    Event, Goal, GoalStatus, Opportunity, OpportunityStage, Task, TaskStatus,
+};
 
 pub fn header_widget(session_name: &str) -> Paragraph<'_> {
     Paragraph::new(Line::from(vec![
-        Span::styled(" RUSVEL ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " RUSVEL ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("— "),
         Span::styled(session_name, Style::default().fg(Color::Yellow)),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan)),
+    )
 }
 
 pub fn tasks_widget(tasks: &[Task]) -> List<'_> {
@@ -38,8 +49,7 @@ pub fn tasks_widget(tasks: &[Task]) -> List<'_> {
         })
         .collect();
 
-    List::new(items)
-        .block(Block::default().title(" Tasks ").borders(Borders::ALL))
+    List::new(items).block(Block::default().title(" Tasks ").borders(Borders::ALL))
 }
 
 pub fn goals_widget(goals: &[Goal]) -> Table<'_> {
@@ -49,19 +59,19 @@ pub fn goals_widget(goals: &[Goal]) -> Table<'_> {
             let pct = (g.progress * 100.0) as u32;
             let bar_len = 10;
             let filled = ((g.progress * bar_len as f64) as usize).min(bar_len);
-            let bar = format!("{}{} {pct}%", "█".repeat(filled), "░".repeat(bar_len - filled));
+            let bar = format!(
+                "{}{} {pct}%",
+                "█".repeat(filled),
+                "░".repeat(bar_len - filled)
+            );
             let status_color = match g.status {
                 GoalStatus::Active => Color::Green,
                 GoalStatus::Completed => Color::Cyan,
                 GoalStatus::Deferred => Color::Yellow,
                 GoalStatus::Abandoned => Color::Red,
             };
-            Row::new(vec![
-                g.title.clone(),
-                bar,
-                format!("{:?}", g.timeframe),
-            ])
-            .style(Style::default().fg(status_color))
+            Row::new(vec![g.title.clone(), bar, format!("{:?}", g.timeframe)])
+                .style(Style::default().fg(status_color))
         })
         .collect();
 
@@ -74,14 +84,24 @@ pub fn goals_widget(goals: &[Goal]) -> Table<'_> {
         ],
     )
     .header(
-        Row::new(vec!["Goal", "Progress", "Timeframe"])
-            .style(Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan)),
+        Row::new(vec!["Goal", "Progress", "Timeframe"]).style(
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Cyan),
+        ),
     )
     .block(Block::default().title(" Goals ").borders(Borders::ALL))
 }
 
 pub fn pipeline_widget(stats: &HashMap<String, usize>) -> BarChart<'_> {
-    let stages = ["Cold", "Contacted", "Qualified", "ProposalSent", "Won", "Lost"];
+    let stages = [
+        "Cold",
+        "Contacted",
+        "Qualified",
+        "ProposalSent",
+        "Won",
+        "Lost",
+    ];
     let bars: Vec<Bar<'_>> = stages
         .iter()
         .map(|s| {
@@ -112,8 +132,7 @@ pub fn events_widget(events: &[Event]) -> List<'_> {
         })
         .collect();
 
-    List::new(items)
-        .block(Block::default().title(" Events ").borders(Borders::ALL))
+    List::new(items).block(Block::default().title(" Events ").borders(Borders::ALL))
 }
 
 /// Build pipeline stats from a slice of opportunities.

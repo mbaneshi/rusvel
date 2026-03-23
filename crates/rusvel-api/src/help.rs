@@ -6,14 +6,14 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::Json;
 use futures::stream::Stream;
 use serde::Deserialize;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 

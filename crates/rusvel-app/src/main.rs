@@ -19,22 +19,22 @@ use tracing_subscriber::EnvFilter;
 use forge_engine::ForgeEngine;
 use rusvel_agent::AgentRuntime;
 use rusvel_api::AppState;
-use rusvel_core::registry::DepartmentRegistry;
 use rusvel_auth::InMemoryAuthAdapter;
 use rusvel_cli::Cli;
 use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
+use rusvel_core::id::AgentProfileId;
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{EmbeddingPort, SessionPort, StoragePort};
+use rusvel_core::registry::DepartmentRegistry;
 use rusvel_db::Database;
+use rusvel_embed::FastEmbedAdapter;
 use rusvel_event::EventBus;
 use rusvel_jobs::JobQueue;
 use rusvel_llm::ClaudeCliProvider;
-use rusvel_core::id::AgentProfileId;
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
 use rusvel_tool::ToolRegistry;
-use rusvel_embed::FastEmbedAdapter;
 use rusvel_vector::LanceVectorStore;
 
 // ════════════════════════════════════════════════════════════════════
@@ -60,10 +60,11 @@ fn extract_embedded_frontend() -> Option<PathBuf> {
         if let Some(content) = FrontendAssets::get(&path) {
             let out = dir.join(path.as_ref());
             if let Some(parent) = out.parent()
-                && let Err(e) = std::fs::create_dir_all(parent) {
-                    tracing::warn!("Failed to create dir {}: {e}", parent.display());
-                    continue;
-                }
+                && let Err(e) = std::fs::create_dir_all(parent)
+            {
+                tracing::warn!("Failed to create dir {}: {e}", parent.display());
+                continue;
+            }
             if let Err(e) = std::fs::write(&out, content.data.as_ref()) {
                 tracing::warn!("Failed to write {}: {e}", out.display());
                 continue;
@@ -73,7 +74,10 @@ fn extract_embedded_frontend() -> Option<PathBuf> {
     }
 
     if count > 0 && dir.join("index.html").exists() {
-        tracing::info!("Extracted {count} embedded frontend files to {}", dir.display());
+        tracing::info!(
+            "Extracted {count} embedded frontend files to {}",
+            dir.display()
+        );
         Some(dir)
     } else {
         tracing::debug!("No embedded frontend assets found");
@@ -139,7 +143,10 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
                 name: "rust-engine".into(),
                 role: "Rust backend engineer".into(),
                 instructions: "Build RUSVEL engine crates. Follow hexagonal architecture.".into(),
-                default_model: ModelRef { provider: ModelProvider::Claude, model: "opus".into() },
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "opus".into(),
+                },
                 allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
                 capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
                 budget_limit: None,
@@ -150,7 +157,10 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
                 name: "svelte-ui".into(),
                 role: "Frontend engineer".into(),
                 instructions: "Build SvelteKit 5 pages using RUSVEL design system.".into(),
-                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "sonnet".into(),
+                },
                 allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
                 capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
                 budget_limit: None,
@@ -161,7 +171,10 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
                 name: "test-writer".into(),
                 role: "QA and test engineer".into(),
                 instructions: "Write tests for RUSVEL crates and frontend.".into(),
-                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "sonnet".into(),
+                },
                 allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
                 capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
                 budget_limit: None,
@@ -172,7 +185,10 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
                 name: "content-writer".into(),
                 role: "Content strategist and writer".into(),
                 instructions: "Draft blog posts, articles, and long-form content.".into(),
-                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "sonnet".into(),
+                },
                 allowed_tools: vec!["read_file".into(), "web_search".into()],
                 capabilities: vec![Capability::ContentCreation],
                 budget_limit: None,
@@ -183,9 +199,15 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
                 name: "proposal-writer".into(),
                 role: "Proposal and business development specialist".into(),
                 instructions: "Draft compelling proposals tailored to each gig.".into(),
-                default_model: ModelRef { provider: ModelProvider::Claude, model: "opus".into() },
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "opus".into(),
+                },
                 allowed_tools: vec!["read_file".into(), "web_search".into()],
-                capabilities: vec![Capability::ContentCreation, Capability::OpportunityDiscovery],
+                capabilities: vec![
+                    Capability::ContentCreation,
+                    Capability::OpportunityDiscovery,
+                ],
                 budget_limit: None,
                 metadata: serde_json::json!({"engine": "harvest", "department": "Harvest"}),
             },
@@ -290,7 +312,7 @@ async fn first_run_wizard(
     data_dir: &std::path::Path,
     sessions: &Arc<dyn SessionPort>,
 ) -> Result<Option<UserProfile>> {
-    use cliclack::{intro, input, confirm, select, outro_note};
+    use cliclack::{confirm, input, intro, outro_note, select};
 
     intro("Welcome to RUSVEL — Your AI-Powered Virtual Agency")?;
 
@@ -358,7 +380,11 @@ style = "direct"
         let kind_idx: &str = select("Session type")
             .item("Project", "Project", "For building a product or app")
             .item("Lead", "Lead", "For tracking a freelance opportunity")
-            .item("ContentCampaign", "Content Campaign", "For a content initiative")
+            .item(
+                "ContentCampaign",
+                "Content Campaign",
+                "For a content initiative",
+            )
             .item("General", "General", "For everything else")
             .interact()?;
 
@@ -418,18 +444,23 @@ async fn main() -> Result<()> {
     let db: Arc<Database> = Arc::new(Database::open(data_dir.join("rusvel.db"))?);
     let config = Arc::new(TomlConfig::load(data_dir.join("config.toml"))?);
     let llm: Arc<dyn rusvel_core::ports::LlmPort> = Arc::new(ClaudeCliProvider::max_subscription());
-    let events = Arc::new(EventBus::new(db.clone() as Arc<dyn rusvel_core::ports::EventStore>));
-    let memory: Arc<dyn rusvel_core::ports::MemoryPort> = Arc::new(
-        MemoryStore::open(data_dir.join("memory.db").to_str().unwrap_or("memory.db"))?,
-    );
+    let events = Arc::new(EventBus::new(
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
+    ));
+    let memory: Arc<dyn rusvel_core::ports::MemoryPort> = Arc::new(MemoryStore::open(
+        data_dir.join("memory.db").to_str().unwrap_or("memory.db"),
+    )?);
     let tools: Arc<dyn rusvel_core::ports::ToolPort> = Arc::new(ToolRegistry::new());
     let jobs: Arc<dyn rusvel_core::ports::JobPort> = Arc::new(JobQueue::new());
     let jobs_for_worker = jobs.clone();
     let _auth = Arc::new(InMemoryAuthAdapter::from_env());
     let sessions: Arc<dyn SessionPort> =
         Arc::new(SessionAdapter(db.clone() as Arc<dyn StoragePort>));
-    let agent: Arc<dyn rusvel_core::ports::AgentPort> =
-        Arc::new(AgentRuntime::new(llm.clone(), tools.clone(), memory.clone()));
+    let agent: Arc<dyn rusvel_core::ports::AgentPort> = Arc::new(AgentRuntime::new(
+        llm.clone(),
+        tools.clone(),
+        memory.clone(),
+    ));
 
     // 4. Build Forge Engine
     let forge = Arc::new(ForgeEngine::new(
@@ -562,40 +593,58 @@ async fn main() -> Result<()> {
     } else if cli.tui {
         // --tui flag: launch TUI dashboard
         tracing::info!("Launching TUI dashboard...");
-        let session_name = if crate::rusvel_dir()
-            .join("active_session")
-            .exists() { {
+        let session_name = if crate::rusvel_dir().join("active_session").exists() {
+            {
                 std::fs::read_to_string(rusvel_dir().join("active_session"))
                     .unwrap_or_default()
                     .trim()
                     .to_string()
-            } } else { "(no session)".into() };
+            }
+        } else {
+            "(no session)".into()
+        };
 
         // Load data from storage for the dashboard
         let objects = storage_port.objects();
         let filter = rusvel_core::domain::ObjectFilter::default();
 
-        let goals_json = objects.list("goals", filter.clone()).await.unwrap_or_default();
+        let goals_json = objects
+            .list("goals", filter.clone())
+            .await
+            .unwrap_or_default();
         let goals: Vec<rusvel_core::domain::Goal> = goals_json
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
             .collect();
 
-        let tasks_json = objects.list("tasks", filter.clone()).await.unwrap_or_default();
+        let tasks_json = objects
+            .list("tasks", filter.clone())
+            .await
+            .unwrap_or_default();
         let tasks: Vec<rusvel_core::domain::Task> = tasks_json
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
             .collect();
 
-        let opps_json = objects.list("opportunities", filter.clone()).await.unwrap_or_default();
+        let opps_json = objects
+            .list("opportunities", filter.clone())
+            .await
+            .unwrap_or_default();
         let opportunities: Vec<rusvel_core::domain::Opportunity> = opps_json
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
             .collect();
 
-        let events_json = objects.list("events", rusvel_core::domain::ObjectFilter {
-            limit: Some(50), ..Default::default()
-        }).await.unwrap_or_default();
+        let events_json = objects
+            .list(
+                "events",
+                rusvel_core::domain::ObjectFilter {
+                    limit: Some(50),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap_or_default();
         let recent_events: Vec<rusvel_core::domain::Event> = events_json
             .into_iter()
             .filter_map(|v| serde_json::from_value(v).ok())
@@ -613,19 +662,28 @@ async fn main() -> Result<()> {
         // --mcp flag: start MCP server over stdio (JSON-RPC)
         tracing::info!("Starting MCP server on stdio...");
         let mcp = Arc::new(RusvelMcp::new(forge.clone(), sessions.clone()));
-        rusvel_mcp::run_stdio(mcp).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+        rusvel_mcp::run_stdio(mcp)
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
     } else {
         // Default: start the API web server with graceful shutdown
         // Load department registry
         let registry = DepartmentRegistry::load(&data_dir.join("departments.toml"));
-        tracing::info!("Loaded {} departments from registry", registry.departments.len());
+        tracing::info!(
+            "Loaded {} departments from registry",
+            registry.departments.len()
+        );
 
         // Initialize embedding + vector store for RAG (graceful if either fails)
         let (embedding, embed_dims): (Option<Arc<dyn rusvel_core::ports::EmbeddingPort>>, usize) =
             match FastEmbedAdapter::new() {
                 Ok(adapter) => {
                     let dims = adapter.dimensions();
-                    tracing::info!("Embedding adapter ready ({}, {}d)", adapter.model_name(), dims);
+                    tracing::info!(
+                        "Embedding adapter ready ({}, {}d)",
+                        adapter.model_name(),
+                        dims
+                    );
                     (Some(Arc::new(adapter)), dims)
                 }
                 Err(e) => {
@@ -662,9 +720,9 @@ async fn main() -> Result<()> {
 
         // Look for frontend build in known locations (filesystem first)
         let frontend_dir = [
-            PathBuf::from("frontend/build"),                       // dev: run from repo root
-            data_dir.join("frontend"),                             // installed: ~/.rusvel/frontend
-            std::env::current_exe()                                // next to binary
+            PathBuf::from("frontend/build"), // dev: run from repo root
+            data_dir.join("frontend"),       // installed: ~/.rusvel/frontend
+            std::env::current_exe() // next to binary
                 .unwrap_or_default()
                 .parent()
                 .unwrap_or(std::path::Path::new("."))

@@ -14,13 +14,17 @@ pub struct PersonaManager {
 impl PersonaManager {
     /// Create a new manager pre-loaded with the 10 default personas.
     pub fn new() -> Self {
-        Self { profiles: default_personas() }
+        Self {
+            profiles: default_personas(),
+        }
     }
 
     /// Look up a persona by name (case-insensitive).
     pub fn get(&self, name: &str) -> Option<&AgentProfile> {
         let lower = name.to_lowercase();
-        self.profiles.iter().find(|p| p.name.to_lowercase() == lower)
+        self.profiles
+            .iter()
+            .find(|p| p.name.to_lowercase() == lower)
     }
 
     /// Return all registered personas.
@@ -30,7 +34,10 @@ impl PersonaManager {
 
     /// Return personas that possess a given capability.
     pub fn list_by_capability(&self, cap: &Capability) -> Vec<&AgentProfile> {
-        self.profiles.iter().filter(|p| p.capabilities.contains(cap)).collect()
+        self.profiles
+            .iter()
+            .filter(|p| p.capabilities.contains(cap))
+            .collect()
     }
 
     /// Register a custom persona.
@@ -40,18 +47,27 @@ impl PersonaManager {
 }
 
 impl Default for PersonaManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ── Helper ────────────────────────────────────────────────────────
 
 fn ollama_model() -> ModelRef {
-    ModelRef { provider: ModelProvider::Ollama, model: "llama3.2".into() }
+    ModelRef {
+        provider: ModelProvider::Ollama,
+        model: "llama3.2".into(),
+    }
 }
 
 fn profile(
-    name: &str, role: &str, instructions: &str,
-    tools: &[&str], caps: Vec<Capability>, budget: f64,
+    name: &str,
+    role: &str,
+    instructions: &str,
+    tools: &[&str],
+    caps: Vec<Capability>,
+    budget: f64,
 ) -> AgentProfile {
     AgentProfile {
         id: AgentProfileId::new(),
@@ -70,7 +86,8 @@ fn profile(
 pub fn default_personas() -> Vec<AgentProfile> {
     vec![
         profile(
-            "CodeWriter", "code_writer",
+            "CodeWriter",
+            "code_writer",
             "You are a senior software engineer. Write clean, well-structured code from specifications. \
              Follow best practices, add error handling, and include inline comments.",
             &["file_write", "file_read", "shell"],
@@ -78,7 +95,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             1.00,
         ),
         profile(
-            "Reviewer", "code_reviewer",
+            "Reviewer",
+            "code_reviewer",
             "You are an expert code reviewer. Examine code for bugs, anti-patterns, performance issues, \
              and readability. Provide actionable feedback with severity levels.",
             &["file_read", "search"],
@@ -86,7 +104,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.50,
         ),
         profile(
-            "Tester", "test_engineer",
+            "Tester",
+            "test_engineer",
             "You are a QA engineer. Write comprehensive unit, integration, and property-based tests. \
              Aim for edge cases and high coverage. Run tests and report results.",
             &["file_write", "file_read", "shell"],
@@ -94,7 +113,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.75,
         ),
         profile(
-            "Debugger", "debugger",
+            "Debugger",
+            "debugger",
             "You are a debugging specialist. Diagnose failures by reading logs, tracing execution, \
              and isolating root causes. Propose minimal targeted fixes.",
             &["file_read", "shell", "search"],
@@ -102,7 +122,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.75,
         ),
         profile(
-            "Architect", "architect",
+            "Architect",
+            "architect",
             "You are a systems architect. Design high-level architecture, define module boundaries, \
              choose patterns, and document trade-offs. Produce diagrams when possible.",
             &["file_read", "search"],
@@ -110,7 +131,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.50,
         ),
         profile(
-            "Documenter", "technical_writer",
+            "Documenter",
+            "technical_writer",
             "You are a technical writer. Produce clear README files, API docs, architecture guides, \
              and inline documentation. Match the project's existing style.",
             &["file_write", "file_read"],
@@ -118,15 +140,20 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.50,
         ),
         profile(
-            "SecurityAuditor", "security_auditor",
+            "SecurityAuditor",
+            "security_auditor",
             "You are a security engineer. Audit code for vulnerabilities: injection, auth bypass, \
              secrets in source, dependency CVEs. Report findings with CVSS-like severity.",
             &["file_read", "shell", "search"],
-            vec![Capability::CodeAnalysis, Capability::Custom("Security".into())],
+            vec![
+                Capability::CodeAnalysis,
+                Capability::Custom("Security".into()),
+            ],
             0.75,
         ),
         profile(
-            "Refactorer", "refactorer",
+            "Refactorer",
+            "refactorer",
             "You are a refactoring specialist. Improve code structure without changing behavior. \
              Extract functions, reduce duplication, simplify control flow, improve naming.",
             &["file_write", "file_read", "shell"],
@@ -134,7 +161,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.75,
         ),
         profile(
-            "ContentWriter", "content_writer",
+            "ContentWriter",
+            "content_writer",
             "You are a content creator. Write engaging blog posts, tweets, documentation, and \
              marketing copy. Adapt tone and format to the target platform.",
             &["file_write", "web_search"],
@@ -142,7 +170,8 @@ pub fn default_personas() -> Vec<AgentProfile> {
             0.50,
         ),
         profile(
-            "Researcher", "researcher",
+            "Researcher",
+            "researcher",
             "You are a research analyst. Investigate topics, summarize findings, compare options, \
              and produce structured reports with citations.",
             &["web_search", "file_write"],
@@ -183,7 +212,14 @@ mod tests {
     #[test]
     fn add_custom_persona() {
         let mut mgr = PersonaManager::new();
-        let custom = profile("DevOps", "devops", "You handle CI/CD.", &["shell"], vec![], 0.25);
+        let custom = profile(
+            "DevOps",
+            "devops",
+            "You handle CI/CD.",
+            &["shell"],
+            vec![],
+            0.25,
+        );
         mgr.add(custom);
         assert_eq!(mgr.list().len(), 11);
         assert!(mgr.get("DevOps").is_some());

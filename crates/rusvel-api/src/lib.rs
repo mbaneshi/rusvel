@@ -22,6 +22,7 @@ pub mod mcp_servers;
 pub mod routes;
 pub mod rules;
 pub mod skills;
+pub mod system;
 pub mod workflows;
 
 use std::net::SocketAddr;
@@ -60,7 +61,10 @@ pub fn build_router(state: AppState) -> Router {
 }
 
 /// Build the router with optional frontend static file serving.
-pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::path::PathBuf>) -> Router {
+pub fn build_router_with_frontend(
+    state: AppState,
+    frontend_dir: Option<std::path::PathBuf>,
+) -> Router {
     let shared = Arc::new(state);
 
     let api = Router::new()
@@ -68,9 +72,15 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
         .route("/api/sessions/{id}", get(routes::get_session))
-        .route("/api/sessions/{id}/mission/today", get(routes::mission_today))
+        .route(
+            "/api/sessions/{id}/mission/today",
+            get(routes::mission_today),
+        )
         .route("/api/sessions/{id}/mission/goals", get(routes::list_goals))
-        .route("/api/sessions/{id}/mission/goals", post(routes::create_goal))
+        .route(
+            "/api/sessions/{id}/mission/goals",
+            post(routes::create_goal),
+        )
         .route("/api/sessions/{id}/events", get(routes::query_events))
         // Chat (god agent)
         .route("/api/chat", post(chat::chat_handler))
@@ -85,29 +95,80 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/departments", get(department::list_departments))
         // Profile
         .route("/api/profile", get(department::get_profile))
-        .route("/api/profile", axum::routing::put(department::update_profile))
+        .route(
+            "/api/profile",
+            axum::routing::put(department::update_profile),
+        )
         // Departments — 6 parameterized routes replace 72 hardcoded ones
         .route("/api/dept/{dept}/chat", post(department::dept_chat))
-        .route("/api/dept/{dept}/chat/conversations", get(department::dept_conversations))
-        .route("/api/dept/{dept}/chat/conversations/{id}", get(department::dept_history))
+        .route(
+            "/api/dept/{dept}/chat/conversations",
+            get(department::dept_conversations),
+        )
+        .route(
+            "/api/dept/{dept}/chat/conversations/{id}",
+            get(department::dept_history),
+        )
         .route("/api/dept/{dept}/config", get(department::dept_config_get))
-        .route("/api/dept/{dept}/config", axum::routing::put(department::dept_config_update))
+        .route(
+            "/api/dept/{dept}/config",
+            axum::routing::put(department::dept_config_update),
+        )
         .route("/api/dept/{dept}/events", get(department::dept_events))
         // Agents CRUD
-        .route("/api/agents", get(agents::list_agents).post(agents::create_agent))
-        .route("/api/agents/{id}", get(agents::get_agent).put(agents::update_agent).delete(agents::delete_agent))
+        .route(
+            "/api/agents",
+            get(agents::list_agents).post(agents::create_agent),
+        )
+        .route(
+            "/api/agents/{id}",
+            get(agents::get_agent)
+                .put(agents::update_agent)
+                .delete(agents::delete_agent),
+        )
         // Skills CRUD
-        .route("/api/skills", get(skills::list_skills).post(skills::create_skill))
-        .route("/api/skills/{id}", get(skills::get_skill).put(skills::update_skill).delete(skills::delete_skill))
+        .route(
+            "/api/skills",
+            get(skills::list_skills).post(skills::create_skill),
+        )
+        .route(
+            "/api/skills/{id}",
+            get(skills::get_skill)
+                .put(skills::update_skill)
+                .delete(skills::delete_skill),
+        )
         // Rules CRUD
-        .route("/api/rules", get(rules::list_rules).post(rules::create_rule))
-        .route("/api/rules/{id}", get(rules::get_rule).put(rules::update_rule).delete(rules::delete_rule))
+        .route(
+            "/api/rules",
+            get(rules::list_rules).post(rules::create_rule),
+        )
+        .route(
+            "/api/rules/{id}",
+            get(rules::get_rule)
+                .put(rules::update_rule)
+                .delete(rules::delete_rule),
+        )
         // MCP Servers CRUD
-        .route("/api/mcp-servers", get(mcp_servers::list_mcp_servers).post(mcp_servers::create_mcp_server))
-        .route("/api/mcp-servers/{id}", axum::routing::put(mcp_servers::update_mcp_server).delete(mcp_servers::delete_mcp_server))
+        .route(
+            "/api/mcp-servers",
+            get(mcp_servers::list_mcp_servers).post(mcp_servers::create_mcp_server),
+        )
+        .route(
+            "/api/mcp-servers/{id}",
+            axum::routing::put(mcp_servers::update_mcp_server)
+                .delete(mcp_servers::delete_mcp_server),
+        )
         // Workflows CRUD + execution
-        .route("/api/workflows", get(workflows::list_workflows).post(workflows::create_workflow))
-        .route("/api/workflows/{id}", get(workflows::get_workflow).put(workflows::update_workflow).delete(workflows::delete_workflow))
+        .route(
+            "/api/workflows",
+            get(workflows::list_workflows).post(workflows::create_workflow),
+        )
+        .route(
+            "/api/workflows/{id}",
+            get(workflows::get_workflow)
+                .put(workflows::update_workflow)
+                .delete(workflows::delete_workflow),
+        )
         .route("/api/workflows/{id}/run", post(workflows::run_workflow))
         // Capability Engine
         .route("/api/capability/build", post(capability::build_capability))
@@ -120,15 +181,29 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/approvals/{id}/approve", post(approvals::approve_job))
         .route("/api/approvals/{id}/reject", post(approvals::reject_job))
         // Hooks CRUD
-        .route("/api/hooks", get(hooks::list_hooks).post(hooks::create_hook))
-        .route("/api/hooks/{id}", axum::routing::put(hooks::update_hook).delete(hooks::delete_hook))
+        .route(
+            "/api/hooks",
+            get(hooks::list_hooks).post(hooks::create_hook),
+        )
+        .route(
+            "/api/hooks/{id}",
+            axum::routing::put(hooks::update_hook).delete(hooks::delete_hook),
+        )
         .route("/api/hooks/events", get(hooks::list_hook_events))
         // Knowledge (RAG)
         .route("/api/knowledge", get(knowledge::list_knowledge))
         .route("/api/knowledge/ingest", post(knowledge::ingest_knowledge))
         .route("/api/knowledge/search", post(knowledge::search_knowledge))
         .route("/api/knowledge/stats", get(knowledge::knowledge_stats))
-        .route("/api/knowledge/{id}", axum::routing::delete(knowledge::delete_knowledge))
+        .route(
+            "/api/knowledge/{id}",
+            axum::routing::delete(knowledge::delete_knowledge),
+        )
+        // System self-improvement
+        .route("/api/system/test", post(system::run_tests))
+        .route("/api/system/build", post(system::run_build))
+        .route("/api/system/status", get(system::get_status))
+        .route("/api/system/fix", post(system::self_fix))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

@@ -6,15 +6,15 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::Json;
 use chrono::Utc;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::StoragePort;
@@ -56,10 +56,10 @@ pub async fn chat_handler(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ChatRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
-    let profile = state
-        .profile
-        .as_ref()
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "no profile loaded".into()))?;
+    let profile = state.profile.as_ref().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "no profile loaded".into(),
+    ))?;
 
     let conversation_id = body
         .conversation_id
@@ -153,10 +153,7 @@ pub async fn list_conversations(
     let all = state
         .storage
         .objects()
-        .list(
-            "chat_message",
-            rusvel_core::domain::ObjectFilter::default(),
-        )
+        .list("chat_message", rusvel_core::domain::ObjectFilter::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -165,7 +162,10 @@ pub async fn list_conversations(
         std::collections::HashMap::new();
     for val in all {
         if let Ok(msg) = serde_json::from_value::<ChatMessage>(val) {
-            convos.entry(msg.conversation_id.clone()).or_default().push(msg);
+            convos
+                .entry(msg.conversation_id.clone())
+                .or_default()
+                .push(msg);
         }
     }
 
@@ -218,7 +218,10 @@ fn build_prompt(profile: &UserProfile, history: &[ChatMessage], user_message: &s
     let mut parts = Vec::new();
 
     // System prompt from profile
-    parts.push(format!("<system>\n{}\n</system>", profile.to_system_prompt()));
+    parts.push(format!(
+        "<system>\n{}\n</system>",
+        profile.to_system_prompt()
+    ));
 
     // Conversation history (last N messages)
     for msg in history {
@@ -242,10 +245,7 @@ async fn load_history(
 ) -> rusvel_core::error::Result<Vec<ChatMessage>> {
     let all = storage
         .objects()
-        .list(
-            "chat_message",
-            rusvel_core::domain::ObjectFilter::default(),
-        )
+        .list("chat_message", rusvel_core::domain::ObjectFilter::default())
         .await?;
 
     let mut msgs: Vec<ChatMessage> = all

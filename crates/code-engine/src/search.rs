@@ -137,9 +137,24 @@ mod tests {
     #[test]
     fn bm25_returns_relevant_results() {
         let items = vec![
-            ("greet".into(), "lib.rs".into(), "fn greet name hello world".into(), 1),
-            ("add".into(), "math.rs".into(), "fn add numbers sum".into(), 5),
-            ("parse".into(), "parser.rs".into(), "fn parse source tree".into(), 10),
+            (
+                "greet".into(),
+                "lib.rs".into(),
+                "fn greet name hello world".into(),
+                1,
+            ),
+            (
+                "add".into(),
+                "math.rs".into(),
+                "fn add numbers sum".into(),
+                5,
+            ),
+            (
+                "parse".into(),
+                "parser.rs".into(),
+                "fn parse source tree".into(),
+                10,
+            ),
         ];
         let idx = SearchIndex::build(&items);
         let results = idx.search("greet hello", 10);

@@ -4,9 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rusvel_core::ports::StoragePort;
-use rusvel_core::{
-    ObjectFilter, Opportunity, OpportunityStage, Result, RusvelError, SessionId,
-};
+use rusvel_core::{ObjectFilter, Opportunity, OpportunityStage, Result, RusvelError, SessionId};
 use serde::{Deserialize, Serialize};
 
 /// Counts of opportunities grouped by pipeline stage.
@@ -65,11 +63,7 @@ impl Pipeline {
     }
 
     /// Advance an opportunity to a new pipeline stage.
-    pub async fn advance(
-        &self,
-        id: &str,
-        new_stage: OpportunityStage,
-    ) -> Result<()> {
+    pub async fn advance(&self, id: &str, new_stage: OpportunityStage) -> Result<()> {
         let value = self
             .storage
             .objects()
@@ -84,10 +78,7 @@ impl Pipeline {
         opportunity.stage = new_stage;
 
         let updated = serde_json::to_value(&opportunity)?;
-        self.storage
-            .objects()
-            .put(OBJ_KIND, id, updated)
-            .await
+        self.storage.objects().put(OBJ_KIND, id, updated).await
     }
 
     /// Get pipeline statistics for a session.

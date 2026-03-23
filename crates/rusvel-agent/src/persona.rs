@@ -21,10 +21,7 @@ pub struct PersonaCatalog {
 impl PersonaCatalog {
     /// Build a catalog from a list of profiles, keyed by `profile.name`.
     pub fn from_profiles(profiles: Vec<AgentProfile>) -> Self {
-        let personas = profiles
-            .into_iter()
-            .map(|p| (p.name.clone(), p))
-            .collect();
+        let personas = profiles.into_iter().map(|p| (p.name.clone(), p)).collect();
         Self { personas }
     }
 
@@ -96,36 +93,66 @@ fn profile(name: &str, role: &str, instructions: &str, caps: Vec<Capability>) ->
 /// The 10 built-in personas.
 fn default_personas() -> Vec<AgentProfile> {
     vec![
-        profile("CodeWriter", "Software Engineer",
+        profile(
+            "CodeWriter",
+            "Software Engineer",
             "Write clean, idiomatic code. Follow best practices.",
-            vec![Capability::CodeAnalysis, Capability::ToolUse]),
-        profile("Reviewer", "Code Reviewer",
+            vec![Capability::CodeAnalysis, Capability::ToolUse],
+        ),
+        profile(
+            "Reviewer",
+            "Code Reviewer",
             "Review code for correctness, style, and performance.",
-            vec![Capability::CodeAnalysis]),
-        profile("Tester", "QA Engineer",
+            vec![Capability::CodeAnalysis],
+        ),
+        profile(
+            "Tester",
+            "QA Engineer",
             "Write comprehensive tests. Identify edge cases.",
-            vec![Capability::CodeAnalysis]),
-        profile("Debugger", "Debug Specialist",
+            vec![Capability::CodeAnalysis],
+        ),
+        profile(
+            "Debugger",
+            "Debug Specialist",
             "Diagnose and fix bugs. Trace root causes.",
-            vec![Capability::CodeAnalysis, Capability::ToolUse]),
-        profile("Architect", "System Architect",
+            vec![Capability::CodeAnalysis, Capability::ToolUse],
+        ),
+        profile(
+            "Architect",
+            "System Architect",
             "Design systems. Evaluate trade-offs. Write ADRs.",
-            vec![Capability::Planning, Capability::CodeAnalysis]),
-        profile("Documenter", "Technical Writer",
+            vec![Capability::Planning, Capability::CodeAnalysis],
+        ),
+        profile(
+            "Documenter",
+            "Technical Writer",
             "Write clear documentation, guides, and API references.",
-            vec![Capability::ContentCreation]),
-        profile("SecurityAuditor", "Security Engineer",
+            vec![Capability::ContentCreation],
+        ),
+        profile(
+            "SecurityAuditor",
+            "Security Engineer",
             "Audit code for vulnerabilities. Recommend mitigations.",
-            vec![Capability::CodeAnalysis]),
-        profile("Refactorer", "Refactoring Specialist",
+            vec![Capability::CodeAnalysis],
+        ),
+        profile(
+            "Refactorer",
+            "Refactoring Specialist",
             "Improve code structure without changing behavior.",
-            vec![Capability::CodeAnalysis]),
-        profile("ContentWriter", "Content Creator",
+            vec![Capability::CodeAnalysis],
+        ),
+        profile(
+            "ContentWriter",
+            "Content Creator",
             "Write blog posts, social media content, and copy.",
-            vec![Capability::ContentCreation]),
-        profile("Researcher", "Research Analyst",
+            vec![Capability::ContentCreation],
+        ),
+        profile(
+            "Researcher",
+            "Research Analyst",
             "Research topics. Summarize findings. Cite sources.",
-            vec![Capability::WebBrowsing, Capability::ContentCreation]),
+            vec![Capability::WebBrowsing, Capability::ContentCreation],
+        ),
     ]
 }
 

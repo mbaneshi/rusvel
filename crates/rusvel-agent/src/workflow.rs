@@ -86,83 +86,92 @@ impl WorkflowRunner {
         &'a self,
         step: &'a WorkflowStep,
         input: Content,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<AgentOutput>>> + Send + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<AgentOutput>>> + Send + 'a>>
+    {
         Box::pin(async move {
-        match step {
-            WorkflowStep::Agent { config, input_mapping } => {
-                debug!(mapping = ?input_mapping, "running agent step");
-                let run_id = self.agent_port.create(config.clone()).await?;
-                let output = self.agent_port.run(&run_id, input).await?;
-                Ok(vec![output])
-            }
-
-            WorkflowStep::Sequential { steps } => {
-                let mut results = Vec::new();
-                let mut current = input;
-                for (i, s) in steps.iter().enumerate() {
-                    debug!(seq_step = i, "sequential step");
-                    let step_results = self.execute_step(s, current.clone()).await?;
-                    if let Some(last) = step_results.last() {
-                        current = last.content.clone();
-                    }
-                    results.extend(step_results);
-                }
-                Ok(results)
-            }
-
-            WorkflowStep::Parallel { steps } => {
-                let mut join_set = tokio::task::JoinSet::new();
-                for s in steps.clone() {
-                    let port = Arc::clone(&self.agent_port);
-                    let inp = input.clone();
-                    join_set.spawn(async move {
-                        let runner = WorkflowRunner::new(port);
-                        runner.execute_step(&s, inp).await
-                    });
+            match step {
+                WorkflowStep::Agent {
+                    config,
+                    input_mapping,
+                } => {
+                    debug!(mapping = ?input_mapping, "running agent step");
+                    let run_id = self.agent_port.create(config.clone()).await?;
+                    let output = self.agent_port.run(&run_id, input).await?;
+                    Ok(vec![output])
                 }
 
-                let mut results = Vec::new();
-                while let Some(join_result) = join_set.join_next().await {
-                    let step_results = join_result
-                        .map_err(|e| RusvelError::Agent(format!("join error: {e}")))?;
-                    results.extend(step_results?);
-                }
-                Ok(results)
-            }
-
-            WorkflowStep::Loop { step, max_iterations, until } => {
-                let sentinel = until.as_deref().unwrap_or("DONE");
-                let mut results = Vec::new();
-                let mut current = input;
-
-                for iteration in 0..*max_iterations {
-                    debug!(iteration, max = max_iterations, "loop iteration");
-                    let step_results =
-                        self.execute_step(step, current.clone()).await?;
-
-                    if let Some(last) = step_results.last() {
-                        current = last.content.clone();
-                        // Check if any text part contains the sentinel.
-                        let done = last.content.parts.iter().any(|p| {
-                            matches!(p, Part::Text(t) if t.contains(sentinel))
-                        });
+                WorkflowStep::Sequential { steps } => {
+                    let mut results = Vec::new();
+                    let mut current = input;
+                    for (i, s) in steps.iter().enumerate() {
+                        debug!(seq_step = i, "sequential step");
+                        let step_results = self.execute_step(s, current.clone()).await?;
+                        if let Some(last) = step_results.last() {
+                            current = last.content.clone();
+                        }
                         results.extend(step_results);
-                        if done {
-                            debug!(iteration, "loop sentinel found");
+                    }
+                    Ok(results)
+                }
+
+                WorkflowStep::Parallel { steps } => {
+                    let mut join_set = tokio::task::JoinSet::new();
+                    for s in steps.clone() {
+                        let port = Arc::clone(&self.agent_port);
+                        let inp = input.clone();
+                        join_set.spawn(async move {
+                            let runner = WorkflowRunner::new(port);
+                            runner.execute_step(&s, inp).await
+                        });
+                    }
+
+                    let mut results = Vec::new();
+                    while let Some(join_result) = join_set.join_next().await {
+                        let step_results = join_result
+                            .map_err(|e| RusvelError::Agent(format!("join error: {e}")))?;
+                        results.extend(step_results?);
+                    }
+                    Ok(results)
+                }
+
+                WorkflowStep::Loop {
+                    step,
+                    max_iterations,
+                    until,
+                } => {
+                    let sentinel = until.as_deref().unwrap_or("DONE");
+                    let mut results = Vec::new();
+                    let mut current = input;
+
+                    for iteration in 0..*max_iterations {
+                        debug!(iteration, max = max_iterations, "loop iteration");
+                        let step_results = self.execute_step(step, current.clone()).await?;
+
+                        if let Some(last) = step_results.last() {
+                            current = last.content.clone();
+                            // Check if any text part contains the sentinel.
+                            let done = last
+                                .content
+                                .parts
+                                .iter()
+                                .any(|p| matches!(p, Part::Text(t) if t.contains(sentinel)));
+                            results.extend(step_results);
+                            if done {
+                                debug!(iteration, "loop sentinel found");
+                                break;
+                            }
+                        } else {
+                            results.extend(step_results);
                             break;
                         }
-                    } else {
-                        results.extend(step_results);
-                        break;
-                    }
 
-                    if iteration + 1 == *max_iterations {
-                        debug!("loop reached max iterations");
+                        if iteration + 1 == *max_iterations {
+                            debug!("loop reached max iterations");
+                        }
                     }
+                    Ok(results)
                 }
-                Ok(results)
             }
-        }
         })
     }
 }

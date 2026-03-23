@@ -55,8 +55,6 @@ impl EmbeddingPort for FastEmbedAdapter {
         // fastembed wants Vec<String>
         let owned: Vec<String> = texts.iter().map(std::string::ToString::to_string).collect();
 
-        
-
         tokio::task::spawn_blocking(move || {
             model
                 .embed(owned, None)

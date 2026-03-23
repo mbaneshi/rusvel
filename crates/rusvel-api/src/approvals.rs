@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 
 use rusvel_core::domain::{Job, JobFilter, JobStatus};
 use rusvel_core::id::JobId;

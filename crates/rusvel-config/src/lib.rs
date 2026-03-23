@@ -47,12 +47,7 @@ impl TomlConfig {
     }
 
     /// Set a per-session override. Session overrides shadow global values.
-    pub fn set_session_value(
-        &self,
-        session_id: &str,
-        key: &str,
-        value: Value,
-    ) -> Result<()> {
+    pub fn set_session_value(&self, session_id: &str, key: &str, value: Value) -> Result<()> {
         let mut sessions = self.sessions.write().map_err(lock_err)?;
         sessions
             .entry(session_id.to_string())
@@ -65,9 +60,10 @@ impl TomlConfig {
     pub fn get_for_session(&self, session_id: &str, key: &str) -> Result<Option<Value>> {
         let sessions = self.sessions.read().map_err(lock_err)?;
         if let Some(session_map) = sessions.get(session_id)
-            && let Some(v) = session_map.get(key) {
-                return Ok(Some(v.clone()));
-            }
+            && let Some(v) = session_map.get(key)
+        {
+            return Ok(Some(v.clone()));
+        }
         drop(sessions);
         self.get_value(key)
     }
@@ -158,8 +154,10 @@ fn toml_to_json(v: &toml::Value) -> Value {
         toml::Value::Boolean(b) => Value::Bool(*b),
         toml::Value::Array(a) => Value::Array(a.iter().map(toml_to_json).collect()),
         toml::Value::Table(t) => {
-            let obj: serde_json::Map<String, Value> =
-                t.iter().map(|(k, v)| (k.clone(), toml_to_json(v))).collect();
+            let obj: serde_json::Map<String, Value> = t
+                .iter()
+                .map(|(k, v)| (k.clone(), toml_to_json(v)))
+                .collect();
             Value::Object(obj)
         }
         toml::Value::Datetime(d) => Value::String(d.to_string()),
@@ -179,7 +177,10 @@ fn json_to_toml(v: &Value) -> toml::Value {
         Value::Bool(b) => toml::Value::Boolean(*b),
         Value::Array(a) => toml::Value::Array(a.iter().map(json_to_toml).collect()),
         Value::Object(o) => {
-            let t: toml::Table = o.iter().map(|(k, v)| (k.clone(), json_to_toml(v))).collect();
+            let t: toml::Table = o
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_toml(v)))
+                .collect();
             toml::Value::Table(t)
         }
         Value::Null => toml::Value::String(String::new()),
@@ -222,7 +223,8 @@ mod tests {
     #[test]
     fn get_set_roundtrip() {
         let (_dir, cfg) = test_config();
-        cfg.set_value("app.name", Value::String("test".into())).unwrap();
+        cfg.set_value("app.name", Value::String("test".into()))
+            .unwrap();
         let v = cfg.get_value("app.name").unwrap();
         assert_eq!(v, Some(Value::String("test".into())));
     }
@@ -234,7 +236,8 @@ mod tests {
 
         {
             let cfg = TomlConfig::load(path.clone()).unwrap();
-            cfg.set_value("db.url", Value::String("sqlite://test.db".into())).unwrap();
+            cfg.set_value("db.url", Value::String("sqlite://test.db".into()))
+                .unwrap();
         }
 
         // Reload from disk
@@ -246,7 +249,8 @@ mod tests {
     #[test]
     fn session_overrides_global() {
         let (_dir, cfg) = test_config();
-        cfg.set_value("llm.default_model", Value::String("gpt-4o".into())).unwrap();
+        cfg.set_value("llm.default_model", Value::String("gpt-4o".into()))
+            .unwrap();
         cfg.set_session_value("s1", "llm.default_model", Value::String("claude".into()))
             .unwrap();
 
@@ -266,7 +270,8 @@ mod tests {
     #[test]
     fn clear_session_removes_overrides() {
         let (_dir, cfg) = test_config();
-        cfg.set_session_value("s1", "key", Value::Bool(true)).unwrap();
+        cfg.set_session_value("s1", "key", Value::Bool(true))
+            .unwrap();
         cfg.clear_session("s1").unwrap();
         let v = cfg.get_for_session("s1", "key").unwrap();
         assert_eq!(v, None);

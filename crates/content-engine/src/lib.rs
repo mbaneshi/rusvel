@@ -101,7 +101,11 @@ impl ContentEngine {
         let item = self.writer.draft(session_id, topic, kind).await?;
         self.storage
             .objects()
-            .put("content", &item.id.to_string(), serde_json::to_value(&item)?)
+            .put(
+                "content",
+                &item.id.to_string(),
+                serde_json::to_value(&item)?,
+            )
             .await?;
         self.emit(events::CONTENT_DRAFTED, Some(*session_id), &item.id)
             .await?;
@@ -121,7 +125,10 @@ impl ContentEngine {
             .get_adapter(&platform)
             .ok()
             .and_then(|a| a.max_length());
-        let adapted_body = self.writer.adapt(&original, platform.clone(), max_len).await?;
+        let adapted_body = self
+            .writer
+            .adapt(&original, platform.clone(), max_len)
+            .await?;
 
         let mut adapted = original;
         adapted.id = ContentId::new();
@@ -131,7 +138,11 @@ impl ContentEngine {
         adapted.platform_targets = vec![platform];
         self.storage
             .objects()
-            .put("content", &adapted.id.to_string(), serde_json::to_value(&adapted)?)
+            .put(
+                "content",
+                &adapted.id.to_string(),
+                serde_json::to_value(&adapted)?,
+            )
             .await?;
         self.emit(events::CONTENT_ADAPTED, Some(*session_id), &adapted.id)
             .await?;
@@ -163,7 +174,11 @@ impl ContentEngine {
         item.published_at = Some(result.published_at);
         self.storage
             .objects()
-            .put("content", &content_id.to_string(), serde_json::to_value(&item)?)
+            .put(
+                "content",
+                &content_id.to_string(),
+                serde_json::to_value(&item)?,
+            )
             .await?;
         self.emit(events::CONTENT_PUBLISHED, Some(*session_id), &content_id)
             .await?;
@@ -210,10 +225,7 @@ impl ContentEngine {
     }
 
     /// Get engagement metrics for a content item.
-    pub async fn get_metrics(
-        &self,
-        content_id: ContentId,
-    ) -> Result<Vec<(Platform, PostMetrics)>> {
+    pub async fn get_metrics(&self, content_id: ContentId) -> Result<Vec<(Platform, PostMetrics)>> {
         self.analytics.get_metrics(content_id).await
     }
 

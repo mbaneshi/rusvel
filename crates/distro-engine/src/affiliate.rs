@@ -25,7 +25,9 @@ impl Default for PartnerId {
 }
 
 impl PartnerId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for PartnerId {
@@ -74,7 +76,10 @@ impl AffiliateManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&partner)?;
-        self.storage.objects().put(KIND, &partner.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &partner.id.to_string(), json)
+            .await?;
         Ok(partner)
     }
 
@@ -84,6 +89,8 @@ impl AffiliateManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 }

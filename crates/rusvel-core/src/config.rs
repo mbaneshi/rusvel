@@ -41,9 +41,15 @@ impl LayeredConfig {
             model: self.model.clone().or(parent.model.clone()),
             effort: self.effort.clone().or(parent.effort.clone()),
             max_budget_usd: self.max_budget_usd.or(parent.max_budget_usd),
-            permission_mode: self.permission_mode.clone().or(parent.permission_mode.clone()),
+            permission_mode: self
+                .permission_mode
+                .clone()
+                .or(parent.permission_mode.clone()),
             allowed_tools: self.allowed_tools.clone().or(parent.allowed_tools.clone()),
-            disallowed_tools: self.disallowed_tools.clone().or(parent.disallowed_tools.clone()),
+            disallowed_tools: self
+                .disallowed_tools
+                .clone()
+                .or(parent.disallowed_tools.clone()),
             system_prompt: self.system_prompt.clone().or(parent.system_prompt.clone()),
             add_dirs: self.add_dirs.clone().or(parent.add_dirs.clone()),
             max_turns: self.max_turns.or(parent.max_turns),
@@ -56,7 +62,10 @@ impl LayeredConfig {
             model: self.model.clone().unwrap_or_else(|| "sonnet".into()),
             effort: self.effort.clone().unwrap_or_else(|| "medium".into()),
             max_budget_usd: self.max_budget_usd,
-            permission_mode: self.permission_mode.clone().unwrap_or_else(|| "plan".into()),
+            permission_mode: self
+                .permission_mode
+                .clone()
+                .unwrap_or_else(|| "plan".into()),
             allowed_tools: self.allowed_tools.clone().unwrap_or_default(),
             disallowed_tools: self.disallowed_tools.clone().unwrap_or_default(),
             system_prompt: self.system_prompt.clone().unwrap_or_default(),
@@ -70,9 +79,12 @@ impl ResolvedConfig {
     /// Convert to Claude CLI args.
     pub fn to_claude_args(&self) -> Vec<String> {
         let mut args = vec![
-            "--model".into(), self.model.clone(),
-            "--effort".into(), self.effort.clone(),
-            "--permission-mode".into(), self.permission_mode.clone(),
+            "--model".into(),
+            self.model.clone(),
+            "--effort".into(),
+            self.effort.clone(),
+            "--permission-mode".into(),
+            self.permission_mode.clone(),
         ];
         if let Some(budget) = self.max_budget_usd {
             args.extend(["--max-budget-usd".into(), budget.to_string()]);
@@ -99,9 +111,9 @@ pub fn resolve_cascade(
     dept: &LayeredConfig,
     session: &LayeredConfig,
 ) -> ResolvedConfig {
-    global.overlay(&LayeredConfig::default())  // global on top of hard defaults
-        .overlay(&LayeredConfig::default())
-        ;
+    global
+        .overlay(&LayeredConfig::default()) // global on top of hard defaults
+        .overlay(&LayeredConfig::default());
     // dept overrides global, session overrides dept
     let merged = dept.overlay(global);
     let merged = session.overlay(&merged);
@@ -153,9 +165,9 @@ mod tests {
             ..Default::default()
         };
         let resolved = resolve_cascade(&global, &dept, &session);
-        assert_eq!(resolved.model, "opus");       // session wins
-        assert_eq!(resolved.effort, "high");       // dept wins over global
-        assert_eq!(resolved.add_dirs, vec!["."]);  // dept, session didn't set
+        assert_eq!(resolved.model, "opus"); // session wins
+        assert_eq!(resolved.effort, "high"); // dept wins over global
+        assert_eq!(resolved.add_dirs, vec!["."]); // dept, session didn't set
     }
 
     #[test]

@@ -14,10 +14,7 @@ pub enum StreamEvent {
     /// Incremental text chunk from the assistant.
     Delta { text: String },
     /// Stream completed successfully.
-    Done {
-        full_text: String,
-        cost_usd: f64,
-    },
+    Done { full_text: String, cost_usd: f64 },
     /// An error occurred.
     Error { message: String },
 }
@@ -44,7 +41,11 @@ impl ClaudeCliStreamer {
     }
 
     /// Stream with additional CLI arguments (e.g., --model, --effort, --allowedTools).
-    pub fn stream_with_args(&self, prompt: &str, extra_args: &[String]) -> mpsc::Receiver<StreamEvent> {
+    pub fn stream_with_args(
+        &self,
+        prompt: &str,
+        extra_args: &[String],
+    ) -> mpsc::Receiver<StreamEvent> {
         let (tx, rx) = mpsc::channel(64);
         let command = self.command.clone();
         let timeout_secs = self.timeout_secs;
@@ -97,7 +98,9 @@ async fn run_stream(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::null());
 
-    let mut child = cmd.spawn().map_err(|e| format!("failed to spawn claude: {e}"))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("failed to spawn claude: {e}"))?;
 
     let stdout = child
         .stdout
@@ -108,80 +111,78 @@ async fn run_stream(
     let mut full_text = String::new();
     let mut cost_usd = 0.0;
 
-    let stream_result = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        async {
-            while let Ok(Some(line)) = lines.next_line().await {
-                if line.trim().is_empty() {
-                    continue;
-                }
+    let stream_result = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
+        while let Ok(Some(line)) = lines.next_line().await {
+            if line.trim().is_empty() {
+                continue;
+            }
 
-                // Each line is a JSON object
-                let parsed: serde_json::Value = match serde_json::from_str(&line) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
+            // Each line is a JSON object
+            let parsed: serde_json::Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
 
-                let event_type = parsed.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            let event_type = parsed.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
-                match event_type {
-                    "assistant" => {
-                        // Extract text from message.content[].text
-                        if let Some(content) = parsed
-                            .pointer("/message/content")
-                            .and_then(|c| c.as_array())
-                        {
-                            for block in content {
-                                if block.get("type").and_then(|t| t.as_str()) == Some("text")
-                                    && let Some(text) = block.get("text").and_then(|t| t.as_str())
-                                        && !text.is_empty() {
-                                            debug!(len = text.len(), "stream delta");
-                                            let _ = tx
-                                                .send(StreamEvent::Delta {
-                                                    text: text.to_string(),
-                                                })
-                                                .await;
-                                        }
+            match event_type {
+                "assistant" => {
+                    // Extract text from message.content[].text
+                    if let Some(content) = parsed
+                        .pointer("/message/content")
+                        .and_then(|c| c.as_array())
+                    {
+                        for block in content {
+                            if block.get("type").and_then(|t| t.as_str()) == Some("text")
+                                && let Some(text) = block.get("text").and_then(|t| t.as_str())
+                                && !text.is_empty()
+                            {
+                                debug!(len = text.len(), "stream delta");
+                                let _ = tx
+                                    .send(StreamEvent::Delta {
+                                        text: text.to_string(),
+                                    })
+                                    .await;
                             }
                         }
                     }
-                    "result" => {
-                        // Final result
-                        if let Some(result) = parsed.get("result").and_then(|r| r.as_str()) {
-                            full_text = result.to_string();
-                        }
-                        cost_usd = parsed
-                            .get("total_cost_usd")
-                            .and_then(serde_json::Value::as_f64)
-                            .unwrap_or(0.0);
-
-                        let is_error = parsed
-                            .get("is_error")
-                            .and_then(serde_json::Value::as_bool)
-                            .unwrap_or(false);
-
-                        if is_error {
-                            let _ = tx
-                                .send(StreamEvent::Error {
-                                    message: full_text.clone(),
-                                })
-                                .await;
-                        } else {
-                            let _ = tx
-                                .send(StreamEvent::Done {
-                                    full_text: full_text.clone(),
-                                    cost_usd,
-                                })
-                                .await;
-                        }
+                }
+                "result" => {
+                    // Final result
+                    if let Some(result) = parsed.get("result").and_then(|r| r.as_str()) {
+                        full_text = result.to_string();
                     }
-                    _ => {
-                        // system, content_block_delta, etc. — skip for now
+                    cost_usd = parsed
+                        .get("total_cost_usd")
+                        .and_then(serde_json::Value::as_f64)
+                        .unwrap_or(0.0);
+
+                    let is_error = parsed
+                        .get("is_error")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false);
+
+                    if is_error {
+                        let _ = tx
+                            .send(StreamEvent::Error {
+                                message: full_text.clone(),
+                            })
+                            .await;
+                    } else {
+                        let _ = tx
+                            .send(StreamEvent::Done {
+                                full_text: full_text.clone(),
+                                cost_usd,
+                            })
+                            .await;
                     }
                 }
+                _ => {
+                    // system, content_block_delta, etc. — skip for now
+                }
             }
-        },
-    )
+        }
+    })
     .await;
 
     // Clean up child process

@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::Deserialize;
 
 use rusvel_core::domain::{AgentProfile, ModelProvider, ModelRef, ObjectFilter};
@@ -27,12 +27,15 @@ pub async fn list_agents(
     State(state): State<Arc<AppState>>,
     Query(params): Query<AgentQuery>,
 ) -> Result<Json<Vec<AgentProfile>>, (StatusCode, String)> {
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(STORE_KIND, ObjectFilter::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut agents: Vec<AgentProfile> = all.into_iter()
+    let mut agents: Vec<AgentProfile> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
 
@@ -66,9 +69,14 @@ pub async fn create_agent(
         metadata: body.metadata.unwrap_or_else(|| serde_json::json!({})),
     };
 
-    state.storage.objects()
-        .put(STORE_KIND, &agent.id.to_string(), serde_json::to_value(&agent)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &agent.id.to_string(),
+            serde_json::to_value(&agent).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -80,7 +88,9 @@ pub async fn get_agent(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<AgentProfile>, (StatusCode, String)> {
-    let val = state.storage.objects()
+    let val = state
+        .storage
+        .objects()
         .get(STORE_KIND, &id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -98,9 +108,14 @@ pub async fn update_agent(
     Path(id): Path<String>,
     Json(agent): Json<AgentProfile>,
 ) -> Result<Json<AgentProfile>, (StatusCode, String)> {
-    state.storage.objects()
-        .put(STORE_KIND, &id, serde_json::to_value(&agent)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &id,
+            serde_json::to_value(&agent).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -112,7 +127,9 @@ pub async fn delete_agent(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.storage.objects()
+    state
+        .storage
+        .objects()
         .delete(STORE_KIND, &id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

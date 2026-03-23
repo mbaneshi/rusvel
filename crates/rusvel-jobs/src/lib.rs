@@ -105,8 +105,8 @@ impl JobPort for JobQueue {
 
         job.status = JobStatus::Succeeded;
         job.completed_at = Some(Utc::now());
-        job.metadata["result"] = serde_json::to_value(&result)
-            .map_err(|e| RusvelError::Serialization(e.to_string()))?;
+        job.metadata["result"] =
+            serde_json::to_value(&result).map_err(|e| RusvelError::Serialization(e.to_string()))?;
         Ok(())
     }
 
@@ -192,9 +192,10 @@ impl JobPort for JobQueue {
         let jobs = self.jobs.lock().await;
         let iter = jobs.iter().filter(|j| {
             if let Some(ref sid) = filter.session_id
-                && &j.session_id != sid {
-                    return false;
-                }
+                && &j.session_id != sid
+            {
+                return false;
+            }
             if !filter.kinds.is_empty() && !filter.kinds.contains(&j.kind) {
                 return false;
             }

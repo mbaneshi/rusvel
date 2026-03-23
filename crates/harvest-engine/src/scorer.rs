@@ -74,9 +74,7 @@ impl OpportunityScorer {
         let skill_score = matched.len() as f64 / self.skills.len() as f64;
 
         // Budget bonus: if budget is stated and meets minimum, small boost
-        let budget_bonus = if let (Some(budget_str), Some(min)) =
-            (&raw.budget, self.min_budget)
-        {
+        let budget_bonus = if let (Some(budget_str), Some(min)) = (&raw.budget, self.min_budget) {
             let numeric: f64 = budget_str
                 .chars()
                 .filter(|c| c.is_ascii_digit() || *c == '.')
@@ -118,7 +116,8 @@ impl OpportunityScorer {
              Required skills: {}\n\n\
              Respond with ONLY a JSON object: {{\"score\": 0.X, \"reasoning\": \"...\"}}",
             self.skills.join(", "),
-            self.min_budget.map_or_else(|| "none".into(), |b| format!("${b}")),
+            self.min_budget
+                .map_or_else(|| "none".into(), |b| format!("${b}")),
             raw.title,
             raw.description,
             raw.budget.as_deref().unwrap_or("not specified"),

@@ -24,7 +24,9 @@ impl Default for DealId {
 }
 
 impl DealId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for DealId {
@@ -78,12 +80,19 @@ impl CrmManager {
         contact.session_id = session_id;
         let id = contact.id;
         let json = serde_json::to_value(&contact)?;
-        self.storage.objects().put(KIND_CONTACT, &id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND_CONTACT, &id.to_string(), json)
+            .await?;
         Ok(id)
     }
 
     pub async fn get_contact(&self, id: &ContactId) -> Result<Contact> {
-        let val = self.storage.objects().get(KIND_CONTACT, &id.to_string()).await?;
+        let val = self
+            .storage
+            .objects()
+            .get(KIND_CONTACT, &id.to_string())
+            .await?;
         match val {
             Some(v) => Ok(serde_json::from_value(v)?),
             None => Err(RusvelError::NotFound {
@@ -99,23 +108,27 @@ impl CrmManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND_CONTACT, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 
     pub async fn update_contact(&self, contact: &Contact) -> Result<()> {
         let json = serde_json::to_value(contact)?;
-        self.storage.objects().put(KIND_CONTACT, &contact.id.to_string(), json).await
+        self.storage
+            .objects()
+            .put(KIND_CONTACT, &contact.id.to_string(), json)
+            .await
     }
 
-    pub async fn add_deal(
-        &self,
-        session_id: SessionId,
-        mut deal: Deal,
-    ) -> Result<DealId> {
+    pub async fn add_deal(&self, session_id: SessionId, mut deal: Deal) -> Result<DealId> {
         deal.session_id = session_id;
         let id = deal.id;
         let json = serde_json::to_value(&deal)?;
-        self.storage.objects().put(KIND_DEAL, &id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND_DEAL, &id.to_string(), json)
+            .await?;
         Ok(id)
     }
 
@@ -140,13 +153,20 @@ impl CrmManager {
     }
 
     pub async fn advance_deal(&self, id: &DealId, new_stage: DealStage) -> Result<()> {
-        let val = self.storage.objects().get(KIND_DEAL, &id.to_string()).await?;
+        let val = self
+            .storage
+            .objects()
+            .get(KIND_DEAL, &id.to_string())
+            .await?;
         match val {
             Some(v) => {
                 let mut deal: Deal = serde_json::from_value(v)?;
                 deal.stage = new_stage;
                 let json = serde_json::to_value(&deal)?;
-                self.storage.objects().put(KIND_DEAL, &id.to_string(), json).await
+                self.storage
+                    .objects()
+                    .put(KIND_DEAL, &id.to_string(), json)
+                    .await
             }
             None => Err(RusvelError::NotFound {
                 kind: KIND_DEAL.into(),

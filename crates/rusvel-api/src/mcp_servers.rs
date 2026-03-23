@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -19,11 +19,11 @@ pub struct McpServerConfig {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub server_type: String,      // "stdio" | "http" | "sse" | "ws"
-    pub command: Option<String>,   // for stdio: command to run
-    pub args: Vec<String>,         // for stdio: command arguments
-    pub url: Option<String>,       // for http/sse/ws: endpoint URL
-    pub env: serde_json::Value,    // environment variables
+    pub server_type: String,     // "stdio" | "http" | "sse" | "ws"
+    pub command: Option<String>, // for stdio: command to run
+    pub args: Vec<String>,       // for stdio: command arguments
+    pub url: Option<String>,     // for http/sse/ws: endpoint URL
+    pub env: serde_json::Value,  // environment variables
     pub enabled: bool,
     pub metadata: serde_json::Value,
 }
@@ -37,11 +37,15 @@ pub async fn list_mcp_servers(
     State(state): State<Arc<AppState>>,
     Query(params): Query<McpQuery>,
 ) -> Result<Json<Vec<McpServerConfig>>, (StatusCode, String)> {
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut servers: Vec<McpServerConfig> = all.into_iter()
+    let mut servers: Vec<McpServerConfig> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
 
@@ -59,10 +63,19 @@ pub async fn create_mcp_server(
     State(state): State<Arc<AppState>>,
     Json(mut server): Json<McpServerConfig>,
 ) -> Result<(StatusCode, Json<McpServerConfig>), (StatusCode, String)> {
-    if server.id.is_empty() { server.id = uuid::Uuid::now_v7().to_string(); }
-    state.storage.objects()
-        .put(STORE_KIND, &server.id, serde_json::to_value(&server).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if server.id.is_empty() {
+        server.id = uuid::Uuid::now_v7().to_string();
+    }
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &server.id,
+            serde_json::to_value(&server).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::CREATED, Json(server)))
 }
 
@@ -71,9 +84,16 @@ pub async fn update_mcp_server(
     Path(id): Path<String>,
     Json(server): Json<McpServerConfig>,
 ) -> Result<Json<McpServerConfig>, (StatusCode, String)> {
-    state.storage.objects()
-        .put(STORE_KIND, &id, serde_json::to_value(&server).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &id,
+            serde_json::to_value(&server).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(server))
 }
 
@@ -81,19 +101,23 @@ pub async fn delete_mcp_server(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.storage.objects().delete(STORE_KIND, &id).await
+    state
+        .storage
+        .objects()
+        .delete(STORE_KIND, &id)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Build --mcp-config JSON for enabled MCP servers in a department.
-pub async fn build_mcp_config_for_engine(
-    state: &Arc<AppState>,
-    engine: &str,
-) -> Option<String> {
-    let servers: Vec<McpServerConfig> = state.storage.objects()
+pub async fn build_mcp_config_for_engine(state: &Arc<AppState>, engine: &str) -> Option<String> {
+    let servers: Vec<McpServerConfig> = state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
-        .await.unwrap_or_default()
+        .await
+        .unwrap_or_default()
         .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .filter(|s: &McpServerConfig| s.enabled)
@@ -103,7 +127,9 @@ pub async fn build_mcp_config_for_engine(
         })
         .collect();
 
-    if servers.is_empty() { return None; }
+    if servers.is_empty() {
+        return None;
+    }
 
     // Build mcpServers JSON matching Claude Code format
     let mut mcp_json = serde_json::Map::new();
@@ -113,7 +139,10 @@ pub async fn build_mcp_config_for_engine(
             "stdio" => {
                 if let Some(ref cmd) = s.command {
                     entry.insert("command".into(), serde_json::Value::String(cmd.clone()));
-                    entry.insert("args".into(), serde_json::to_value(&s.args).unwrap_or_default());
+                    entry.insert(
+                        "args".into(),
+                        serde_json::to_value(&s.args).unwrap_or_default(),
+                    );
                 }
             }
             "http" | "sse" | "ws" => {

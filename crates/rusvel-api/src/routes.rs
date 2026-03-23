@@ -1,8 +1,8 @@
 //! HTTP handler functions for the RUSVEL API.
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::Json;
 use chrono::Utc;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -73,10 +73,7 @@ pub async fn create_session(
         .create(session)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok((
-        StatusCode::CREATED,
-        Json(serde_json::json!({ "id": id })),
-    ))
+    Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id }))))
 }
 
 pub async fn get_session(

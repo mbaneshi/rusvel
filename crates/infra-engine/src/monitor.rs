@@ -26,7 +26,9 @@ impl Default for HealthCheckId {
 }
 
 impl HealthCheckId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for HealthCheckId {
@@ -84,7 +86,10 @@ impl MonitorManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&check)?;
-        self.storage.objects().put(KIND, &check.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &check.id.to_string(), json)
+            .await?;
         Ok(check)
     }
 
@@ -94,6 +99,8 @@ impl MonitorManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 }

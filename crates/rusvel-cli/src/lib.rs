@@ -8,9 +8,9 @@
 pub mod departments;
 pub mod shell;
 
-use std::sync::Arc;
 use chrono::Utc;
 use clap::{Parser, Subcommand, ValueEnum};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use forge_engine::ForgeEngine;
@@ -189,7 +189,12 @@ pub enum GoalCmd {
 }
 
 #[derive(Debug, Clone, ValueEnum)]
-pub enum TimeframeArg { Day, Week, Month, Quarter }
+pub enum TimeframeArg {
+    Day,
+    Week,
+    Month,
+    Quarter,
+}
 
 impl From<TimeframeArg> for Timeframe {
     fn from(t: TimeframeArg) -> Self {
@@ -270,9 +275,14 @@ pub(crate) async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) 
         SessionCmd::Create { name } => {
             let now = Utc::now();
             let session = Session {
-                id: SessionId::new(), name: name.clone(), kind: SessionKind::General,
-                tags: vec![], config: SessionConfig::default(),
-                created_at: now, updated_at: now, metadata: serde_json::json!({}),
+                id: SessionId::new(),
+                name: name.clone(),
+                kind: SessionKind::General,
+                tags: vec![],
+                config: SessionConfig::default(),
+                created_at: now,
+                updated_at: now,
+                metadata: serde_json::json!({}),
             };
             let id = port.create(session).await?;
             save_active_session(&id)?;
@@ -290,15 +300,25 @@ pub(crate) async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) 
             println!("{:<38}  {:<20}  {:<10}  UPDATED", "ID", "NAME", "KIND");
             println!("{}", "-".repeat(90));
             for s in &sessions {
-                let marker = if active.as_ref() == Some(&s.id) { " *" } else { "" };
-                println!("{:<38}  {:<20}  {:<10}  {}{}", s.id,
-                    truncate(&s.name, 20), format!("{:?}", s.kind),
-                    s.updated_at.format("%Y-%m-%d %H:%M"), marker);
+                let marker = if active.as_ref() == Some(&s.id) {
+                    " *"
+                } else {
+                    ""
+                };
+                println!(
+                    "{:<38}  {:<20}  {:<10}  {}{}",
+                    s.id,
+                    truncate(&s.name, 20),
+                    format!("{:?}", s.kind),
+                    s.updated_at.format("%Y-%m-%d %H:%M"),
+                    marker
+                );
             }
             Ok(())
         }
         SessionCmd::Switch { id } => {
-            let uuid: Uuid = id.parse()
+            let uuid: Uuid = id
+                .parse()
                 .map_err(|e| RusvelError::Validation(format!("Invalid UUID: {e}")))?;
             let sid = SessionId::from_uuid(uuid);
             let _ = port.load(&sid).await?; // verify exists
@@ -327,9 +347,13 @@ async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()>
             }
             if !plan.focus_areas.is_empty() {
                 println!("\nFocus areas:");
-                for a in &plan.focus_areas { println!("  - {a}"); }
+                for a in &plan.focus_areas {
+                    println!("  - {a}");
+                }
             }
-            if !plan.notes.is_empty() { println!("\nNotes: {}", plan.notes); }
+            if !plan.notes.is_empty() {
+                println!("\nNotes: {}", plan.notes);
+            }
             Ok(())
         }
         MissionCmd::Goals => {
@@ -338,20 +362,36 @@ async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()>
                 println!("No goals. Add one: rusvel forge mission goal add <title>");
                 return Ok(());
             }
-            println!("{:<38}  {:<25}  {:<10}  {:<10}  PROGRESS", "ID", "TITLE", "TIMEFRAME", "STATUS");
+            println!(
+                "{:<38}  {:<25}  {:<10}  {:<10}  PROGRESS",
+                "ID", "TITLE", "TIMEFRAME", "STATUS"
+            );
             println!("{}", "-".repeat(100));
             for g in &goals {
-                println!("{:<38}  {:<25}  {:<10}  {:<10}  {:.0}%", g.id,
-                    truncate(&g.title, 25), format!("{:?}", g.timeframe),
-                    format!("{:?}", g.status), g.progress * 100.0);
+                println!(
+                    "{:<38}  {:<25}  {:<10}  {:<10}  {:.0}%",
+                    g.id,
+                    truncate(&g.title, 25),
+                    format!("{:?}", g.timeframe),
+                    format!("{:?}", g.status),
+                    g.progress * 100.0
+                );
             }
             Ok(())
         }
         MissionCmd::Goal { action } => match action {
-            GoalCmd::Add { title, description, timeframe } => {
-                let goal = engine.set_goal(&session_id, title, description, timeframe.into()).await?;
-                println!("Goal created:\n  ID:        {}\n  Title:     {}\n  Timeframe: {:?}",
-                    goal.id, goal.title, goal.timeframe);
+            GoalCmd::Add {
+                title,
+                description,
+                timeframe,
+            } => {
+                let goal = engine
+                    .set_goal(&session_id, title, description, timeframe.into())
+                    .await?;
+                println!(
+                    "Goal created:\n  ID:        {}\n  Title:     {}\n  Timeframe: {:?}",
+                    goal.id, goal.title, goal.timeframe
+                );
                 Ok(())
             }
         },
@@ -374,10 +414,16 @@ async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()>
 fn print_list(heading: &str, items: &[String]) {
     if !items.is_empty() {
         println!("\n{heading}:");
-        for item in items { println!("  - {item}"); }
+        for item in items {
+            println!("  - {item}");
+        }
     }
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max { s.to_string() } else { format!("{}...", &s[..max.saturating_sub(3)]) }
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    }
 }

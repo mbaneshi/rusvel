@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -31,12 +31,15 @@ pub async fn list_skills(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SkillQuery>,
 ) -> Result<Json<Vec<SkillDefinition>>, (StatusCode, String)> {
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut skills: Vec<SkillDefinition> = all.into_iter()
+    let mut skills: Vec<SkillDefinition> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
 
@@ -57,9 +60,14 @@ pub async fn create_skill(
     if skill.id.is_empty() {
         skill.id = uuid::Uuid::now_v7().to_string();
     }
-    state.storage.objects()
-        .put(STORE_KIND, &skill.id, serde_json::to_value(&skill)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &skill.id,
+            serde_json::to_value(&skill).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::CREATED, Json(skill)))
@@ -69,11 +77,16 @@ pub async fn get_skill(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<SkillDefinition>, (StatusCode, String)> {
-    let val = state.storage.objects()
-        .get(STORE_KIND, &id).await
+    let val = state
+        .storage
+        .objects()
+        .get(STORE_KIND, &id)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "skill not found".into()))?;
-    Ok(Json(serde_json::from_value(val).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
+    Ok(Json(serde_json::from_value(val).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?))
 }
 
 pub async fn update_skill(
@@ -81,9 +94,16 @@ pub async fn update_skill(
     Path(id): Path<String>,
     Json(skill): Json<SkillDefinition>,
 ) -> Result<Json<SkillDefinition>, (StatusCode, String)> {
-    state.storage.objects()
-        .put(STORE_KIND, &id, serde_json::to_value(&skill).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &id,
+            serde_json::to_value(&skill).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(skill))
 }
 
@@ -91,7 +111,11 @@ pub async fn delete_skill(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.storage.objects().delete(STORE_KIND, &id).await
+    state
+        .storage
+        .objects()
+        .delete(STORE_KIND, &id)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -103,11 +127,7 @@ pub async fn delete_skill(
 /// interpolates `{{input}}` with the remaining text, and returns the expanded prompt.
 ///
 /// Returns `None` if no skill matches.
-pub async fn resolve_skill(
-    state: &Arc<AppState>,
-    engine: &str,
-    message: &str,
-) -> Option<String> {
+pub async fn resolve_skill(state: &Arc<AppState>, engine: &str, message: &str) -> Option<String> {
     let trimmed = message.trim();
     if !trimmed.starts_with('/') || trimmed.len() < 2 {
         return None;
@@ -132,12 +152,15 @@ pub async fn resolve_skill(
     let normalized_slug = skill_slug.to_lowercase().replace('_', "-");
 
     // Load skills for this engine
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
         .await
         .ok()?;
 
-    let skills: Vec<SkillDefinition> = all.into_iter()
+    let skills: Vec<SkillDefinition> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .filter(|s: &SkillDefinition| {
             let skill_engine = s.metadata.get("engine").and_then(|e| e.as_str());

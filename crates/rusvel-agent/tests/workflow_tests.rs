@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
@@ -84,31 +84,43 @@ async fn sequential_chains_output() {
         name: "seq-test".into(),
         steps: vec![WorkflowStep::Sequential {
             steps: vec![
-                WorkflowStep::Agent { config: cfg(), input_mapping: None },
-                WorkflowStep::Agent { config: cfg(), input_mapping: None },
+                WorkflowStep::Agent {
+                    config: cfg(),
+                    input_mapping: None,
+                },
+                WorkflowStep::Agent {
+                    config: cfg(),
+                    input_mapping: None,
+                },
             ],
         }],
     };
 
-    let results = runner.run_workflow(&wf, Content::text("start")).await.unwrap();
+    let results = runner
+        .run_workflow(&wf, Content::text("start"))
+        .await
+        .unwrap();
     assert_eq!(results.len(), 2);
     assert_eq!(mock.call_count.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
 async fn parallel_runs_concurrently() {
-    let mock = Arc::new(MockAgent::new(vec![
-        Content::text("a"),
-        Content::text("b"),
-    ]));
+    let mock = Arc::new(MockAgent::new(vec![Content::text("a"), Content::text("b")]));
     let runner = WorkflowRunner::new(mock.clone());
 
     let wf = Workflow {
         name: "par-test".into(),
         steps: vec![WorkflowStep::Parallel {
             steps: vec![
-                WorkflowStep::Agent { config: cfg(), input_mapping: None },
-                WorkflowStep::Agent { config: cfg(), input_mapping: None },
+                WorkflowStep::Agent {
+                    config: cfg(),
+                    input_mapping: None,
+                },
+                WorkflowStep::Agent {
+                    config: cfg(),
+                    input_mapping: None,
+                },
             ],
         }],
     };

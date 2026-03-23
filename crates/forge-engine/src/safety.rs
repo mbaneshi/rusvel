@@ -3,8 +3,8 @@
 //! Provides budget enforcement, concurrency limiting, and a simple
 //! circuit breaker to protect against runaway agent costs.
 
-use std::sync::Mutex;
 use rusvel_core::error::{Result, RusvelError};
+use std::sync::Mutex;
 
 /// RAII guard that releases a concurrency slot on drop.
 pub struct SafetySlot<'a> {
@@ -52,7 +52,10 @@ impl SafetyGuard {
     pub fn check_budget(&self, estimated_cost: f64) -> Result<()> {
         let spent = *self.total_spent.lock().unwrap();
         if spent + estimated_cost > self.cost_limit {
-            return Err(RusvelError::BudgetExceeded { spent, limit: self.cost_limit });
+            return Err(RusvelError::BudgetExceeded {
+                spent,
+                limit: self.cost_limit,
+            });
         }
         Ok(())
     }
@@ -73,7 +76,8 @@ impl SafetyGuard {
         let active = *self.active_runs.lock().unwrap();
         if active >= self.max_concurrent {
             return Err(RusvelError::Validation(format!(
-                "concurrency limit reached: {active}/{}", self.max_concurrent
+                "concurrency limit reached: {active}/{}",
+                self.max_concurrent
             )));
         }
         Ok(())
@@ -84,7 +88,8 @@ impl SafetyGuard {
         let mut active = self.active_runs.lock().unwrap();
         if *active >= self.max_concurrent {
             return Err(RusvelError::Validation(format!(
-                "concurrency limit reached: {active}/{}", self.max_concurrent
+                "concurrency limit reached: {active}/{}",
+                self.max_concurrent
             )));
         }
         *active += 1;
@@ -101,7 +106,11 @@ impl SafetyGuard {
     /// Return the current circuit state.
     pub fn circuit_state(&self) -> CircuitState {
         let failures = *self.consecutive_failures.lock().unwrap();
-        if failures >= self.failure_threshold { CircuitState::Open } else { CircuitState::Closed }
+        if failures >= self.failure_threshold {
+            CircuitState::Open
+        } else {
+            CircuitState::Closed
+        }
     }
 
     /// Record a successful run (resets failure counter).
@@ -113,7 +122,11 @@ impl SafetyGuard {
     pub fn record_failure(&self) -> CircuitState {
         let mut failures = self.consecutive_failures.lock().unwrap();
         *failures += 1;
-        if *failures >= self.failure_threshold { CircuitState::Open } else { CircuitState::Closed }
+        if *failures >= self.failure_threshold {
+            CircuitState::Open
+        } else {
+            CircuitState::Closed
+        }
     }
 
     /// Manually reset the circuit breaker to closed.
@@ -133,7 +146,9 @@ impl SafetyGuard {
 }
 
 impl Default for SafetyGuard {
-    fn default() -> Self { Self::new(10.0, 4, 5) }
+    fn default() -> Self {
+        Self::new(10.0, 4, 5)
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────

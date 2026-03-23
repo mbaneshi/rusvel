@@ -7,16 +7,16 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
-use axum::Json;
 use chrono::Utc;
-use std::pin::Pin;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
-use tokio_stream::wrappers::ReceiverStream;
+use std::pin::Pin;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
 use rusvel_core::domain::{EventFilter, UserProfile};
@@ -25,8 +25,8 @@ use rusvel_core::ports::{EmbeddingPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentDef;
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
-use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
 use crate::AppState;
+use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
 
 // ── Department Config (stored per-dept as LayeredConfig) ─────
 
@@ -36,11 +36,10 @@ fn msg_namespace(engine: &str) -> String {
     format!("dept_msg_{engine}")
 }
 
-async fn load_dept_config(
-    engine: &str,
-    state: &Arc<AppState>,
-) -> LayeredConfig {
-    state.storage.objects()
+async fn load_dept_config(engine: &str, state: &Arc<AppState>) -> LayeredConfig {
+    state
+        .storage
+        .objects()
         .get(CONFIG_STORE_KEY, engine)
         .await
         .ok()
@@ -59,7 +58,9 @@ fn resolve_dept_config(
     let mut base = dept_def.default_config.clone();
 
     // Set system prompt from registry + user context
-    let user_context = profile.map(rusvel_core::UserProfile::to_system_prompt).unwrap_or_default();
+    let user_context = profile
+        .map(rusvel_core::UserProfile::to_system_prompt)
+        .unwrap_or_default();
     if base.system_prompt.is_none() {
         base.system_prompt = Some(format!("{}\n\n{user_context}", dept_def.system_prompt));
     }
@@ -125,17 +126,19 @@ fn validate_dept<'a>(
     state: &'a Arc<AppState>,
     dept: &str,
 ) -> Result<&'a DepartmentDef, (StatusCode, String)> {
-    state.registry.get(dept).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, format!("Unknown department: {dept}"))
-    })
+    state
+        .registry
+        .get(dept)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Unknown department: {dept}")))
 }
 
 // ── Registry endpoint ────────────────────────────────────────
 
-pub async fn list_departments(
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<serde_json::Value>> {
-    let depts: Vec<serde_json::Value> = state.registry.list().iter()
+pub async fn list_departments(State(state): State<Arc<AppState>>) -> Json<Vec<serde_json::Value>> {
+    let depts: Vec<serde_json::Value> = state
+        .registry
+        .list()
+        .iter()
         .map(|d| serde_json::to_value(d).unwrap_or_default())
         .collect();
     Json(depts)
@@ -143,10 +146,10 @@ pub async fn list_departments(
 
 // ── Profile endpoints ────────────────────────────────────────
 
-pub async fn get_profile(
-    State(state): State<Arc<AppState>>,
-) -> Json<serde_json::Value> {
-    let profile = state.profile.as_ref()
+pub async fn get_profile(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let profile = state
+        .profile
+        .as_ref()
         .map(|p| serde_json::to_value(p).unwrap_or_default())
         .unwrap_or(serde_json::json!(null));
     Json(profile)
@@ -157,7 +160,9 @@ pub async fn update_profile(
     Json(profile): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // Store profile in ObjectStore for now
-    state.storage.objects()
+    state
+        .storage
+        .objects()
         .put("user_profile", "current", profile.clone())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -183,9 +188,11 @@ pub async fn dept_config_update(
 ) -> Result<Json<DepartmentConfig>, (StatusCode, String)> {
     validate_dept(&state, &dept)?;
     let layered = config.to_layered();
-    let value = serde_json::to_value(&layered)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-    state.storage.objects()
+    let value =
+        serde_json::to_value(&layered).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    state
+        .storage
+        .objects()
         .put(CONFIG_STORE_KEY, &dept, value)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -206,7 +213,8 @@ pub async fn dept_chat(
     let mut resolved = resolve_dept_config(dept_def, &stored, state.profile.as_ref());
     let namespace = msg_namespace(&dept);
 
-    let conversation_id = body.conversation_id
+    let conversation_id = body
+        .conversation_id
         .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
 
     // Load history
@@ -233,13 +241,17 @@ pub async fn dept_chat(
 
         let (tx, rx) = tokio::sync::mpsc::channel::<Event>(8);
         tokio::spawn(async move {
-            let _ = tx.send(Event::default()
-                .event("delta")
-                .data(serde_json::json!({
-                    "text": format!("Building {}...\n\n", build_cmd.entity_type.label()),
-                    "conversation_id": conv_id,
-                }).to_string())
-            ).await;
+            let _ = tx
+                .send(
+                    Event::default().event("delta").data(
+                        serde_json::json!({
+                            "text": format!("Building {}...\n\n", build_cmd.entity_type.label()),
+                            "conversation_id": conv_id,
+                        })
+                        .to_string(),
+                    ),
+                )
+                .await;
 
             let result = crate::build_cmd::execute_build(&build_cmd, &engine_owned, &storage).await;
             let response_text = match result {
@@ -255,66 +267,81 @@ pub async fn dept_chat(
                 created_at: Utc::now().to_rfc3339(),
             };
             let _ = store_namespaced_message(&storage, &ns, &assistant_msg).await;
-            let _ = tx.send(Event::default()
-                .event("done")
-                .data(serde_json::json!({
-                    "text": response_text,
-                    "cost_usd": 0.0,
-                    "conversation_id": conv_id,
-                }).to_string())
-            ).await;
+            let _ = tx
+                .send(
+                    Event::default().event("done").data(
+                        serde_json::json!({
+                            "text": response_text,
+                            "cost_usd": 0.0,
+                            "conversation_id": conv_id,
+                        })
+                        .to_string(),
+                    ),
+                )
+                .await;
         });
 
         let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
-            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
-                .map(Ok::<_, Infallible>));
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx).map(Ok::<_, Infallible>));
         return Ok(Sse::new(stream).keep_alive(KeepAlive::default()));
     }
 
     // /skill-name interceptor
-    let effective_message = if let Some(expanded) = crate::skills::resolve_skill(&state, &dept, &body.message).await {
-        expanded
-    } else {
-        body.message.clone()
-    };
+    let effective_message =
+        if let Some(expanded) = crate::skills::resolve_skill(&state, &dept, &body.message).await {
+            expanded
+        } else {
+            body.message.clone()
+        };
 
     // @agent-name mention override
     if let Some(agent_name) = extract_agent_mention(&body.message)
-        && let Ok(agents) = state.storage.objects()
-            .list("agents", rusvel_core::domain::ObjectFilter::default()).await
-        {
-            let found = agents.into_iter()
-                .filter_map(|v| serde_json::from_value::<rusvel_core::domain::AgentProfile>(v).ok())
-                .find(|a| a.name.eq_ignore_ascii_case(&agent_name));
-            if let Some(agent) = found {
-                resolved.system_prompt = agent.instructions.clone();
-                resolved.model = agent.default_model.model.clone();
-                if !agent.allowed_tools.is_empty() {
-                    resolved.allowed_tools = agent.allowed_tools.clone();
-                }
+        && let Ok(agents) = state
+            .storage
+            .objects()
+            .list("agents", rusvel_core::domain::ObjectFilter::default())
+            .await
+    {
+        let found = agents
+            .into_iter()
+            .filter_map(|v| serde_json::from_value::<rusvel_core::domain::AgentProfile>(v).ok())
+            .find(|a| a.name.eq_ignore_ascii_case(&agent_name));
+        if let Some(agent) = found {
+            resolved.system_prompt = agent.instructions.clone();
+            resolved.model = agent.default_model.model.clone();
+            if !agent.allowed_tools.is_empty() {
+                resolved.allowed_tools = agent.allowed_tools.clone();
             }
         }
+    }
 
     // Load enabled rules and append to system prompt
     let rules = crate::rules::load_rules_for_engine(&state, &dept).await;
     if !rules.is_empty() {
         resolved.system_prompt.push_str("\n\n--- Rules ---\n");
         for rule in &rules {
-            resolved.system_prompt.push_str(&format!("[{}]: {}\n", rule.name, rule.content));
+            resolved
+                .system_prompt
+                .push_str(&format!("[{}]: {}\n", rule.name, rule.content));
         }
     }
 
     // RAG: retrieve relevant knowledge
     if let (Some(embed_port), Some(vector_store)) = (&state.embedding, &state.vector_store)
-        && let Ok(query_emb) = embed_port.embed_one(&body.message).await {
-            let results = vector_store.search(&query_emb, 5).await.unwrap_or_default();
-            if !results.is_empty() {
-                resolved.system_prompt.push_str("\n\n--- Relevant Knowledge ---\n");
-                for r in &results {
-                    resolved.system_prompt.push_str(&format!("[score: {:.2}] {}\n", r.score, r.entry.content));
-                }
+        && let Ok(query_emb) = embed_port.embed_one(&body.message).await
+    {
+        let results = vector_store.search(&query_emb, 5).await.unwrap_or_default();
+        if !results.is_empty() {
+            resolved
+                .system_prompt
+                .push_str("\n\n--- Relevant Knowledge ---\n");
+            for r in &results {
+                resolved
+                    .system_prompt
+                    .push_str(&format!("[score: {:.2}] {}\n", r.score, r.entry.content));
             }
         }
+    }
 
     // Build prompt
     let prompt = build_dept_prompt(&resolved.system_prompt, &history, &effective_message);
@@ -339,10 +366,13 @@ pub async fn dept_chat(
     let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
         Box::pin(ReceiverStream::new(rx).map(move |event| {
             let sse_event = match &event {
-                StreamEvent::Delta { text } => Event::default()
-                    .event("delta")
-                    .data(serde_json::json!({"text": text, "conversation_id": conv_id}).to_string()),
-                StreamEvent::Done { full_text, cost_usd } => {
+                StreamEvent::Delta { text } => Event::default().event("delta").data(
+                    serde_json::json!({"text": text, "conversation_id": conv_id}).to_string(),
+                ),
+                StreamEvent::Done {
+                    full_text,
+                    cost_usd,
+                } => {
                     let storage = storage.clone();
                     let events_port = events_port.clone();
                     let conv_id_inner = conv_id.clone();
@@ -359,20 +389,22 @@ pub async fn dept_chat(
                             created_at: Utc::now().to_rfc3339(),
                         };
                         let _ = store_namespaced_message(&storage, &ns_inner, &msg).await;
-                        let _ = events_port.emit(rusvel_core::domain::Event {
-                            id: EventId::new(),
-                            session_id: None,
-                            run_id: None,
-                            source: eng,
-                            kind: format!("{eng}.chat.completed"),
-                            payload: serde_json::json!({
-                                "conversation_id": conv_id_inner,
-                                "cost_usd": cost,
-                                "response_length": msg.content.len(),
-                            }),
-                            created_at: Utc::now(),
-                            metadata: serde_json::json!({}),
-                        }).await;
+                        let _ = events_port
+                            .emit(rusvel_core::domain::Event {
+                                id: EventId::new(),
+                                session_id: None,
+                                run_id: None,
+                                source: eng,
+                                kind: format!("{eng}.chat.completed"),
+                                payload: serde_json::json!({
+                                    "conversation_id": conv_id_inner,
+                                    "cost_usd": cost,
+                                    "response_length": msg.content.len(),
+                                }),
+                                created_at: Utc::now(),
+                                metadata: serde_json::json!({}),
+                            })
+                            .await;
                         crate::hook_dispatch::dispatch_hooks(
                             &format!("{eng}.chat.completed"),
                             serde_json::json!({
@@ -389,7 +421,8 @@ pub async fn dept_chat(
                             "text": full_text,
                             "cost_usd": cost_usd,
                             "conversation_id": conv_id
-                        }).to_string(),
+                        })
+                        .to_string(),
                     )
                 }
                 StreamEvent::Error { message } => Event::default()
@@ -408,7 +441,9 @@ pub async fn dept_conversations(
 ) -> Result<Json<Vec<ConversationSummary>>, (StatusCode, String)> {
     validate_dept(&state, &dept)?;
     let namespace = msg_namespace(&dept);
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(&namespace, rusvel_core::domain::ObjectFilter::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -417,7 +452,10 @@ pub async fn dept_conversations(
         std::collections::HashMap::new();
     for val in all {
         if let Ok(msg) = serde_json::from_value::<ChatMessage>(val) {
-            convos.entry(msg.conversation_id.clone()).or_default().push(msg);
+            convos
+                .entry(msg.conversation_id.clone())
+                .or_default()
+                .push(msg);
         }
     }
 
@@ -425,10 +463,26 @@ pub async fn dept_conversations(
         .into_iter()
         .map(|(id, mut msgs)| {
             msgs.sort_by(|a, b| a.created_at.cmp(&b.created_at));
-            let title = msgs.iter()
-                .find(|m| m.role == "user").map_or_else(|| "New conversation".into(), |m| if m.content.len() > 60 { format!("{}...", &m.content[..57]) } else { m.content.clone() });
-            let updated_at = msgs.last().map(|m| m.created_at.clone()).unwrap_or_default();
-            ConversationSummary { id, title, updated_at, message_count: msgs.len() }
+            let title = msgs.iter().find(|m| m.role == "user").map_or_else(
+                || "New conversation".into(),
+                |m| {
+                    if m.content.len() > 60 {
+                        format!("{}...", &m.content[..57])
+                    } else {
+                        m.content.clone()
+                    }
+                },
+            );
+            let updated_at = msgs
+                .last()
+                .map(|m| m.created_at.clone())
+                .unwrap_or_default();
+            ConversationSummary {
+                id,
+                title,
+                updated_at,
+                message_count: msgs.len(),
+            }
         })
         .collect();
     summaries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
@@ -452,11 +506,16 @@ pub async fn dept_events(
     Path(dept): Path<String>,
 ) -> Result<Json<Vec<rusvel_core::domain::Event>>, (StatusCode, String)> {
     let dept_def = validate_dept(&state, &dept)?;
-    state.events.query(EventFilter {
-        source: Some(dept_def.engine_kind),
-        limit: Some(50),
-        ..Default::default()
-    }).await.map(Json).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    state
+        .events
+        .query(EventFilter {
+            source: Some(dept_def.engine_kind),
+            limit: Some(50),
+            ..Default::default()
+        })
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -481,10 +540,12 @@ async fn load_namespaced_history(
     conversation_id: &str,
     limit: usize,
 ) -> rusvel_core::error::Result<Vec<ChatMessage>> {
-    let all = storage.objects()
+    let all = storage
+        .objects()
         .list(namespace, rusvel_core::domain::ObjectFilter::default())
         .await?;
-    let mut msgs: Vec<ChatMessage> = all.into_iter()
+    let mut msgs: Vec<ChatMessage> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .filter(|m: &ChatMessage| m.conversation_id == conversation_id)
         .collect();
@@ -500,7 +561,8 @@ async fn store_namespaced_message(
     namespace: &str,
     msg: &ChatMessage,
 ) -> rusvel_core::error::Result<()> {
-    storage.objects()
+    storage
+        .objects()
         .put(namespace, &msg.id, serde_json::to_value(msg)?)
         .await
 }

@@ -5,9 +5,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::AppState;
@@ -32,12 +32,15 @@ pub async fn list_rules(
     State(state): State<Arc<AppState>>,
     Query(params): Query<RuleQuery>,
 ) -> Result<Json<Vec<RuleDefinition>>, (StatusCode, String)> {
-    let all = state.storage.objects()
+    let all = state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut rules: Vec<RuleDefinition> = all.into_iter()
+    let mut rules: Vec<RuleDefinition> = all
+        .into_iter()
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect();
 
@@ -58,9 +61,14 @@ pub async fn create_rule(
     if rule.id.is_empty() {
         rule.id = uuid::Uuid::now_v7().to_string();
     }
-    state.storage.objects()
-        .put(STORE_KIND, &rule.id, serde_json::to_value(&rule)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &rule.id,
+            serde_json::to_value(&rule).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok((StatusCode::CREATED, Json(rule)))
@@ -70,11 +78,16 @@ pub async fn get_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<Json<RuleDefinition>, (StatusCode, String)> {
-    let val = state.storage.objects()
-        .get(STORE_KIND, &id).await
+    let val = state
+        .storage
+        .objects()
+        .get(STORE_KIND, &id)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "rule not found".into()))?;
-    Ok(Json(serde_json::from_value(val).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?))
+    Ok(Json(serde_json::from_value(val).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?))
 }
 
 pub async fn update_rule(
@@ -82,9 +95,16 @@ pub async fn update_rule(
     Path(id): Path<String>,
     Json(rule): Json<RuleDefinition>,
 ) -> Result<Json<RuleDefinition>, (StatusCode, String)> {
-    state.storage.objects()
-        .put(STORE_KIND, &id, serde_json::to_value(&rule).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .storage
+        .objects()
+        .put(
+            STORE_KIND,
+            &id,
+            serde_json::to_value(&rule).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(rule))
 }
 
@@ -92,17 +112,20 @@ pub async fn delete_rule(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.storage.objects().delete(STORE_KIND, &id).await
+    state
+        .storage
+        .objects()
+        .delete(STORE_KIND, &id)
+        .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// Load enabled rules for a department (used by `department_chat_handler`).
-pub async fn load_rules_for_engine(
-    state: &Arc<AppState>,
-    engine: &str,
-) -> Vec<RuleDefinition> {
-    state.storage.objects()
+pub async fn load_rules_for_engine(state: &Arc<AppState>, engine: &str) -> Vec<RuleDefinition> {
+    state
+        .storage
+        .objects()
         .list(STORE_KIND, rusvel_core::domain::ObjectFilter::default())
         .await
         .unwrap_or_default()

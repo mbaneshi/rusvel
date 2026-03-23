@@ -26,7 +26,9 @@ impl Default for TicketId {
 }
 
 impl TicketId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for TicketId {
@@ -97,7 +99,10 @@ impl TicketManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&ticket)?;
-        self.storage.objects().put(KIND, &ticket.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &ticket.id.to_string(), json)
+            .await?;
         Ok(ticket)
     }
 
@@ -107,6 +112,8 @@ impl TicketManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 }

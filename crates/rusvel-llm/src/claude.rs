@@ -67,17 +67,12 @@ impl LlmPort for ClaudeProvider {
             return Err(map_claude_http_error(status.as_u16(), &body));
         }
 
-        let claude_resp: ClaudeResponse =
-            http_resp.json().await.map_err(map_reqwest_error)?;
+        let claude_resp: ClaudeResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(from_claude_response(claude_resp))
     }
 
-    async fn embed(
-        &self,
-        _model: &ModelRef,
-        _text: &str,
-    ) -> rusvel_core::error::Result<Vec<f32>> {
+    async fn embed(&self, _model: &ModelRef, _text: &str) -> rusvel_core::error::Result<Vec<f32>> {
         Err(RusvelError::Llm(
             "Claude does not support embeddings — use an embedding-capable provider".into(),
         ))

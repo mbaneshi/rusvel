@@ -64,7 +64,11 @@ impl HarvestSource for MockSource {
                     .into(),
                 url: Some("https://example.com/job/2".into()),
                 budget: Some("$8000".into()),
-                skills: vec!["react-native".into(), "typescript".into(), "firebase".into()],
+                skills: vec![
+                    "react-native".into(),
+                    "typescript".into(),
+                    "firebase".into(),
+                ],
                 posted_at: Some("2026-03-19".into()),
                 source_data: serde_json::json!({"mock": true}),
             },

@@ -25,7 +25,9 @@ impl Default for ListingId {
 }
 
 impl ListingId {
-    pub fn new() -> Self { Self(Uuid::now_v7()) }
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
 impl std::fmt::Display for ListingId {
@@ -84,7 +86,10 @@ impl MarketplaceManager {
             metadata: serde_json::json!({}),
         };
         let json = serde_json::to_value(&listing)?;
-        self.storage.objects().put(KIND, &listing.id.to_string(), json).await?;
+        self.storage
+            .objects()
+            .put(KIND, &listing.id.to_string(), json)
+            .await?;
         Ok(listing)
     }
 
@@ -94,6 +99,8 @@ impl MarketplaceManager {
             ..Default::default()
         };
         let vals = self.storage.objects().list(KIND, filter).await?;
-        vals.into_iter().map(|v| Ok(serde_json::from_value(v)?)).collect()
+        vals.into_iter()
+            .map(|v| Ok(serde_json::from_value(v)?))
+            .collect()
     }
 }

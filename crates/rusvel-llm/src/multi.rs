@@ -64,16 +64,10 @@ impl Default for MultiProvider {
 #[async_trait]
 impl LlmPort for MultiProvider {
     async fn generate(&self, request: LlmRequest) -> rusvel_core::error::Result<LlmResponse> {
-        self.get(&request.model.provider)?
-            .generate(request)
-            .await
+        self.get(&request.model.provider)?.generate(request).await
     }
 
-    async fn embed(
-        &self,
-        model: &ModelRef,
-        text: &str,
-    ) -> rusvel_core::error::Result<Vec<f32>> {
+    async fn embed(&self, model: &ModelRef, text: &str) -> rusvel_core::error::Result<Vec<f32>> {
         self.get(&model.provider)?.embed(model, text).await
     }
 
@@ -106,10 +100,7 @@ mod tests {
 
     #[async_trait]
     impl LlmPort for FakeProvider {
-        async fn generate(
-            &self,
-            _request: LlmRequest,
-        ) -> rusvel_core::error::Result<LlmResponse> {
+        async fn generate(&self, _request: LlmRequest) -> rusvel_core::error::Result<LlmResponse> {
             Ok(LlmResponse {
                 content: Content::text(format!("from {}", self.tag)),
                 finish_reason: FinishReason::Stop,
@@ -185,9 +176,7 @@ mod tests {
     #[tokio::test]
     async fn unregistered_provider_returns_error() {
         let multi = MultiProvider::new();
-        let result = multi
-            .generate(make_request(ModelProvider::OpenAI))
-            .await;
+        let result = multi.generate(make_request(ModelProvider::OpenAI)).await;
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
         assert!(msg.contains("no adapter registered"), "got: {msg}");

@@ -1,11 +1,11 @@
 //! Burn rate and runway forecasting.
 
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use rusvel_core::error::Result;
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::StoragePort;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::ledger::{LedgerManager, TransactionKind};
 
@@ -21,20 +21,51 @@ pub struct RunwaySnapshot {
 
 const KIND: &str = "finance_runway";
 
-pub struct RunwayManager { storage: Arc<dyn StoragePort> }
+pub struct RunwayManager {
+    storage: Arc<dyn StoragePort>,
+}
 
 impl RunwayManager {
-    pub fn new(storage: Arc<dyn StoragePort>) -> Self { Self { storage } }
+    pub fn new(storage: Arc<dyn StoragePort>) -> Self {
+        Self { storage }
+    }
 
-    pub async fn calculate(&self, session_id: SessionId, cash_on_hand: f64, ledger: &LedgerManager) -> Result<RunwaySnapshot> {
+    pub async fn calculate(
+        &self,
+        session_id: SessionId,
+        cash_on_hand: f64,
+        ledger: &LedgerManager,
+    ) -> Result<RunwaySnapshot> {
         let txs = ledger.list_transactions(session_id).await?;
-        let monthly_income: f64 = txs.iter().filter(|t| t.kind == TransactionKind::Income).map(|t| t.amount).sum();
-        let monthly_burn: f64 = txs.iter().filter(|t| t.kind == TransactionKind::Expense).map(|t| t.amount).sum();
+        let monthly_income: f64 = txs
+            .iter()
+            .filter(|t| t.kind == TransactionKind::Income)
+            .map(|t| t.amount)
+            .sum();
+        let monthly_burn: f64 = txs
+            .iter()
+            .filter(|t| t.kind == TransactionKind::Expense)
+            .map(|t| t.amount)
+            .sum();
         let net_burn = monthly_burn - monthly_income;
-        let months_remaining = if net_burn > 0.0 { cash_on_hand / net_burn } else { f64::INFINITY };
-        let snapshot = RunwaySnapshot { monthly_burn, monthly_income, cash_on_hand, months_remaining, calculated_at: Utc::now(), metadata: serde_json::json!({}) };
+        let months_remaining = if net_burn > 0.0 {
+            cash_on_hand / net_burn
+        } else {
+            f64::INFINITY
+        };
+        let snapshot = RunwaySnapshot {
+            monthly_burn,
+            monthly_income,
+            cash_on_hand,
+            months_remaining,
+            calculated_at: Utc::now(),
+            metadata: serde_json::json!({}),
+        };
         let key = format!("{session_id}_latest");
-        self.storage.objects().put(KIND, &key, serde_json::to_value(&snapshot)?).await?;
+        self.storage
+            .objects()
+            .put(KIND, &key, serde_json::to_value(&snapshot)?)
+            .await?;
         Ok(snapshot)
     }
 

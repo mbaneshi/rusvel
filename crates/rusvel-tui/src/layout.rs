@@ -16,7 +16,7 @@ pub fn dashboard_layout(area: Rect) -> (Rect, [Rect; 4]) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // header
+            Constraint::Length(3), // header
             Constraint::Min(8),    // top row
             Constraint::Min(8),    // bottom row
         ])
