@@ -61,6 +61,33 @@ export interface Event {
 	metadata: Record<string, unknown>;
 }
 
+// Shared SSE stream parser — used by all streaming endpoints
+async function parseSSE(
+	res: Response,
+	onChunk: (parsed: Record<string, unknown>) => void,
+	onError: (message: string) => void
+): Promise<void> {
+	if (!res.ok) { onError(`API error ${res.status}`); return; }
+	const reader = res.body?.getReader();
+	if (!reader) { onError('No response body'); return; }
+	const decoder = new TextDecoder();
+	let buffer = '';
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() ?? '';
+		for (const line of lines) {
+			if (line.startsWith('event: ')) continue;
+			if (line.startsWith('data: ')) {
+				try { onChunk(JSON.parse(line.slice(6))); }
+				catch { /* skip unparseable */ }
+			}
+		}
+	}
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
 	const res = await fetch(`${BASE}${path}`, {
 		headers: { 'Content-Type': 'application/json' },
@@ -205,32 +232,11 @@ export async function streamDeptChat(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ message, conversation_id: conversationId })
 	});
-	if (!res.ok) { onError(`API error ${res.status}`); return; }
-	const reader = res.body?.getReader();
-	if (!reader) { onError('No response body'); return; }
-	const decoder = new TextDecoder();
-	let buffer = '';
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
-		for (const line of lines) {
-			if (line.startsWith('data: ')) {
-				try {
-					const parsed = JSON.parse(line.slice(6));
-					if (parsed.text !== undefined && parsed.cost_usd === undefined) {
-						onDelta(parsed.text, parsed.conversation_id);
-					} else if (parsed.cost_usd !== undefined) {
-						onDone(parsed.text, parsed.conversation_id);
-					} else if (parsed.message) {
-						onError(parsed.message);
-					}
-				} catch { /* skip */ }
-			}
-		}
-	}
+	await parseSSE(res, (p) => {
+		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string, p.conversation_id as string);
+		else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
+		else if (p.message) onError(p.message as string);
+	}, onError);
 }
 
 // ── Agents CRUD ──────────────────────────────────────────────
@@ -437,6 +443,35 @@ export async function runWorkflow(
 	});
 }
 
+// ── Approvals (Human-in-the-loop, ADR-008) ───────────────────
+
+export interface Job {
+	id: string;
+	session_id: string;
+	kind: string;
+	payload: unknown;
+	status: string;
+	scheduled_at: string | null;
+	started_at: string | null;
+	completed_at: string | null;
+	retries: number;
+	max_retries: number;
+	error: string | null;
+	metadata: Record<string, unknown>;
+}
+
+export async function getPendingApprovals(): Promise<Job[]> {
+	return request('/api/approvals');
+}
+
+export async function approveJob(id: string): Promise<void> {
+	return request(`/api/approvals/${id}/approve`, { method: 'POST' });
+}
+
+export async function rejectJob(id: string): Promise<void> {
+	return request(`/api/approvals/${id}/reject`, { method: 'POST' });
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {
@@ -462,10 +497,50 @@ export async function getChatHistory(conversationId: string): Promise<ChatMessag
 	return request(`/api/chat/conversations/${conversationId}`);
 }
 
-/**
- * Send a chat message and stream the response via SSE.
- * Calls `onDelta` for each text chunk and `onDone` when complete.
- */
+// ── Capability Engine ────────────────────────────────────────
+
+export async function streamCapability(
+	description: string,
+	engine: string | undefined,
+	onDelta: (text: string) => void,
+	onDone: (fullText: string) => void,
+	onError: (message: string) => void
+): Promise<void> {
+	const res = await fetch(`${BASE}/api/capability/build`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ description, engine })
+	});
+	await parseSSE(res, (p) => {
+		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
+		else if (p.cost_usd !== undefined) onDone(p.text as string);
+		else if (p.message) onError(p.message as string);
+	}, onError);
+}
+
+// ── Help (AI-powered) ────────────────────────────────────────
+
+export async function streamHelp(
+	question: string,
+	context: string | undefined,
+	onDelta: (text: string) => void,
+	onDone: (fullText: string) => void,
+	onError: (message: string) => void
+): Promise<void> {
+	const res = await fetch(`${BASE}/api/help`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ question, context })
+	});
+	await parseSSE(res, (p) => {
+		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
+		else if (p.cost_usd !== undefined) onDone(p.text as string);
+		else if (p.message) onError(p.message as string);
+	}, onError);
+}
+
+// ── Chat (God Agent) ─────────────────────────────────────────
+
 export async function streamChat(
 	message: string,
 	conversationId: string | undefined,
@@ -478,49 +553,67 @@ export async function streamChat(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ message, conversation_id: conversationId })
 	});
+	await parseSSE(res, (p) => {
+		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string, p.conversation_id as string);
+		else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
+		else if (p.message) onError(p.message as string);
+	}, onError);
+}
 
-	if (!res.ok) {
-		onError(`API error ${res.status}`);
-		return;
-	}
+// ── Department Registry ──────────────────────────────────────
 
-	const reader = res.body?.getReader();
-	if (!reader) {
-		onError('No response body');
-		return;
-	}
+export interface QuickAction {
+	label: string;
+	prompt: string;
+}
 
-	const decoder = new TextDecoder();
-	let buffer = '';
+export interface DepartmentDef {
+	id: string;
+	name: string;
+	title: string;
+	engine_kind: string;
+	icon: string;
+	color: string;
+	system_prompt: string;
+	capabilities: string[];
+	tabs: string[];
+	quick_actions: QuickAction[];
+	default_config: Record<string, unknown>;
+}
 
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
+export async function getDepartments(): Promise<DepartmentDef[]> {
+	const res = await fetch(`${BASE}/api/departments`);
+	return res.json();
+}
 
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
+export async function getProfile(): Promise<unknown> {
+	const res = await fetch(`${BASE}/api/profile`);
+	return res.json();
+}
 
-		for (const line of lines) {
-			if (line.startsWith('event: ')) {
-				// Will be followed by data line
-				continue;
-			}
-			if (line.startsWith('data: ')) {
-				const data = line.slice(6);
-				try {
-					const parsed = JSON.parse(data);
-					if (parsed.text !== undefined && !parsed.cost_usd) {
-						onDelta(parsed.text, parsed.conversation_id);
-					} else if (parsed.cost_usd !== undefined) {
-						onDone(parsed.text, parsed.conversation_id);
-					} else if (parsed.message) {
-						onError(parsed.message);
-					}
-				} catch {
-					// Skip unparseable lines
-				}
-			}
-		}
-	}
+export async function updateProfile(profile: unknown): Promise<unknown> {
+	const res = await fetch(`${BASE}/api/profile`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(profile),
+	});
+	return res.json();
+}
+
+// ── Analytics ─────────────────────────────────────────────────
+export interface AnalyticsData {
+	agents: number;
+	skills: number;
+	rules: number;
+	mcp_servers: number;
+	hooks: number;
+	conversations: number;
+	events: number;
+	departments: number;
+}
+
+export async function getAnalytics(): Promise<AnalyticsData> {
+	const res = await fetch(`${BASE}/api/analytics`);
+	if (!res.ok) throw new Error('Failed to load analytics');
+	return res.json();
 }

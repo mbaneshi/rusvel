@@ -1,32 +1,38 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { activeSession } from '$lib/stores';
-	import { getGoals, getEvents } from '$lib/api';
-	import type { Goal, Event } from '$lib/api';
+	import { activeSession, onboarding, departments } from '$lib/stores';
+	import { getGoals, getEvents, getAnalytics } from '$lib/api';
+	import type { Goal, Event, AnalyticsData, DepartmentDef } from '$lib/api';
 
 	let goals: Goal[] = $state([]);
 	let events: Event[] = $state([]);
+	let analytics: AnalyticsData | null = $state(null);
+	let deptList: DepartmentDef[] = $state([]);
 	let loading = $state(false);
 	let error = $state('');
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
 
+	departments.subscribe((v) => (deptList = v));
 	activeSession.subscribe((v) => {
 		currentSession = v;
 		if (v) loadData(v.id);
+	});
+
+	onMount(async () => {
+		try { analytics = await getAnalytics(); } catch { /* analytics optional */ }
 	});
 
 	async function loadData(sessionId: string) {
 		loading = true;
 		error = '';
 		try {
-			// Load goals and events (both cheap reads from DB).
-			// Plan generation is expensive (calls LLM) — only on-demand from Forge page.
 			const [goalsResult, eventsResult] = await Promise.allSettled([
 				getGoals(sessionId),
 				getEvents(sessionId)
 			]);
 			goals = goalsResult.status === 'fulfilled' ? goalsResult.value : [];
 			events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+			if (goals.length > 0) onboarding.complete('goalAdded');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
@@ -41,80 +47,132 @@
 			return iso;
 		}
 	}
+
+	// Compute event counts by source for the mini bar chart
+	let eventsBySource = $derived(() => {
+		const counts: Record<string, number> = {};
+		for (const e of events) {
+			counts[e.source] = (counts[e.source] || 0) + 1;
+		}
+		return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+	});
+
+	let maxEventCount = $derived(() => {
+		const entries = eventsBySource();
+		return entries.length > 0 ? Math.max(...entries.map(e => e[1])) : 1;
+	});
 </script>
 
-<div class="p-6">
-	<h1 class="mb-6 text-2xl font-bold text-gray-100">Dashboard</h1>
+<div class="h-full overflow-y-auto p-6">
+	<h1 class="mb-6 text-2xl font-bold text-foreground">Dashboard</h1>
 
 	{#if !currentSession}
-		<div class="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
-			<p class="text-lg text-gray-400">No session selected</p>
-			<p class="mt-2 text-sm text-gray-600">Create or select a session from the sidebar to begin.</p>
+		<div class="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 px-8">
+			<div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-chart-4/20">
+				<span class="text-3xl font-bold text-primary">R</span>
+			</div>
+			<h2 class="text-xl font-semibold text-foreground">Welcome to RUSVEL</h2>
+			<p class="mt-2 max-w-md text-center text-sm text-muted-foreground">
+				Your AI-powered virtual agency. Create a session to start planning your day, managing goals, and chatting with department agents.
+			</p>
+			<div class="mt-6 flex flex-col items-center gap-3">
+				<p class="text-xs text-muted-foreground/60">Click <strong class="text-muted-foreground">+ New Session</strong> in the sidebar to begin</p>
+				<div class="flex items-center gap-2 text-[10px] text-muted-foreground/60">
+					<span>or press</span>
+					<kbd class="rounded border border-border bg-secondary px-1.5 py-0.5 text-muted-foreground">⌘K</kbd>
+					<span>to open the command palette</span>
+				</div>
+			</div>
 		</div>
 	{:else if loading}
-		<div class="flex items-center gap-3 text-gray-400">
-			<div
-				class="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-indigo-500"
-			></div>
+		<div class="flex items-center gap-3 text-muted-foreground">
+			<div class="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-primary"></div>
 			Loading...
 		</div>
 	{:else if error}
-		<div class="rounded-xl border border-red-900 bg-red-950 p-4 text-red-400">{error}</div>
+		<div class="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive">{error}</div>
 	{:else}
 		<!-- Session Header -->
 		<div class="mb-6 flex items-center gap-3">
-			<span
-				class="rounded-md bg-indigo-900/50 px-2 py-0.5 text-xs font-medium text-indigo-300"
-			>
+			<span class="rounded-md bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
 				{currentSession.kind}
 			</span>
-			<h2 class="text-lg font-semibold text-gray-200">{currentSession.name}</h2>
+			<h2 class="text-lg font-semibold text-foreground">{currentSession.name}</h2>
 		</div>
 
-		<!-- Stats Row -->
+		<!-- Analytics Overview (agency-wide) -->
+		{#if analytics}
+			<div class="mb-6 grid grid-cols-4 gap-3">
+				<div class="rounded-xl border border-border bg-card p-4">
+					<p class="text-xs font-medium text-muted-foreground">Agents</p>
+					<p class="mt-1 text-2xl font-bold text-chart-1">{analytics.agents}</p>
+				</div>
+				<div class="rounded-xl border border-border bg-card p-4">
+					<p class="text-xs font-medium text-muted-foreground">Skills</p>
+					<p class="mt-1 text-2xl font-bold text-chart-2">{analytics.skills}</p>
+				</div>
+				<div class="rounded-xl border border-border bg-card p-4">
+					<p class="text-xs font-medium text-muted-foreground">Rules</p>
+					<p class="mt-1 text-2xl font-bold text-chart-3">{analytics.rules}</p>
+				</div>
+				<div class="rounded-xl border border-border bg-card p-4">
+					<p class="text-xs font-medium text-muted-foreground">Conversations</p>
+					<p class="mt-1 text-2xl font-bold text-chart-4">{analytics.conversations}</p>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Session Stats Row -->
 		<div class="mb-6 grid grid-cols-3 gap-4">
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Goals</p>
-				<p class="mt-1 text-2xl font-bold text-gray-100">{goals.length}</p>
-				<p class="text-xs text-gray-500">{goals.filter(g => g.status === 'Active').length} active</p>
+			<div class="rounded-xl border border-border bg-card p-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Goals</p>
+				<p class="mt-1 text-2xl font-bold text-foreground">{goals.length}</p>
+				<p class="text-xs text-muted-foreground">{goals.filter(g => g.status === 'Active').length} active</p>
 			</div>
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Events</p>
-				<p class="mt-1 text-2xl font-bold text-gray-100">{events.length}</p>
-				<p class="text-xs text-gray-500">total logged</p>
+			<div class="rounded-xl border border-border bg-card p-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Events</p>
+				<p class="mt-1 text-2xl font-bold text-foreground">{events.length}</p>
+				<p class="text-xs text-muted-foreground">total logged</p>
 			</div>
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Engine</p>
-				<p class="mt-1 text-2xl font-bold text-indigo-400">Forge</p>
-				<p class="text-xs text-gray-500">
-					<a href="/forge" class="text-indigo-400 hover:text-indigo-300">Generate plan &rarr;</a>
+			<div class="rounded-xl border border-border bg-card p-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Departments</p>
+				<p class="mt-1 text-2xl font-bold text-primary">{deptList.length}</p>
+				<p class="text-xs text-muted-foreground">
+					<a href="/forge" class="text-primary hover:text-primary/80">Generate plan &rarr;</a>
 				</p>
 			</div>
 		</div>
 
 		<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 			<!-- Active Goals -->
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
-				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+			<div class="rounded-xl border border-border bg-card p-5">
+				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
 					Active Goals
 				</h3>
 				{#if goals.length === 0}
-					<p class="text-sm text-gray-500">
-						No goals yet. <a href="/forge" class="text-indigo-400 hover:text-indigo-300">Add goals in Forge</a>
-					</p>
+					<div class="flex flex-col items-center py-6 text-center">
+						<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/15">
+							<svg class="h-5 w-5 text-primary" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l3.5 3.5L13 4" /></svg>
+						</div>
+						<p class="text-sm text-muted-foreground">No goals yet</p>
+						<p class="mt-1 text-xs text-muted-foreground/60">Goals help you stay focused and track progress</p>
+						<a href="/forge" class="mt-3 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+							Add your first goal
+						</a>
+					</div>
 				{:else}
 					<ul class="space-y-2">
 						{#each goals as goal}
-							<li class="rounded-lg bg-gray-800/50 p-3">
+							<li class="rounded-lg bg-secondary/50 p-3">
 								<div class="mb-1 flex items-center justify-between">
-									<p class="text-sm font-medium text-gray-200">{goal.title}</p>
-									<span class="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-400">{goal.timeframe}</span>
+									<p class="text-sm font-medium text-foreground">{goal.title}</p>
+									<span class="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">{goal.timeframe}</span>
 								</div>
 								<div class="flex items-center gap-2">
-									<div class="h-1.5 flex-1 rounded-full bg-gray-700">
-										<div class="h-1.5 rounded-full bg-indigo-500" style="width: {Math.round(goal.progress * 100)}%"></div>
+									<div class="h-1.5 flex-1 rounded-full bg-secondary">
+										<div class="h-1.5 rounded-full bg-primary transition-all duration-500" style="width: {Math.round(goal.progress * 100)}%"></div>
 									</div>
-									<span class="text-xs text-gray-500">{Math.round(goal.progress * 100)}%</span>
+									<span class="text-xs text-muted-foreground">{Math.round(goal.progress * 100)}%</span>
 								</div>
 							</li>
 						{/each}
@@ -122,27 +180,54 @@
 				{/if}
 			</div>
 
+			<!-- Event Activity by Source (mini bar chart) -->
+			<div class="rounded-xl border border-border bg-card p-5">
+				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+					Activity by Engine
+				</h3>
+				{#if events.length === 0}
+					<div class="flex flex-col items-center py-6 text-center">
+						<div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-chart-2/15">
+							<svg class="h-5 w-5 text-chart-2" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3.5V8L10.5 10.5" stroke-linecap="round" /><circle cx="8" cy="8" r="5.5" /></svg>
+						</div>
+						<p class="text-sm text-muted-foreground">No events yet</p>
+						<p class="mt-1 text-xs text-muted-foreground/60">Events are logged when you generate plans, add goals, or chat with departments</p>
+					</div>
+				{:else}
+					<div class="space-y-2">
+						{#each eventsBySource() as [source, count]}
+							{@const pct = (count / maxEventCount()) * 100}
+							{@const colors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5', 'bg-primary']}
+							{@const colorIdx = eventsBySource().findIndex(e => e[0] === source)}
+							<div class="flex items-center gap-3">
+								<span class="w-16 text-xs font-mono text-muted-foreground truncate">{source}</span>
+								<div class="flex-1 h-5 rounded-md bg-secondary overflow-hidden">
+									<div class="h-full rounded-md {colors[colorIdx % colors.length]} transition-all duration-500" style="width: {pct}%"></div>
+								</div>
+								<span class="w-8 text-right text-xs font-medium text-foreground">{count}</span>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
 			<!-- Recent Events -->
-			<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
-				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">
+			<div class="rounded-xl border border-border bg-card p-5 lg:col-span-2">
+				<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
 					Recent Events
 				</h3>
 				{#if events.length === 0}
-					<p class="text-sm text-gray-500">No events yet. Actions you take will show up here.</p>
+					<p class="text-sm text-muted-foreground">No events yet.</p>
 				{:else}
-					<ul class="space-y-2">
-						{#each events.slice(0, 20) as event}
-							<li class="flex items-start gap-3 border-l-2 border-gray-700 py-1 pl-3">
-								<div class="flex-1">
-									<div class="flex items-center gap-2">
-										<span class="rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-400">{event.source}</span>
-										<span class="text-xs text-gray-500">{formatTime(event.created_at)}</span>
-									</div>
-									<p class="mt-0.5 text-sm text-gray-300">{event.kind}</p>
-								</div>
-							</li>
+					<div class="space-y-1">
+						{#each events.slice(0, 15) as event}
+							<div class="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50">
+								<span class="rounded bg-secondary px-1.5 py-0.5 text-xs font-mono text-muted-foreground">{event.source}</span>
+								<span class="flex-1 text-sm text-foreground/80 truncate">{event.kind}</span>
+								<span class="text-xs text-muted-foreground">{formatTime(event.created_at)}</span>
+							</div>
 						{/each}
-					</ul>
+					</div>
 				{/if}
 			</div>
 		</div>

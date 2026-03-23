@@ -2,8 +2,13 @@
 	import '../app.css';
 	import { onMount, type Snippet } from 'svelte';
 	import { page } from '$app/state';
-	import { getSessions, createSession } from '$lib/api';
-	import { sessions, activeSession } from '$lib/stores';
+	import { getSessions, createSession, getDepartments } from '$lib/api';
+	import type { DepartmentDef } from '$lib/api';
+	import { sessions, activeSession, sidebarOpen, sidebarWidth, departments } from '$lib/stores';
+	import OnboardingChecklist from '$lib/components/onboarding/OnboardingChecklist.svelte';
+	import ProductTour from '$lib/components/onboarding/ProductTour.svelte';
+	import CommandPalette from '$lib/components/onboarding/CommandPalette.svelte';
+	import { Toaster } from 'svelte-sonner';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -12,40 +17,52 @@
 	let newKind = $state('Project');
 	let loading = $state(true);
 	let error = $state('');
+	let isOpen = $state(true);
+	let width = $state(256);
+	let resizing = $state(false);
 
-	const navItems = [
-		{ href: '/chat', label: 'Chat', icon: '>' },
-		{ href: '/', label: 'Dashboard', icon: '~' },
-		{ href: '/forge', label: 'Forge', icon: '=' },
-		{ href: '/code', label: 'Code', icon: '#' },
-		{ href: '/harvest', label: 'Harvest', icon: '$' },
-		{ href: '/content', label: 'Content', icon: '*' },
-		{ href: '/gtm', label: 'GTM', icon: '^' },
-		{ href: '/finance', label: 'Finance', icon: '%' },
-		{ href: '/product', label: 'Product', icon: '@' },
-		{ href: '/growth', label: 'Growth', icon: '&' },
-		{ href: '/distro', label: 'Distro', icon: '!' },
-		{ href: '/legal', label: 'Legal', icon: '§' },
-		{ href: '/support', label: 'Support', icon: '?' },
-		{ href: '/infra', label: 'Infra', icon: '>' },
-		{ href: '/settings', label: 'Settings', icon: '%' }
+	// Static nav items (non-department pages)
+	const staticNavBefore = [
+		{ href: '/chat', label: 'Chat', icon: '>', tour: 'nav-chat' },
+		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' },
 	];
+	const staticNavAfter = [
+		{ href: '/settings', label: 'Settings', icon: '%', tour: 'nav-settings' }
+	];
+
+	// Department nav items generated from registry
+	let deptList: DepartmentDef[] = $state([]);
+	departments.subscribe((v) => (deptList = v));
+
+	let navItems = $derived([
+		...staticNavBefore,
+		...deptList.map((d) => ({
+			href: `/dept/${d.id}`,
+			label: d.name,
+			icon: d.icon,
+			tour: d.id === 'forge' ? 'nav-forge' : '',
+		})),
+		...staticNavAfter,
+	]);
 
 	let currentSessions: import('$lib/api').SessionSummary[] = $state([]);
 	let currentActive: import('$lib/api').SessionSummary | null = $state(null);
 
 	sessions.subscribe((v) => (currentSessions = v));
 	activeSession.subscribe((v) => (currentActive = v));
+	sidebarOpen.subscribe((v) => (isOpen = v));
+	sidebarWidth.subscribe((v) => (width = v));
 
 	onMount(async () => {
 		try {
-			const list = await getSessions();
+			const [list, depts] = await Promise.all([getSessions(), getDepartments()]);
 			sessions.set(list);
+			departments.set(depts);
 			if (list.length > 0) {
 				activeSession.set(list[0]);
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load sessions';
+			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
 			loading = false;
 		}
@@ -73,102 +90,187 @@
 		const found = currentSessions.find((s) => s.id === id);
 		if (found) activeSession.set(found);
 	}
+
+	function toggleSidebar() {
+		sidebarOpen.update((v) => !v);
+	}
+
+	function startResize(e: MouseEvent) {
+		e.preventDefault();
+		resizing = true;
+		const onMove = (ev: MouseEvent) => {
+			const newWidth = Math.max(48, Math.min(400, ev.clientX));
+			sidebarWidth.set(newWidth);
+		};
+		const onUp = () => {
+			resizing = false;
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+	}
 </script>
 
-<div class="flex h-screen bg-gray-950 text-gray-100">
+<div class="flex h-screen bg-background text-foreground" class:select-none={resizing}>
 	<!-- Sidebar -->
-	<aside class="flex w-64 flex-shrink-0 flex-col border-r border-gray-800 bg-gray-900">
-		<!-- Logo -->
-		<div class="flex items-center gap-3 border-b border-gray-800 px-5 py-4">
-			<div
-				class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold"
-			>
-				R
-			</div>
-			<span class="text-lg font-semibold tracking-tight">RUSVEL</span>
-		</div>
-
-		<!-- Session Switcher -->
-		<div class="border-b border-gray-800 px-4 py-3">
-			<label for="session-select" class="mb-1 block text-xs font-medium text-gray-400">Session</label>
-			{#if loading}
-				<div class="text-sm text-gray-500">Loading...</div>
-			{:else if currentSessions.length === 0}
-				<div class="text-sm text-gray-500">No sessions</div>
-			{:else}
-				<select
-					id="session-select"
-					onchange={selectSession}
-					value={currentActive?.id ?? ''}
-					class="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1.5 text-sm text-gray-200 focus:border-indigo-500 focus:outline-none"
+	{#if isOpen}
+		<aside
+			class="flex flex-shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground relative"
+			style="width: {width}px"
+		>
+			<!-- Logo -->
+			<div class="flex items-center justify-between border-b border-sidebar-border px-4 py-3" data-tour="sidebar-logo">
+				<div class="flex items-center gap-3">
+					<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+						R
+					</div>
+					{#if width > 100}
+						<span class="text-lg font-semibold tracking-tight">RUSVEL</span>
+					{/if}
+				</div>
+				<button
+					onclick={toggleSidebar}
+					class="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+					title="Collapse sidebar"
 				>
-					{#each currentSessions as session}
-						<option value={session.id}>{session.name}</option>
-					{/each}
-				</select>
-			{/if}
-			<button
-				onclick={() => (showNewSession = !showNewSession)}
-				class="mt-2 w-full rounded-md bg-gray-800 px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-			>
-				+ New Session
-			</button>
+					<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5" /></svg>
+				</button>
+			</div>
 
-			{#if showNewSession}
-				<div class="mt-2 space-y-2">
-					<input
-						bind:value={newName}
-						placeholder="Session name"
-						class="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-200 focus:border-indigo-500 focus:outline-none"
-					/>
-					<select
-						bind:value={newKind}
-						class="w-full rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-sm text-gray-200"
-					>
-						<option>Project</option>
-						<option>Lead</option>
-						<option>ContentCampaign</option>
-						<option>General</option>
-					</select>
+			<!-- Session Switcher -->
+			{#if width > 100}
+				<div class="border-b border-sidebar-border px-4 py-3" data-tour="session-switcher">
+					<label for="session-select" class="mb-1 block text-xs font-medium text-muted-foreground">Session</label>
+					{#if loading}
+						<div class="text-sm text-muted-foreground">Loading...</div>
+					{:else if currentSessions.length === 0}
+						<div class="text-sm text-muted-foreground">No sessions</div>
+					{:else}
+						<select
+							id="session-select"
+							onchange={selectSession}
+							value={currentActive?.id ?? ''}
+							class="w-full rounded-md border border-border bg-secondary px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+						>
+							{#each currentSessions as session}
+								<option value={session.id}>{session.name}</option>
+							{/each}
+						</select>
+					{/if}
 					<button
-						onclick={handleCreateSession}
-						class="w-full rounded-md bg-indigo-600 px-2 py-1 text-sm font-medium hover:bg-indigo-500"
+						onclick={() => (showNewSession = !showNewSession)}
+						class="mt-2 w-full rounded-md bg-secondary px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 					>
-						Create
+						+ New Session
 					</button>
+
+					{#if showNewSession}
+						<div class="mt-2 space-y-2">
+							<input
+								bind:value={newName}
+								placeholder="Session name"
+								class="w-full rounded-md border border-border bg-secondary px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none"
+							/>
+							<select
+								bind:value={newKind}
+								class="w-full rounded-md border border-border bg-secondary px-2 py-1 text-sm text-foreground"
+							>
+								<option>Project</option>
+								<option>Lead</option>
+								<option>ContentCampaign</option>
+								<option>General</option>
+							</select>
+							<button
+								onclick={handleCreateSession}
+								class="w-full rounded-md bg-primary px-2 py-1 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+							>
+								Create
+							</button>
+						</div>
+					{/if}
 				</div>
 			{/if}
-		</div>
 
-		<!-- Navigation -->
-		<nav class="flex-1 overflow-y-auto px-3 py-3">
+			<!-- Navigation -->
+			<nav class="flex-1 overflow-y-auto px-2 py-2">
+				{#each navItems as item}
+					{@const isActive = item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
+					<a
+						href={item.href}
+						data-tour={item.tour || undefined}
+						class="mb-0.5 flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors
+							{isActive
+							? 'bg-sidebar-primary/15 text-sidebar-primary font-medium'
+							: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+						title={item.label}
+					>
+						<span class="w-5 flex-shrink-0 text-center font-mono text-xs {isActive ? 'text-sidebar-primary' : 'text-muted-foreground/50'}">{item.icon}</span>
+						{#if width > 100}
+							{item.label}
+						{/if}
+					</a>
+				{/each}
+			</nav>
+
+			<!-- Status + Cmd+K hint -->
+			{#if width > 100}
+				<div class="border-t border-sidebar-border px-4 py-3">
+					{#if error}
+						<div class="text-xs text-destructive">{error}</div>
+					{:else}
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-muted-foreground/50">API: localhost:3000</span>
+							<kbd class="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">⌘K</kbd>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Resize handle -->
+			<div
+				onmousedown={startResize}
+				role="button"
+				tabindex="0"
+				class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary/70 transition-colors"
+			></div>
+		</aside>
+	{:else}
+		<!-- Collapsed sidebar — just icons -->
+		<aside class="flex w-12 flex-shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-3 gap-1">
+			<button
+				onclick={toggleSidebar}
+				class="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90"
+				title="Expand sidebar"
+				data-tour="sidebar-logo"
+			>
+				R
+			</button>
 			{#each navItems as item}
 				{@const isActive = item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
 				<a
 					href={item.href}
-					class="mb-0.5 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors
+					data-tour={item.tour || undefined}
+					class="flex h-8 w-8 items-center justify-center rounded-lg text-xs transition-colors
 						{isActive
-						? 'bg-indigo-600/15 text-indigo-300 font-medium'
-						: 'text-gray-400 hover:bg-gray-800 hover:text-gray-100'}"
+						? 'bg-sidebar-primary/15 text-sidebar-primary'
+						: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+					title={item.label}
 				>
-					<span class="w-5 text-center font-mono text-xs {isActive ? 'text-indigo-400' : 'text-gray-600'}">{item.icon}</span>
-					{item.label}
+					<span class="font-mono">{item.icon}</span>
 				</a>
 			{/each}
-		</nav>
-
-		<!-- Status -->
-		<div class="border-t border-gray-800 px-4 py-3">
-			{#if error}
-				<div class="text-xs text-red-400">{error}</div>
-			{:else}
-				<div class="text-xs text-gray-600">API: localhost:3000</div>
-			{/if}
-		</div>
-	</aside>
+		</aside>
+	{/if}
 
 	<!-- Main Content -->
-	<main class="flex-1 overflow-y-auto">
+	<main class="flex-1 overflow-hidden">
 		{@render children()}
 	</main>
 </div>
+
+<!-- Overlays -->
+<Toaster richColors position="bottom-right" theme="dark" />
+<CommandPalette />
+<OnboardingChecklist />
+<ProductTour />
