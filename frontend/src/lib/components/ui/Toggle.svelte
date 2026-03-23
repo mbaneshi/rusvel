@@ -44,7 +44,7 @@
 		class={cn(
 			'relative inline-flex shrink-0 rounded-full transition-colors',
 			sizes[size].track,
-			checked ? 'bg-[var(--r-brand-default)]' : 'bg-[var(--r-bg-raised)]',
+			checked ? 'bg-primary' : 'bg-secondary',
 		)}
 	>
 		<span
@@ -57,6 +57,6 @@
 		></span>
 	</span>
 	{#if label}
-		<span class="text-sm text-[var(--r-fg-default)]">{label}</span>
+		<span class="text-sm text-foreground">{label}</span>
 	{/if}
 </button>

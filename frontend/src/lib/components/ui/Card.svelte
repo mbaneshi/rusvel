@@ -22,12 +22,10 @@
 		[key: string]: unknown;
 	} = $props();
 
-	const base = 'rounded-[var(--radius-xl)]';
-
 	const variants: Record<Variant, string> = {
-		default:  'bg-[var(--r-bg-surface)] border border-[var(--r-border-default)]',
-		bordered: 'bg-transparent border border-[var(--r-border-strong)]',
-		raised:   'bg-[var(--r-bg-raised)] shadow-lg shadow-black/20',
+		default:  'bg-card text-card-foreground border border-border shadow-sm',
+		bordered: 'bg-transparent border border-border',
+		raised:   'bg-card text-card-foreground shadow-lg',
 		ghost:    'bg-transparent',
 	};
 
@@ -39,9 +37,9 @@
 	};
 </script>
 
-<div class={cn(base, variants[variant], !header && !footer && paddings[padding], className)} {...rest}>
+<div class={cn('rounded-xl', variants[variant], !header && !footer && paddings[padding], className)} {...rest}>
 	{#if header}
-		<div class={cn('border-b border-[var(--r-border-default)]', paddings[padding])}>
+		<div class={cn('border-b border-border', paddings[padding])}>
 			{@render header()}
 		</div>
 	{/if}
@@ -53,7 +51,7 @@
 	{/if}
 
 	{#if footer}
-		<div class={cn('border-t border-[var(--r-border-default)]', paddings[padding])}>
+		<div class={cn('border-t border-border', paddings[padding])}>
 			{@render footer()}
 		</div>
 	{/if}

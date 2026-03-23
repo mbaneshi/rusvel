@@ -28,9 +28,9 @@
 	};
 
 	const fills: Record<string, string> = {
-		brand:   'bg-[var(--r-brand-default)]',
+		brand:   'bg-primary',
 		success: 'bg-success-500',
-		danger:  'bg-danger-500',
+		danger:  'bg-destructive',
 		warning: 'bg-warning-500',
 	};
 </script>
@@ -39,14 +39,14 @@
 	{#if label || showValue}
 		<div class="flex justify-between text-xs">
 			{#if label}
-				<span class="text-[var(--r-fg-muted)]">{label}</span>
+				<span class="text-muted-foreground">{label}</span>
 			{/if}
 			{#if showValue}
-				<span class="text-[var(--r-fg-subtle)]">{Math.round(pct)}%</span>
+				<span class="text-muted-foreground">{Math.round(pct)}%</span>
 			{/if}
 		</div>
 	{/if}
-	<div class={cn('w-full rounded-full bg-[var(--r-bg-raised)]', sizes[size])}>
+	<div class={cn('w-full rounded-full bg-secondary', sizes[size])}>
 		<div
 			class={cn('rounded-full transition-all duration-300', sizes[size], fills[variant])}
 			style="width: {pct}%"

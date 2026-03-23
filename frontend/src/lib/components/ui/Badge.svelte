@@ -2,8 +2,7 @@
 	import { cn } from '$lib/utils/cn';
 	import type { Snippet } from 'svelte';
 
-	type Variant = 'default' | 'brand' | 'success' | 'danger' | 'warning' | 'info';
-	type Size = 'sm' | 'md';
+	type Variant = 'default' | 'brand' | 'success' | 'danger' | 'warning' | 'info' | 'outline';
 
 	let {
 		variant = 'default',
@@ -14,40 +13,40 @@
 		...rest
 	}: {
 		variant?: Variant;
-		size?: Size;
+		size?: 'sm' | 'md';
 		dot?: boolean;
 		class?: string;
 		children?: Snippet;
 		[key: string]: unknown;
 	} = $props();
 
-	const base = 'inline-flex items-center font-medium rounded-[var(--radius-full)]';
-
 	const variants: Record<Variant, string> = {
-		default: 'bg-[var(--r-bg-raised)] text-[var(--r-fg-muted)]',
-		brand:   'bg-brand-900/50 text-brand-300',
-		success: 'bg-success-900/50 text-success-400',
-		danger:  'bg-danger-900/50 text-danger-400',
-		warning: 'bg-warning-900/50 text-warning-400',
-		info:    'bg-info-900/50 text-info-400',
+		default: 'bg-secondary text-secondary-foreground',
+		brand:   'bg-primary/15 text-primary',
+		success: 'bg-success-500/15 text-success-400',
+		danger:  'bg-destructive/15 text-destructive',
+		warning: 'bg-warning-500/15 text-warning-400',
+		info:    'bg-info-500/15 text-info-400',
+		outline: 'border border-border text-foreground',
 	};
 
 	const dotColors: Record<Variant, string> = {
-		default: 'bg-neutral-400',
-		brand:   'bg-brand-400',
+		default: 'bg-muted-foreground',
+		brand:   'bg-primary',
 		success: 'bg-success-400',
-		danger:  'bg-danger-400',
+		danger:  'bg-destructive',
 		warning: 'bg-warning-400',
 		info:    'bg-info-400',
+		outline: 'bg-foreground',
 	};
 
-	const sizes: Record<Size, string> = {
+	const sizes: Record<string, string> = {
 		sm: 'text-xs px-2 py-0.5 gap-1',
 		md: 'text-xs px-2.5 py-1 gap-1.5',
 	};
 </script>
 
-<span class={cn(base, variants[variant], sizes[size], className)} {...rest}>
+<span class={cn('inline-flex items-center font-medium rounded-full', variants[variant], sizes[size], className)} {...rest}>
 	{#if dot}
 		<span class={cn('h-1.5 w-1.5 rounded-full', dotColors[variant])}></span>
 	{/if}

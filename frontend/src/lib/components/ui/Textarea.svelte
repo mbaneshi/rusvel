@@ -35,18 +35,11 @@
 	}
 
 	const textareaId = `textarea-${Math.random().toString(36).slice(2, 9)}`;
-
-	const base = cn(
-		'w-full rounded-[var(--radius-lg)] border bg-[var(--r-bg-raised)] text-[var(--r-fg-default)]',
-		'placeholder:text-[var(--r-fg-subtle)] text-sm px-3 py-2',
-		'r-focus-ring transition-colors resize-none',
-		'disabled:opacity-50 disabled:pointer-events-none',
-	);
 </script>
 
 <div class={cn('flex flex-col gap-1.5', className)}>
 	{#if label}
-		<label for={textareaId} class="text-sm font-medium text-[var(--r-fg-muted)]">{label}</label>
+		<label for={textareaId} class="text-sm font-medium text-foreground">{label}</label>
 	{/if}
 
 	<textarea
@@ -58,17 +51,21 @@
 		{disabled}
 		oninput={handleInput}
 		class={cn(
-			base,
+			'w-full rounded-lg border bg-background text-foreground',
+			'placeholder:text-muted-foreground text-sm px-3 py-2',
+			'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+			'transition-colors resize-none',
+			'disabled:opacity-50 disabled:pointer-events-none',
 			error
-				? 'border-danger-500 focus:border-danger-500'
-				: 'border-[var(--r-border-default)] focus:border-[var(--r-border-brand)]',
+				? 'border-destructive'
+				: 'border-input',
 		)}
 		{...rest}
 	></textarea>
 
 	{#if error}
-		<p class="text-xs text-danger-400">{error}</p>
+		<p class="text-xs text-destructive">{error}</p>
 	{:else if hint}
-		<p class="text-xs text-[var(--r-fg-subtle)]">{hint}</p>
+		<p class="text-xs text-muted-foreground">{hint}</p>
 	{/if}
 </div>

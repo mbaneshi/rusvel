@@ -27,8 +27,8 @@
 	<div
 		class={cn(
 			'absolute z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity',
-			'whitespace-nowrap rounded-[var(--radius-md)] bg-[var(--r-bg-overlay)] border border-[var(--r-border-default)]',
-			'px-2 py-1 text-xs text-[var(--r-fg-default)] shadow-lg',
+			'whitespace-nowrap rounded-md bg-popover border border-border',
+			'px-2 py-1 text-xs text-popover-foreground shadow-lg',
 			positions[position],
 		)}
 		role="tooltip"

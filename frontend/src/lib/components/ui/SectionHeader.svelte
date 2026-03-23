@@ -17,9 +17,9 @@
 
 <div class={cn('mb-4 flex items-center justify-between', className)}>
 	<div>
-		<h3 class="text-sm font-semibold uppercase tracking-wider text-[var(--r-fg-muted)]">{title}</h3>
+		<h3 class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{title}</h3>
 		{#if description}
-			<p class="mt-0.5 text-xs text-[var(--r-fg-subtle)]">{description}</p>
+			<p class="mt-0.5 text-xs text-muted-foreground">{description}</p>
 		{/if}
 	</div>
 	{#if actions}

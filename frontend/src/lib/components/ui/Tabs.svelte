@@ -26,7 +26,7 @@
 <div
 	class={cn(
 		'flex gap-1',
-		variant === 'underline' && 'border-b border-[var(--r-border-default)]',
+		variant === 'underline' && 'border-b border-border',
 		className,
 	)}
 	role="tablist"
@@ -43,14 +43,14 @@
 				variant === 'underline' && [
 					'px-3 py-2 -mb-px border-b-2',
 					active === tab.id
-						? 'border-[var(--r-brand-default)] text-[var(--r-fg-default)]'
-						: 'border-transparent text-[var(--r-fg-muted)] hover:text-[var(--r-fg-default)]',
+						? 'border-primary text-foreground'
+						: 'border-transparent text-muted-foreground hover:text-foreground',
 				],
 				variant === 'pills' && [
-					'px-3 py-1.5 rounded-[var(--radius-lg)]',
+					'px-3 py-1.5 rounded-lg',
 					active === tab.id
-						? 'bg-[var(--r-brand-default)] text-[var(--r-fg-on-brand)]'
-						: 'text-[var(--r-fg-muted)] hover:text-[var(--r-fg-default)] hover:bg-[var(--r-bg-raised)]',
+						? 'bg-primary text-primary-foreground'
+						: 'text-muted-foreground hover:text-foreground hover:bg-accent',
 				],
 			)}
 		>

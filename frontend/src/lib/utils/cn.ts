@@ -1,9 +1,6 @@
-/**
- * Simple class name merge utility.
- * Filters falsy values, flattens arrays, and joins with space.
- */
-type ClassValue = string | number | false | null | undefined;
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-export function cn(...classes: (ClassValue | ClassValue[])[]): string {
-	return classes.flat().filter(Boolean).join(' ');
+export function cn(...inputs: ClassValue[]) {
+	return twMerge(clsx(inputs));
 }

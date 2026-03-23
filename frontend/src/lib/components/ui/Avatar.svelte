@@ -28,10 +28,10 @@
 	};
 
 	const variants: Record<string, string> = {
-		brand:   'bg-brand-900/50 text-brand-300',
-		neutral: 'bg-[var(--r-bg-raised)] text-[var(--r-fg-muted)]',
-		success: 'bg-success-900/50 text-success-300',
-		danger:  'bg-danger-900/50 text-danger-300',
+		brand:   'bg-primary/15 text-primary',
+		neutral: 'bg-secondary text-muted-foreground',
+		success: 'bg-success-500/15 text-success-400',
+		danger:  'bg-destructive/15 text-destructive',
 	};
 </script>
 

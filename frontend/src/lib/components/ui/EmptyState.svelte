@@ -21,13 +21,13 @@
 
 <div class={cn('flex flex-col items-center justify-center py-12 px-4 text-center', className)}>
 	{#if icon}
-		<div class="mb-4 rounded-full bg-[var(--r-bg-raised)] p-4">
-			<Icon name={icon} size={32} class="text-[var(--r-fg-subtle)]" />
+		<div class="mb-4 rounded-full bg-secondary p-4">
+			<Icon name={icon} size={32} class="text-muted-foreground" />
 		</div>
 	{/if}
-	<h3 class="text-lg font-semibold text-[var(--r-fg-default)]">{title}</h3>
+	<h3 class="text-lg font-semibold text-foreground">{title}</h3>
 	{#if description}
-		<p class="mt-1 text-sm text-[var(--r-fg-muted)] max-w-sm">{description}</p>
+		<p class="mt-1 text-sm text-muted-foreground max-w-sm">{description}</p>
 	{/if}
 	{#if actions}
 		<div class="mt-4">

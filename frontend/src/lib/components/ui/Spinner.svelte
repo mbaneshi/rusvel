@@ -24,7 +24,7 @@
 	class={cn(
 		'inline-block animate-spin rounded-full border-current border-t-transparent',
 		sizes[size],
-		'text-[var(--r-brand-default)]',
+		'text-primary',
 		className,
 	)}
 	{...rest}
