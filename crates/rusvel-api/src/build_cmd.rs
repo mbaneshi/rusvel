@@ -230,7 +230,7 @@ For matcher, use a regex/glob pattern (e.g., "Bash" for PreToolUse to match bash
 }
 
 /// Extract JSON from Claude's response, handling potential markdown code blocks.
-fn extract_json(text: &str) -> Option<&str> {
+pub fn extract_json(text: &str) -> Option<&str> {
     let trimmed = text.trim();
 
     // Try direct parse first

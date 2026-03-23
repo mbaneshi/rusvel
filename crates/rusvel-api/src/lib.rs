@@ -8,10 +8,14 @@
 
 pub mod agents;
 pub mod analytics;
+pub mod approvals;
 pub mod build_cmd;
+pub mod capability;
 pub mod chat;
 pub mod config;
 pub mod department;
+pub mod help;
+pub mod hook_dispatch;
 pub mod hooks;
 pub mod mcp_servers;
 pub mod routes;
@@ -32,6 +36,7 @@ use tower_http::trace::TraceLayer;
 use forge_engine::ForgeEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{EventPort, SessionPort, StoragePort};
+use rusvel_core::registry::DepartmentRegistry;
 
 /// Shared application state injected into all handlers.
 pub struct AppState {
@@ -40,6 +45,7 @@ pub struct AppState {
     pub events: Arc<dyn EventPort>,
     pub storage: Arc<dyn StoragePort>,
     pub profile: Option<UserProfile>,
+    pub registry: DepartmentRegistry,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -59,108 +65,31 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
         .route("/api/sessions/{id}", get(routes::get_session))
-        .route(
-            "/api/sessions/{id}/mission/today",
-            get(routes::mission_today),
-        )
-        .route(
-            "/api/sessions/{id}/mission/goals",
-            get(routes::list_goals),
-        )
-        .route(
-            "/api/sessions/{id}/mission/goals",
-            post(routes::create_goal),
-        )
+        .route("/api/sessions/{id}/mission/today", get(routes::mission_today))
+        .route("/api/sessions/{id}/mission/goals", get(routes::list_goals))
+        .route("/api/sessions/{id}/mission/goals", post(routes::create_goal))
         .route("/api/sessions/{id}/events", get(routes::query_events))
         // Chat (god agent)
         .route("/api/chat", post(chat::chat_handler))
         .route("/api/chat/conversations", get(chat::list_conversations))
         .route("/api/chat/conversations/{id}", get(chat::get_history))
-        // Config (M02, M03, M04)
+        // Config
         .route("/api/config", get(config::get_config))
         .route("/api/config", axum::routing::put(config::update_config))
         .route("/api/config/models", get(config::list_models))
         .route("/api/config/tools", get(config::list_tools))
-        // Departments (Code, Content, Harvest, GTM, Forge)
-        .route("/api/dept/code/chat", post(department::code_chat))
-        .route("/api/dept/code/chat/conversations", get(department::code_conversations))
-        .route("/api/dept/code/chat/conversations/{id}", get(department::code_history))
-        .route("/api/dept/code/config", get(department::code_config_get))
-        .route("/api/dept/code/config", axum::routing::put(department::code_config_update))
-        .route("/api/dept/code/events", get(department::code_events))
-        .route("/api/dept/content/chat", post(department::content_chat))
-        .route("/api/dept/content/chat/conversations", get(department::content_conversations))
-        .route("/api/dept/content/chat/conversations/{id}", get(department::content_history))
-        .route("/api/dept/content/config", get(department::content_config_get))
-        .route("/api/dept/content/config", axum::routing::put(department::content_config_update))
-        .route("/api/dept/content/events", get(department::content_events))
-        .route("/api/dept/harvest/chat", post(department::harvest_chat))
-        .route("/api/dept/harvest/chat/conversations", get(department::harvest_conversations))
-        .route("/api/dept/harvest/chat/conversations/{id}", get(department::harvest_history))
-        .route("/api/dept/harvest/config", get(department::harvest_config_get))
-        .route("/api/dept/harvest/config", axum::routing::put(department::harvest_config_update))
-        .route("/api/dept/harvest/events", get(department::harvest_events))
-        .route("/api/dept/gtm/chat", post(department::gtm_chat))
-        .route("/api/dept/gtm/chat/conversations", get(department::gtm_conversations))
-        .route("/api/dept/gtm/chat/conversations/{id}", get(department::gtm_history))
-        .route("/api/dept/gtm/config", get(department::gtm_config_get))
-        .route("/api/dept/gtm/config", axum::routing::put(department::gtm_config_update))
-        .route("/api/dept/gtm/events", get(department::gtm_events))
-        .route("/api/dept/forge/chat", post(department::forge_chat))
-        .route("/api/dept/forge/chat/conversations", get(department::forge_conversations))
-        .route("/api/dept/forge/chat/conversations/{id}", get(department::forge_history))
-        .route("/api/dept/forge/config", get(department::forge_config_get))
-        .route("/api/dept/forge/config", axum::routing::put(department::forge_config_update))
-        .route("/api/dept/forge/events", get(department::forge_events))
-        // Finance
-        .route("/api/dept/finance/chat", post(department::finance_chat))
-        .route("/api/dept/finance/chat/conversations", get(department::finance_conversations))
-        .route("/api/dept/finance/chat/conversations/{id}", get(department::finance_history))
-        .route("/api/dept/finance/config", get(department::finance_config_get))
-        .route("/api/dept/finance/config", axum::routing::put(department::finance_config_update))
-        .route("/api/dept/finance/events", get(department::finance_events))
-        // Product
-        .route("/api/dept/product/chat", post(department::product_chat))
-        .route("/api/dept/product/chat/conversations", get(department::product_conversations))
-        .route("/api/dept/product/chat/conversations/{id}", get(department::product_history))
-        .route("/api/dept/product/config", get(department::product_config_get))
-        .route("/api/dept/product/config", axum::routing::put(department::product_config_update))
-        .route("/api/dept/product/events", get(department::product_events))
-        // Growth
-        .route("/api/dept/growth/chat", post(department::growth_chat))
-        .route("/api/dept/growth/chat/conversations", get(department::growth_conversations))
-        .route("/api/dept/growth/chat/conversations/{id}", get(department::growth_history))
-        .route("/api/dept/growth/config", get(department::growth_config_get))
-        .route("/api/dept/growth/config", axum::routing::put(department::growth_config_update))
-        .route("/api/dept/growth/events", get(department::growth_events))
-        // Distribution
-        .route("/api/dept/distro/chat", post(department::distro_chat))
-        .route("/api/dept/distro/chat/conversations", get(department::distro_conversations))
-        .route("/api/dept/distro/chat/conversations/{id}", get(department::distro_history))
-        .route("/api/dept/distro/config", get(department::distro_config_get))
-        .route("/api/dept/distro/config", axum::routing::put(department::distro_config_update))
-        .route("/api/dept/distro/events", get(department::distro_events))
-        // Legal
-        .route("/api/dept/legal/chat", post(department::legal_chat))
-        .route("/api/dept/legal/chat/conversations", get(department::legal_conversations))
-        .route("/api/dept/legal/chat/conversations/{id}", get(department::legal_history))
-        .route("/api/dept/legal/config", get(department::legal_config_get))
-        .route("/api/dept/legal/config", axum::routing::put(department::legal_config_update))
-        .route("/api/dept/legal/events", get(department::legal_events))
-        // Support
-        .route("/api/dept/support/chat", post(department::support_chat))
-        .route("/api/dept/support/chat/conversations", get(department::support_conversations))
-        .route("/api/dept/support/chat/conversations/{id}", get(department::support_history))
-        .route("/api/dept/support/config", get(department::support_config_get))
-        .route("/api/dept/support/config", axum::routing::put(department::support_config_update))
-        .route("/api/dept/support/events", get(department::support_events))
-        // Infra
-        .route("/api/dept/infra/chat", post(department::infra_chat))
-        .route("/api/dept/infra/chat/conversations", get(department::infra_conversations))
-        .route("/api/dept/infra/chat/conversations/{id}", get(department::infra_history))
-        .route("/api/dept/infra/config", get(department::infra_config_get))
-        .route("/api/dept/infra/config", axum::routing::put(department::infra_config_update))
-        .route("/api/dept/infra/events", get(department::infra_events))
+        // Department Registry
+        .route("/api/departments", get(department::list_departments))
+        // Profile
+        .route("/api/profile", get(department::get_profile))
+        .route("/api/profile", axum::routing::put(department::update_profile))
+        // Departments — 6 parameterized routes replace 72 hardcoded ones
+        .route("/api/dept/{dept}/chat", post(department::dept_chat))
+        .route("/api/dept/{dept}/chat/conversations", get(department::dept_conversations))
+        .route("/api/dept/{dept}/chat/conversations/{id}", get(department::dept_history))
+        .route("/api/dept/{dept}/config", get(department::dept_config_get))
+        .route("/api/dept/{dept}/config", axum::routing::put(department::dept_config_update))
+        .route("/api/dept/{dept}/events", get(department::dept_events))
         // Agents CRUD
         .route("/api/agents", get(agents::list_agents).post(agents::create_agent))
         .route("/api/agents/{id}", get(agents::get_agent).put(agents::update_agent).delete(agents::delete_agent))
@@ -177,8 +106,16 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/workflows", get(workflows::list_workflows).post(workflows::create_workflow))
         .route("/api/workflows/{id}", get(workflows::get_workflow).put(workflows::update_workflow).delete(workflows::delete_workflow))
         .route("/api/workflows/{id}/run", post(workflows::run_workflow))
+        // Capability Engine
+        .route("/api/capability/build", post(capability::build_capability))
         // Analytics
         .route("/api/analytics", get(analytics::get_analytics))
+        // Help (AI-powered)
+        .route("/api/help", post(help::help_handler))
+        // Approvals (human-in-the-loop, ADR-008)
+        .route("/api/approvals", get(approvals::list_pending))
+        .route("/api/approvals/{id}/approve", post(approvals::approve_job))
+        .route("/api/approvals/{id}/reject", post(approvals::reject_job))
         // Hooks CRUD
         .route("/api/hooks", get(hooks::list_hooks).post(hooks::create_hook))
         .route("/api/hooks/{id}", axum::routing::put(hooks::update_hook).delete(hooks::delete_hook))
@@ -194,10 +131,8 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
             move |req: axum::extract::Request| {
                 let html = html.clone();
                 async move {
-                    // Serve static assets directly
                     let path = req.uri().path();
                     if path.starts_with("/_app") || path == "/favicon.png" {
-                        // Handled by nest_service below
                         axum::response::Html("").into_response()
                     } else {
                         axum::response::Html(html).into_response()

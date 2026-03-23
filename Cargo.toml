@@ -62,10 +62,14 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
+cliclack = "0.3"
 
 # TUI
 ratatui = "0.29"
 crossterm = "0.28"
+
+# REPL
+reedline = "0.38"
 
 # LLM
 reqwest = { version = "0.12", features = ["json", "stream"] }
@@ -122,6 +126,7 @@ infra-engine = { path = "crates/infra-engine" }
 rusvel-api = { path = "crates/rusvel-api" }
 rusvel-cli = { path = "crates/rusvel-cli" }
 rusvel-mcp = { path = "crates/rusvel-mcp" }
+rusvel-tui = { path = "crates/rusvel-tui" }
 
 [profile.release]
 lto = true

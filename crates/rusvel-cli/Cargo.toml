@@ -16,3 +16,5 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+reedline = { workspace = true }
+crossterm = { workspace = true }

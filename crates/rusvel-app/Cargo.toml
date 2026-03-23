@@ -41,13 +41,20 @@ infra-engine   = { workspace = true }
 rusvel-cli = { workspace = true }
 rusvel-api = { workspace = true }
 rusvel-mcp = { workspace = true }
+rusvel-tui = { workspace = true }
 
 # ─── Third-party ───
 tokio              = { workspace = true }
 tracing            = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap               = { workspace = true }
+cliclack           = { workspace = true }
 anyhow             = { workspace = true }
 async-trait        = { workspace = true }
 serde_json         = { workspace = true }
+serde              = { workspace = true }
+toml               = { workspace = true }
 uuid               = { workspace = true }
+reqwest            = { workspace = true }
+chrono             = { workspace = true }
+rust-embed         = { workspace = true }

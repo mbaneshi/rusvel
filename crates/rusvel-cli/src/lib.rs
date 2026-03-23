@@ -1,7 +1,12 @@
 //! CLI surface for RUSVEL using Clap 4.
 //!
-//! Exposes a [`Cli`] struct with subcommands and a [`run`] function that
-//! dispatches to the appropriate engine method.
+//! Three-tier terminal interface:
+//! - **Tier 1** — One-shot commands (`rusvel finance status`)
+//! - **Tier 2** — Interactive REPL shell (`rusvel shell`)
+//! - **Tier 3** — TUI dashboard (`rusvel --tui`)
+
+pub mod departments;
+pub mod shell;
 
 use std::sync::Arc;
 use chrono::Utc;
@@ -12,11 +17,11 @@ use forge_engine::ForgeEngine;
 use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::SessionPort;
+use rusvel_core::ports::{SessionPort, StoragePort};
 
 // ── Active session config ────────────────────────────────────────
 
-fn rusvel_dir() -> std::path::PathBuf {
+pub(crate) fn rusvel_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".into());
@@ -53,6 +58,10 @@ pub struct Cli {
     #[arg(long)]
     pub mcp: bool,
 
+    /// Launch the TUI dashboard.
+    #[arg(long)]
+    pub tui: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -68,6 +77,65 @@ pub enum Commands {
     Forge {
         #[command(subcommand)]
         action: ForgeCmd,
+    },
+    /// Launch interactive REPL shell.
+    Shell,
+
+    // ── Department subcommands (Tier 1) ──
+    /// Finance: ledger, runway, tax.
+    Finance {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Growth: funnels, cohorts, KPIs.
+    Growth {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Distribution: marketplace, SEO, affiliates.
+    Distro {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Legal: contracts, compliance, IP.
+    Legal {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Support: tickets, knowledge base, NPS.
+    Support {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Infrastructure: deploys, monitoring, incidents.
+    Infra {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Product: roadmap, pricing, feedback.
+    Product {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Code intelligence: analysis, search.
+    Code {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Harvest: opportunities, proposals, pipeline.
+    Harvest {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Content: drafts, calendar, publishing.
+    Content {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Go-to-market: CRM, outreach, invoices.
+    Gtm {
+        #[command(subcommand)]
+        action: departments::DeptAction,
     },
 }
 
@@ -137,9 +205,12 @@ impl From<TimeframeArg> for Timeframe {
 // ── run — dispatch CLI commands ──────────────────────────────────
 
 /// Execute the parsed CLI. The caller (`rusvel-app`) constructs the
-/// `ForgeEngine` and `SessionPort` with real adapters.
+/// engines and ports with real adapters.
 pub async fn run(
-    cli: Cli, engine: Arc<ForgeEngine>, session_port: Arc<dyn SessionPort>,
+    cli: Cli,
+    engine: Arc<ForgeEngine>,
+    session_port: Arc<dyn SessionPort>,
+    storage: Arc<dyn StoragePort>,
 ) -> Result<()> {
     match cli.command {
         None => {
@@ -149,10 +220,52 @@ pub async fn run(
         }
         Some(Commands::Session { action }) => handle_session(action, session_port).await,
         Some(Commands::Forge { action }) => handle_forge(action, engine).await,
+        Some(Commands::Shell) => {
+            let ctx = shell::ShellContext {
+                sessions: session_port,
+                storage,
+                forge: engine,
+            };
+            shell::run_shell(ctx).await
+        }
+        // Department commands — convert to DeptCmd and dispatch
+        Some(Commands::Finance { action }) => {
+            departments::handle_dept(departments::DeptCmd::Finance { action }, storage).await
+        }
+        Some(Commands::Growth { action }) => {
+            departments::handle_dept(departments::DeptCmd::Growth { action }, storage).await
+        }
+        Some(Commands::Distro { action }) => {
+            departments::handle_dept(departments::DeptCmd::Distro { action }, storage).await
+        }
+        Some(Commands::Legal { action }) => {
+            departments::handle_dept(departments::DeptCmd::Legal { action }, storage).await
+        }
+        Some(Commands::Support { action }) => {
+            departments::handle_dept(departments::DeptCmd::Support { action }, storage).await
+        }
+        Some(Commands::Infra { action }) => {
+            departments::handle_dept(departments::DeptCmd::Infra { action }, storage).await
+        }
+        Some(Commands::Product { action }) => {
+            departments::handle_dept(departments::DeptCmd::Product { action }, storage).await
+        }
+        Some(Commands::Code { action }) => {
+            departments::handle_dept(departments::DeptCmd::Code { action }, storage).await
+        }
+        Some(Commands::Harvest { action }) => {
+            departments::handle_dept(departments::DeptCmd::Harvest { action }, storage).await
+        }
+        Some(Commands::Content { action }) => {
+            departments::handle_dept(departments::DeptCmd::Content { action }, storage).await
+        }
+        Some(Commands::Gtm { action }) => {
+            departments::handle_dept(departments::DeptCmd::Gtm { action }, storage).await
+        }
     }
 }
 
-async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) -> Result<()> {
+pub(crate) async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) -> Result<()> {
     match cmd {
         SessionCmd::Create { name } => {
             let now = Utc::now();
