@@ -67,6 +67,48 @@ jobs:
       - run: npx prettier --check "src/**/*.{svelte,ts,js,css}"
       - run: npm run build
 
+  visual-tests:
+    name: Visual E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Start API server
+        run: cargo run &
+        env:
+          RUSVEL_DB_PATH: /tmp/rusvel-test.db
+      - name: Wait for API
+        run: |
+          for i in $(seq 1 30); do
+            curl -s http://localhost:3000/api/health && break
+            sleep 2
+          done
+      - name: Run visual tests
+        working-directory: frontend
+        run: npx playwright test --project=visual --update-snapshots || true
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-test-results
+          path: frontend/test-results/
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

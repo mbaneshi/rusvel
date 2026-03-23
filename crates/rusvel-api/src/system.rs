@@ -159,6 +159,77 @@ pub struct FixRequest {
     pub issue: String,
 }
 
+/// `POST /api/system/ingest-docs` — ingest RUSVEL's own docs into knowledge base (on-demand)
+pub async fn ingest_docs(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let embed = state.embedding.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Embedding adapter not available".into()))?;
+    let vs = state.vector_store.as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into()))?;
+
+    let project_dir = find_project_dir();
+    let docs = [
+        "CLAUDE.md",
+        "docs/design/architecture-v2.md",
+        "docs/design/decisions.md",
+        "docs/status/current-state.md",
+        "docs/status/gap-analysis.md",
+    ];
+
+    let mut total_chunks = 0usize;
+    let mut ingested_files = Vec::new();
+
+    for doc_path in &docs {
+        let full_path = format!("{}/{}", project_dir, doc_path);
+        let content = match std::fs::read_to_string(&full_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let chunks: Vec<&str> = content.split("\n\n")
+            .map(|c| c.trim())
+            .filter(|c| c.len() > 50)
+            .collect();
+
+        for (i, chunk) in chunks.iter().enumerate() {
+            let id = format!("doc-{}-{}", doc_path.replace('/', "-"), i);
+            match embed.embed_one(chunk).await {
+                Ok(embedding) => {
+                    let _ = vs.upsert(
+                        &id,
+                        chunk,
+                        embedding,
+                        serde_json::json!({ "source": doc_path, "chunk_index": i }),
+                    ).await;
+                    total_chunks += 1;
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to embed chunk from {doc_path}: {e}");
+                }
+            }
+        }
+        ingested_files.push(doc_path.to_string());
+    }
+
+    // Also ingest profile.toml if it exists
+    let profile_path = format!("{}/.rusvel/profile.toml",
+        std::env::var("HOME").unwrap_or_else(|_| ".".into()));
+    if let Ok(profile_content) = std::fs::read_to_string(&profile_path) {
+        if let Ok(embedding) = embed.embed_one(&profile_content).await {
+            let _ = vs.upsert("doc-profile", &profile_content, embedding,
+                serde_json::json!({ "source": "profile.toml" })).await;
+            total_chunks += 1;
+            ingested_files.push("profile.toml".into());
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "chunks_ingested": total_chunks,
+        "files_processed": ingested_files,
+    })))
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 
 async fn run_command(cmd: &str, args: &[&str], cwd: &str) -> CommandResult {

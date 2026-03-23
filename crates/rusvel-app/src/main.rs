@@ -1068,12 +1068,7 @@ async fn main() -> Result<()> {
             }
         };
 
-        // 9a. Seed knowledge base with RUSVEL's own docs (if both adapters are available)
-        if let (Some(emb), Some(vs)) = (&embedding, &vector_store) {
-            if let Err(e) = seed_knowledge(emb, vs, &data_dir).await {
-                tracing::warn!("Knowledge seeding failed (non-fatal): {e}");
-            }
-        }
+        // Knowledge seeding is on-demand via POST /api/system/ingest-docs (not at startup)
 
         let state = AppState {
             forge: forge.clone(),

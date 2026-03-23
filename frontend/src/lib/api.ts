@@ -683,6 +683,65 @@ export async function getKnowledgeStats(): Promise<KnowledgeStats> {
 	return request('/api/knowledge/stats');
 }
 
+// ── Visual Testing ────────────────────────────────────────────
+
+export interface VisualIssue {
+	type: string;
+	description: string;
+	element: string;
+	suggested_fix: string;
+}
+
+export interface RouteAnalysis {
+	route: string;
+	severity: 'low' | 'medium' | 'high' | 'critical';
+	issues: VisualIssue[];
+	recommended_actions: { action_type: string; entity_description: string }[];
+}
+
+export interface VisualReport {
+	run_id: string;
+	timestamp: string;
+	analyses: RouteAnalysis[];
+	summary: {
+		total_routes: number;
+		regressions: number;
+		critical: number;
+		high: number;
+		medium: number;
+		low: number;
+	};
+}
+
+export interface CorrectionResult {
+	skills_created: string[];
+	rules_created: string[];
+	errors: string[];
+}
+
+export async function getVisualReports(): Promise<VisualReport[]> {
+	return request('/api/system/visual-report');
+}
+
+export async function postVisualReport(report: VisualReport): Promise<{ id: string }> {
+	return request('/api/system/visual-report', {
+		method: 'POST',
+		body: JSON.stringify(report)
+	});
+}
+
+export async function triggerSelfCorrect(): Promise<CorrectionResult> {
+	return request('/api/system/visual-report/self-correct', { method: 'POST' });
+}
+
+export async function runVisualTests(): Promise<{
+	success: boolean;
+	stdout: string;
+	stderr: string;
+}> {
+	return request('/api/system/visual-test', { method: 'POST' });
+}
+
 // ── Analytics ─────────────────────────────────────────────────
 export interface AnalyticsData {
 	agents: number;

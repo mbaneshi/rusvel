@@ -205,6 +205,7 @@ pub fn build_router_with_frontend(
         .route("/api/system/build", post(system::run_build))
         .route("/api/system/status", get(system::get_status))
         .route("/api/system/fix", post(system::self_fix))
+        .route("/api/system/ingest-docs", post(system::ingest_docs))
         // Visual regression testing
         .route(
             "/api/system/visual-report",

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { activeSession, onboarding, departments } from '$lib/stores';
-	import { getGoals, getEvents, getAnalytics } from '$lib/api';
-	import type { Goal, Event, AnalyticsData, DepartmentDef } from '$lib/api';
+	import { getGoals, getEvents, getAnalytics, getVisualReports } from '$lib/api';
+	import type { Goal, Event, AnalyticsData, DepartmentDef, VisualReport } from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
 	let goals: Goal[] = $state([]);
 	let events: Event[] = $state([]);
 	let analytics: AnalyticsData | null = $state(null);
+	let visualReport: VisualReport | null = $state(null);
 	let deptList: DepartmentDef[] = $state([]);
 	let loading = $state(false);
 	let error = $state('');
@@ -24,6 +25,12 @@
 			analytics = await getAnalytics();
 		} catch {
 			/* analytics optional */
+		}
+		try {
+			const reports = await getVisualReports();
+			if (reports.length > 0) visualReport = reports[reports.length - 1];
+		} catch {
+			/* visual reports optional */
 		}
 	});
 
@@ -137,6 +144,63 @@
 				<div class="rounded-xl border border-border bg-card p-4">
 					<p class="text-xs font-medium text-muted-foreground">Conversations</p>
 					<p class="mt-1 text-2xl font-bold text-chart-4">{analytics.conversations}</p>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Visual Health -->
+		{#if visualReport}
+			{@const s = visualReport.summary}
+			{@const statusColor =
+				s.critical > 0
+					? 'text-destructive'
+					: s.high > 0
+						? 'text-orange-500'
+						: s.regressions > 0
+							? 'text-yellow-500'
+							: 'text-green-500'}
+			{@const statusLabel =
+				s.critical > 0
+					? 'Critical'
+					: s.high > 0
+						? 'Issues'
+						: s.regressions > 0
+							? 'Minor'
+							: 'Healthy'}
+			<div class="mb-6 rounded-xl border border-border bg-card p-4">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						<div
+							class="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary"
+						>
+							<svg
+								class="h-4 w-4 {statusColor}"
+								viewBox="0 0 16 16"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.5"
+							>
+								<rect x="2" y="2" width="5" height="5" rx="1" />
+								<rect x="9" y="2" width="5" height="5" rx="1" />
+								<rect x="2" y="9" width="5" height="5" rx="1" />
+								<rect x="9" y="9" width="5" height="5" rx="1" />
+							</svg>
+						</div>
+						<div>
+							<p class="text-sm font-medium text-foreground">
+								Visual Health: <span class={statusColor}>{statusLabel}</span>
+							</p>
+							<p class="text-xs text-muted-foreground">
+								{s.total_routes} routes tested &middot; {s.regressions} regressions
+								{#if s.critical > 0}<span class="text-destructive"
+										>({s.critical} critical)</span
+									>{/if}
+							</p>
+						</div>
+					</div>
+					<span class="text-xs text-muted-foreground">
+						{new Date(visualReport.timestamp).toLocaleDateString()}
+					</span>
 				</div>
 			</div>
 		{/if}
