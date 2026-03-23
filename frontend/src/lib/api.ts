@@ -233,6 +233,88 @@ export async function streamDeptChat(
 	}
 }
 
+// ── Agents CRUD ──────────────────────────────────────────────
+
+export interface Agent {
+	id: string;
+	name: string;
+	role: string;
+	instructions: string;
+	default_model: { provider: string; model: string };
+	allowed_tools: string[];
+	capabilities: string[];
+	budget_limit: number | null;
+	metadata: Record<string, unknown>;
+}
+
+export async function getAgents(engine?: string): Promise<Agent[]> {
+	return request(`/api/agents${engine ? `?engine=${engine}` : ''}`);
+}
+
+export async function createAgent(agent: {
+	name: string;
+	role?: string;
+	instructions?: string;
+	model?: string;
+	allowed_tools?: string[];
+	budget_limit?: number;
+	metadata?: Record<string, unknown>;
+}): Promise<Agent> {
+	return request('/api/agents', { method: 'POST', body: JSON.stringify(agent) });
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+	await fetch(`${BASE}/api/agents/${id}`, { method: 'DELETE' });
+}
+
+// ── Skills CRUD ──────────────────────────────────────────────
+
+export interface Skill {
+	id: string;
+	name: string;
+	description: string;
+	prompt_template: string;
+	metadata: Record<string, unknown>;
+}
+
+export async function getSkills(engine?: string): Promise<Skill[]> {
+	return request(`/api/skills${engine ? `?engine=${engine}` : ''}`);
+}
+
+export async function createSkill(skill: Partial<Skill>): Promise<Skill> {
+	return request('/api/skills', { method: 'POST', body: JSON.stringify(skill) });
+}
+
+export async function deleteSkill(id: string): Promise<void> {
+	await fetch(`${BASE}/api/skills/${id}`, { method: 'DELETE' });
+}
+
+// ── Rules CRUD ───────────────────────────────────────────────
+
+export interface Rule {
+	id: string;
+	name: string;
+	content: string;
+	enabled: boolean;
+	metadata: Record<string, unknown>;
+}
+
+export async function getRules(engine?: string): Promise<Rule[]> {
+	return request(`/api/rules${engine ? `?engine=${engine}` : ''}`);
+}
+
+export async function createRule(rule: Partial<Rule>): Promise<Rule> {
+	return request('/api/rules', { method: 'POST', body: JSON.stringify(rule) });
+}
+
+export async function updateRule(id: string, rule: Partial<Rule>): Promise<Rule> {
+	return request(`/api/rules/${id}`, { method: 'PUT', body: JSON.stringify(rule) });
+}
+
+export async function deleteRule(id: string): Promise<void> {
+	await fetch(`${BASE}/api/rules/${id}`, { method: 'DELETE' });
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {

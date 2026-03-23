@@ -1,516 +1,387 @@
-# Sprint Plan: Departments + CRUD + Integrations
+# Sprint Plan: From Storage Layer to Capability Engine
 
-> Aligned to RUSVEL's actual codebase patterns and SOLID principles.
-> Written: 2026-03-23
-
----
-
-## Architecture Principles
-
-Everything in this sprint follows what already works:
-
-1. **ObjectStore is the universal CRUD layer** — `put(kind, id, json)`, `get(kind, id)`, `delete(kind, id)`, `list(kind, filter)`. Already in `rusvel-core/ports.rs:162`, implemented in `rusvel-db/store.rs:255`. All new entities use this — no new tables, no new traits.
-
-2. **Domain types live in `rusvel-core/domain.rs`** — `AgentProfile` already exists at line 128 with `id`, `name`, `role`, `instructions`, `default_model`, `allowed_tools`, `capabilities`, `budget_limit`, `metadata`. We extend this pattern for Skills, Rules, etc.
-
-3. **Department pattern is the template** — `department.rs` has generic handlers that take `engine: &str` and dispatch. Code department has 6 wrappers (chat, config_get, config_update, conversations, history, events). All new departments copy this exactly.
-
-4. **DepartmentChat.svelte is the reusable frontend** — takes `{dept, title, icon}` props. Quick actions dispatch via `CustomEvent('dept-quick-action')`. Config panel persists via `updateDeptConfig()`.
-
-5. **API client pattern** — `api.ts` has typed `request<T>(path, options)` wrapper. SSE streaming via `streamDeptChat()` with `onDelta/onDone/onError` callbacks.
-
-6. **No new crates** — all new features go in existing crates. `rusvel-api` for handlers, `rusvel-core/domain.rs` for types, frontend components in `$lib/`.
+> Aligned to actual codebase state as of 2026-03-23.
+> Every step follows existing patterns exactly.
 
 ---
 
-## What Exists Today
+## What's Already Built
 
-| Component | Status | Location |
-|-----------|--------|----------|
-| ObjectStore trait | Done | `ports.rs:162` — `put/get/delete/list` |
-| ObjectStore impl (SQLite) | Done | `store.rs:255` — upsert with JSON data column |
-| AgentProfile domain type | Done | `domain.rs:128` — name, role, instructions, model, tools, capabilities |
-| DepartmentConfig | Done | `department.rs:34` — model, effort, tools, budget, system_prompt, add_dirs |
-| Department generic handlers | Done | `department.rs` — chat, config, conversations, history, events |
-| Code department wrappers | Done | `department.rs:413-450` — 6 thin wrappers |
-| Code department routes | Done | `lib.rs:77-82` — 6 routes |
-| DepartmentChat.svelte | Done | Reusable component with config panel, streaming |
-| Code page with tabs | Done | Actions, Agents, Skills, Projects, Events tabs |
-| API client dept functions | Done | `api.ts` — getDeptConfig, streamDeptChat, etc. |
-| Design system | Done | 14 components, semantic tokens, icons |
+### Backend (rusvel-api) — 1,573 lines across 8 modules
 
----
+| Module | Lines | What It Does |
+|--------|-------|-------------|
+| `department.rs` | 472 | Generic handlers + macro-generated wrappers for 5 departments (30 endpoints) |
+| `chat.rs` | 275 | God agent streaming chat + conversation history |
+| `routes.rs` | 150 | Sessions, mission, goals, events |
+| `config.rs` | 162 | ChatConfig with model/effort/tools + model list + tool list |
+| `agents.rs` | 134 | CRUD for AgentProfile via ObjectStore("agents") |
+| `skills.rs` | 97 | CRUD for SkillDefinition via ObjectStore("skills") |
+| `rules.rs` | 117 | CRUD for RuleDefinition via ObjectStore("rules") + `load_rules_for_engine()` |
+| `lib.rs` | 166 | Router with 48 routes + AppState + frontend serving |
 
-## Step 1: Wire 4 Department Backends
+### Frontend (api.ts) — All CRUD functions exist
 
-**Add to `department.rs`:** 24 thin wrappers (6 per department x 4 departments).
-
-Each wrapper is 3 lines — delegates to generic handler with engine string:
-
-```rust
-// Content
-pub async fn content_chat(State(state): State<Arc<AppState>>, Json(body): Json<ChatRequest>)
-    -> Result<Sse<impl Stream<...>>, (StatusCode, String)> {
-    department_chat_handler("content", state, body).await
-}
-pub async fn content_config_get(State(state): State<Arc<AppState>>)
-    -> Result<Json<DepartmentConfig>, (StatusCode, String)> {
-    get_dept_config("content", &state).await.map(Json)
-}
-// ... same for config_update, conversations, history, events
-// Repeat for harvest, gtm, forge
-```
-
-**Add to `lib.rs`:** 24 routes following the existing Code pattern:
-```rust
-.route("/api/dept/content/chat", post(department::content_chat))
-.route("/api/dept/content/config", get(department::content_config_get))
-// ... etc for all 4 departments
-```
-
-**Why mechanical:** The generic handlers already exist. `DepartmentConfig::default_for()` already has `match` arms for "content", "harvest", "gtm". This is pure wiring.
-
-**Effort:** 1 hour.
-
----
-
-## Step 2: Build 4 Department Pages
-
-**Clone Code page pattern** for each department. Only these things change:
-
-| Department | `dept=` | Icon | Color | Quick Actions |
-|------------|---------|------|-------|---------------|
-| Content | `"content"` | `*` | purple (purple-600/400/900) | "Draft blog post", "Adapt for Twitter", "Content calendar", "Engagement report" |
-| Harvest | `"harvest"` | `$` | amber (amber-600/400/900) | "Scan for opportunities", "Score opportunity", "Draft proposal", "Pipeline status" |
-| GTM | `"gtm"` | `^` | cyan (cyan-600/400/900) | "List contacts", "Draft outreach", "Generate invoice", "Deal pipeline" |
-| Forge | `"forge"` | `=` | indigo (brand-600/400/900) | "Daily plan", "Review goals", "Hire persona", "Weekly review", "System health" |
-
-Each page: `<DepartmentChat dept="content" title="Content Department" icon="*" />`
-
-Left sidebar has same tab structure (Actions, Agents, Skills, Projects, Events) with domain-specific quick actions.
-
-**Effort:** 2 hours.
-
----
-
-## Step 3: Agents CRUD
-
-### Backend
-
-**Domain type** — `AgentProfile` already exists in `domain.rs:128`:
-```rust
-pub struct AgentProfile {
-    pub id: AgentProfileId,
-    pub name: String,
-    pub role: String,
-    pub instructions: String,     // = system prompt
-    pub default_model: ModelRef,
-    pub allowed_tools: Vec<String>,
-    pub capabilities: Vec<Capability>,
-    pub budget_limit: Option<f64>,
-    pub metadata: serde_json::Value,
-}
-```
-
-We use this type directly. The `metadata` field carries department scoping (`{"engine": "code"}` or absent for global).
-
-**Storage:** `ObjectStore("agents", agent.id, serde_json::to_value(agent))`
-
-**New file: `crates/rusvel-api/src/agents.rs`:**
-```rust
-pub async fn list_agents(State(state), Query(params)) -> Result<Json<Vec<AgentProfile>>> {
-    let all = state.storage.objects().list("agents", ObjectFilter::default()).await?;
-    let mut agents: Vec<AgentProfile> = all.into_iter().filter_map(|v| serde_json::from_value(v).ok()).collect();
-    if let Some(engine) = params.engine {
-        agents.retain(|a| a.metadata.get("engine").and_then(|e| e.as_str()) == Some(&engine)
-            || a.metadata.get("engine").is_none());  // include global agents
-    }
-    Ok(Json(agents))
-}
-
-pub async fn create_agent(State(state), Json(mut agent): Json<AgentProfile>) -> Result<Json<AgentProfile>> {
-    if agent.id.is_empty() { agent.id = AgentProfileId::new(); }
-    state.storage.objects().put("agents", &agent.id.to_string(), serde_json::to_value(&agent)?).await?;
-    Ok(Json(agent))
-}
-
-pub async fn get_agent(State(state), Path(id)) -> Result<Json<AgentProfile>> { ... }
-pub async fn update_agent(State(state), Path(id), Json(agent)) -> Result<Json<AgentProfile>> { ... }
-pub async fn delete_agent(State(state), Path(id)) -> StatusCode { ... }
-```
-
-**Routes in `lib.rs`:**
-```rust
-.route("/api/agents", get(agents::list_agents).post(agents::create_agent))
-.route("/api/agents/{id}", get(agents::get_agent).put(agents::update_agent).delete(agents::delete_agent))
-```
-
-**Register module in `lib.rs`:** `pub mod agents;`
-
-### Frontend
-
-**API additions to `api.ts`:**
 ```typescript
-export interface Agent {
-    id: string;
-    name: string;
-    role: string;
-    instructions: string;
-    default_model: { provider: string; name: string };
-    allowed_tools: string[];
-    capabilities: string[];
-    budget_limit: number | null;
-    metadata: Record<string, unknown>;
-}
-
-export async function getAgents(engine?: string): Promise<Agent[]> {
-    const q = engine ? `?engine=${engine}` : '';
-    return request(`/api/agents${q}`);
-}
-export async function createAgent(agent: Partial<Agent>): Promise<Agent> {
-    return request('/api/agents', { method: 'POST', body: JSON.stringify(agent) });
-}
-export async function updateAgent(id: string, agent: Partial<Agent>): Promise<Agent> {
-    return request(`/api/agents/${id}`, { method: 'PUT', body: JSON.stringify(agent) });
-}
-export async function deleteAgent(id: string): Promise<void> {
-    return request(`/api/agents/${id}`, { method: 'DELETE' });
-}
+// Already implemented:
+getAgents(engine?), createAgent(body), deleteAgent(id)
+getSkills(engine?), createSkill(body), deleteSkill(id)
+getRules(engine?), createRule(body), updateRule(id, body), deleteRule(id)
+getDeptConfig(dept), updateDeptConfig(dept, config)
+streamDeptChat(dept, message, conversationId, onDelta, onDone, onError)
 ```
 
-**UI in department pages (Agents tab):** Replace hardcoded array with:
-- `onMount` → `getAgents(dept)` → populate list
-- "New Agent" button → opens Modal with form (name, role, instructions, model select, tool toggles)
-- Each agent card: edit button → Modal, delete button → confirm + `deleteAgent()`
-- Cards show: name, model badge, role description, tool count
+### What's Wired vs. Not Wired
 
-### Wire into Chat
+| Feature | Backend | Frontend API | Frontend UI | Chat Integration |
+|---------|---------|-------------|-------------|-----------------|
+| 5 Departments | DONE | DONE | DONE (DepartmentChat) | DONE |
+| Agents CRUD | DONE | DONE | **HARDCODED** arrays | **NOT WIRED** |
+| Skills CRUD | DONE | DONE | **HARDCODED** arrays | N/A (click-to-fill) |
+| Rules CRUD | DONE | DONE | **NO UI** | **DONE** (load_rules_for_engine injects into prompt) |
+| MCP Servers | — | — | — | — |
+| Hooks | — | — | — | — |
+| Agent @mention | — | — | — | — |
+| Teams | — | — | — | — |
+| Workflows | — | — | — | — |
+| Capability Engine | — | — | — | — |
 
-In `department_chat_handler()`, before building prompt:
+---
+
+## The Sprint (7 Steps)
+
+### Step 1: Connect UI to Live CRUD (Agents, Skills, Rules)
+
+**What:** Replace hardcoded `prebuiltAgents`/`prebuiltSkills` arrays in department pages with real API calls. Add Rules tab.
+
+**Why first:** Backend + API client are done. The only gap is the UI reading/writing real data. Everything else builds on this.
+
+**Changes per department page (`code/+page.svelte` and 4 others):**
+
+```svelte
+<!-- Replace hardcoded arrays with API-backed state -->
+<script lang="ts">
+    import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule } from '$lib/api';
+    import type { Agent, Skill, Rule } from '$lib/api';
+
+    let agents: Agent[] = $state([]);
+    let skills: Skill[] = $state([]);
+    let rules: Rule[] = $state([]);
+
+    // Load on mount + when session changes
+    async function loadResources() {
+        [agents, skills, rules] = await Promise.all([
+            getAgents(dept), getSkills(dept), getRules(dept)
+        ]);
+    }
+</script>
+```
+
+**Agents tab:** Replace `{#each prebuiltAgents}` with `{#each agents}`. Add:
+- "New Agent" button → Modal form (name, role, instructions, model, tools)
+- Delete button per agent card
+- Each agent card shows: name, model badge, role, instruction preview
+
+**Skills tab:** Same — replace hardcoded, add create/delete.
+
+**Rules tab:** New tab (add to tab list). Shows:
+- List of rules with Toggle for enabled/disabled → calls `updateRule()`
+- "Add Rule" button → Modal (name, content textarea)
+- Delete per rule
+
+**Shared component:** Create `$lib/components/crud/ResourceModal.svelte` — generic create/edit modal reused across agents, skills, rules. Takes schema as prop, renders form fields.
+
+**Seed data:** In `main.rs` on first boot — check if ObjectStore("agents") is empty, if so insert 5 default agents + 5 skills + 3 rules. This replaces the hardcoded arrays as initial data.
+
+**Effort:** ~4 hours.
+
+---
+
+### Step 2: Wire Agent @mention into Department Chat
+
+**What:** When user types `@agent-name` in a message, load that agent from ObjectStore and override the department config for that call.
+
+**Where:** `department.rs` → `department_chat_handler()`, before building the prompt (around line 230).
+
+**Pattern:** Follows existing code exactly — same `state.storage.objects().list()` + `serde_json::from_value()` pattern used in `load_rules_for_engine()`.
+
 ```rust
-// If message contains @agent-name, load that agent and override config
-if let Some(agent_name) = extract_agent_mention(&body.message) {
-    let agents = state.storage.objects().list("agents", ObjectFilter::default()).await?;
-    if let Some(agent_val) = agents.into_iter()
-        .filter_map(|v| serde_json::from_value::<AgentProfile>(v).ok())
-        .find(|a| a.name == agent_name) {
-        config.system_prompt = agent_val.instructions.clone();
-        config.model = agent_val.default_model.name.clone();
-        if !agent_val.allowed_tools.is_empty() {
-            config.allowed_tools = agent_val.allowed_tools.clone();
+// After loading rules (line 232), before building prompt:
+let config = if let Some(agent_name) = extract_agent_mention(&body.message) {
+    let agents: Vec<AgentProfile> = state.storage.objects()
+        .list("agents", ObjectFilter::default()).await
+        .unwrap_or_default().into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect();
+    if let Some(agent) = agents.iter().find(|a| a.name == agent_name) {
+        let mut c = config;
+        c.system_prompt = agent.instructions.clone();
+        c.model = agent.default_model.model.clone();
+        if !agent.allowed_tools.is_empty() {
+            c.allowed_tools = agent.allowed_tools.clone();
         }
-    }
+        if let Some(budget) = agent.budget_limit {
+            c.max_budget_usd = Some(budget);
+        }
+        c
+    } else { config }
+} else { config };
+
+fn extract_agent_mention(msg: &str) -> Option<&str> {
+    msg.split_whitespace()
+        .find(|w| w.starts_with('@'))
+        .map(|w| w.trim_start_matches('@'))
 }
 ```
 
-**Seed data:** Insert 5 defaults on first boot via `rusvel-app/src/main.rs` (check if `list("agents", ...)` is empty, if so insert seed agents).
+**Frontend hint:** In DepartmentChat input placeholder, show available agents: "Ask Code Department... (@rust-engine for specialized help)"
 
-**Effort:** 3 hours.
+**Effort:** ~1 hour.
 
 ---
 
-## Step 4: Skills CRUD
+### Step 3: MCP Servers + Hooks CRUD
 
-### Backend
+**What:** Two new entity types following the exact same CRUD pattern as agents/skills/rules.
 
-**Domain type — new in `domain.rs`:**
+**Backend — new files:**
+
+`crates/rusvel-api/src/mcp_servers.rs` — follows `agents.rs` pattern exactly:
 ```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SkillDefinition {
-    pub id: SkillId,
-    pub name: String,
-    pub description: String,
-    pub prompt_template: String,
-    pub metadata: serde_json::Value,  // {"engine": "code"} for scoping
-}
-```
+const STORE_KIND: &str = "mcp_servers";
 
-**Storage:** `ObjectStore("skills", skill.id, json)`
-
-**New file: `crates/rusvel-api/src/skills.rs`** — same CRUD pattern as agents (list, create, get, update, delete). Filter by `metadata.engine`.
-
-**Routes:**
-```rust
-.route("/api/skills", get(skills::list_skills).post(skills::create_skills))
-.route("/api/skills/{id}", get(skills::get_skill).put(skills::update_skill).delete(skills::delete_skill))
-```
-
-### Frontend
-
-**API additions to `api.ts`:**
-```typescript
-export interface Skill { id: string; name: string; description: string; prompt_template: string; metadata: Record<string, unknown>; }
-export async function getSkills(engine?: string): Promise<Skill[]> { ... }
-export async function createSkill(skill: Partial<Skill>): Promise<Skill> { ... }
-export async function updateSkill(id: string, skill: Partial<Skill>): Promise<Skill> { ... }
-export async function deleteSkill(id: string): Promise<void> { ... }
-```
-
-**UI in Skills tab:** Replace hardcoded array. Click skill → fills chat input with `prompt_template`. CRUD via Modal forms.
-
-**Effort:** 2 hours.
-
----
-
-## Step 5: Rules CRUD
-
-### Backend
-
-**Domain type — new in `domain.rs`:**
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RuleDefinition {
-    pub id: RuleId,
-    pub name: String,
-    pub content: String,          // the rule text
-    pub enabled: bool,
-    pub metadata: serde_json::Value, // {"engine": "code"} or absent for global
-}
-```
-
-**Storage:** `ObjectStore("rules", rule.id, json)`
-
-**New file: `crates/rusvel-api/src/rules.rs`** — same CRUD pattern.
-
-**Routes:**
-```rust
-.route("/api/rules", get(rules::list_rules).post(rules::create_rule))
-.route("/api/rules/{id}", get(rules::get_rule).put(rules::update_rule).delete(rules::delete_rule))
-```
-
-### Wire into Chat
-
-In `department_chat_handler()`, before building prompt — load enabled rules and append to system prompt:
-
-```rust
-let rules: Vec<RuleDefinition> = state.storage.objects()
-    .list("rules", ObjectFilter::default()).await?
-    .into_iter().filter_map(|v| serde_json::from_value(v).ok())
-    .filter(|r: &RuleDefinition| r.enabled)
-    .filter(|r| {
-        let engine_match = r.metadata.get("engine").and_then(|e| e.as_str());
-        engine_match == Some(engine) || engine_match.is_none() // match department or global
-    })
-    .collect();
-
-if !rules.is_empty() {
-    let rules_text = rules.iter()
-        .map(|r| format!("[{}]: {}", r.name, r.content))
-        .collect::<Vec<_>>().join("\n");
-    config.system_prompt = format!("{}\n\nActive rules:\n{}", config.system_prompt, rules_text);
-}
-```
-
-### Frontend
-
-**UI in new "Rules" tab** (add to department page tab list): List rules with enable/disable Toggle. CRUD via Modal.
-
-**Seed data:** 3 default rules:
-- "Engine isolation" (engine: code) — "Engines depend only on rusvel-core traits. Never import adapter crates."
-- "Design system" (engine: code) — "Use semantic tokens (--r-*). Never use raw Tailwind color classes."
-- "Event emission" (global) — "Emit events via EventPort after every state change."
-
-**Effort:** 2 hours.
-
----
-
-## Step 6: MCP Server Registry
-
-### Backend
-
-**Domain type — new in `domain.rs`:**
-```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerDef {
-    pub id: McpServerId,
+    pub id: String,
     pub name: String,
     pub description: String,
-    pub transport: String,       // "stdio" | "http" | "sse"
-    pub command: Option<String>,
-    pub url: Option<String>,
+    pub transport: String,       // "stdio" | "http"
+    pub command: Option<String>, // for stdio
+    pub url: Option<String>,     // for http
     pub args: Vec<String>,
     pub env: HashMap<String, String>,
     pub enabled: bool,
-    pub metadata: serde_json::Value, // {"engine": "code"} for scoping
+    pub metadata: serde_json::Value,
 }
+
+// list_mcp_servers, create_mcp_server, get_mcp_server, update_mcp_server, delete_mcp_server
+// Same handler pattern as agents.rs — State<Arc<AppState>>, ObjectStore operations
 ```
 
-**Storage:** `ObjectStore("mcp_servers", id, json)`
-
-**New file: `crates/rusvel-api/src/mcp_servers.rs`** — same CRUD pattern.
-
-### Wire into Chat
-
-In `DepartmentConfig::to_claude_args()` or in `department_chat_handler()`:
+`crates/rusvel-api/src/hooks.rs` — same pattern:
 ```rust
-let servers = load_mcp_servers_for_engine(engine, &state.storage).await;
-if !servers.is_empty() {
-    let mcp_config = build_mcp_json(&servers); // {"mcpServers": {...}}
-    args.extend(["--mcp-config".into(), mcp_config]);
-}
-```
+const STORE_KIND: &str = "hooks";
 
-### Frontend
-
-**UI in Settings page** (new "MCP Servers" section) or per-department:
-- List servers with status badge + enable/disable Toggle
-- "Add Server" button → Modal (name, transport type, command/url, env key-value pairs)
-- Presets: one-click buttons for popular servers (Context7, Playwright, GitHub)
-
-**Effort:** 3 hours.
-
----
-
-## Step 7: Hooks Registry
-
-### Backend
-
-**Domain type — new in `domain.rs`:**
-```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookDefinition {
-    pub id: HookId,
+    pub id: String,
     pub name: String,
-    pub event: String,           // "chat.completed", "chat.started", "error"
+    pub event: String,           // "chat.completed" | "chat.started"
     pub hook_type: String,       // "command" | "http"
     pub command: Option<String>,
     pub url: Option<String>,
     pub enabled: bool,
     pub metadata: serde_json::Value,
 }
+
+// Same CRUD handlers
+pub async fn load_hooks_for_event(state: &Arc<AppState>, event: &str) -> Vec<HookDefinition>
 ```
 
-**Storage:** `ObjectStore("hooks", id, json)`
+**Wire into chat — `department.rs`:**
 
-**New file: `crates/rusvel-api/src/hooks.rs`** — same CRUD pattern.
-
-### Wire into Chat
-
-In `department_chat_handler()`, after the `StreamEvent::Done` branch stores the assistant message:
+After `StreamEvent::Done` stores the assistant message (around line 274):
 ```rust
-// Fire hooks
-let hooks: Vec<HookDefinition> = state.storage.objects()
-    .list("hooks", ObjectFilter::default()).await
-    .unwrap_or_default().into_iter()
-    .filter_map(|v| serde_json::from_value(v).ok())
-    .filter(|h: &HookDefinition| h.enabled && h.event == "chat.completed")
-    .collect();
-
+// Fire hooks for chat.completed
+let hooks = crate::hooks::load_hooks_for_event(&state_clone, "chat.completed").await;
 for hook in hooks {
     match hook.hook_type.as_str() {
         "command" => if let Some(cmd) = &hook.command {
-            tokio::spawn(async move { let _ = tokio::process::Command::new("sh").arg("-c").arg(cmd).output().await; });
+            let cmd = cmd.clone();
+            tokio::spawn(async move {
+                let _ = tokio::process::Command::new("sh").arg("-c").arg(&cmd).output().await;
+            });
         },
         "http" => if let Some(url) = &hook.url {
-            let client = reqwest::Client::new();
-            tokio::spawn(async move { let _ = client.post(url).json(&payload).send().await; });
+            let url = url.clone();
+            let payload = serde_json::json!({"engine": engine_str, "event": "chat.completed"});
+            tokio::spawn(async move {
+                let _ = reqwest::Client::new().post(&url).json(&payload).send().await;
+            });
         },
         _ => {}
     }
 }
 ```
 
-### Frontend
+**Wire MCP servers into chat — `department.rs`:**
 
-**UI in Settings page** (new "Hooks" section):
-- List hooks grouped by event type
-- "Add Hook" → Modal (name, event dropdown, type, command/url)
-- Enable/disable Toggle
-- Last fired timestamp (from metadata)
-
-**Effort:** 3 hours.
-
----
-
-## Step 8: Wire MCP `--mcp` Flag
-
-**In `crates/rusvel-app/src/main.rs`:**
-
-Add to Clap struct:
+In `department_chat_handler()`, after building `cli_args`:
 ```rust
-#[arg(long, help = "Run as MCP server (stdio JSON-RPC)")]
-mcp: bool,
-```
-
-Add dispatch before CLI/API branching:
-```rust
-if cli.mcp {
-    return rusvel_mcp::run_stdio(/* pass needed ports */).await;
+let mcp_servers = crate::mcp_servers::load_mcp_for_engine(&state, engine).await;
+if !mcp_servers.is_empty() {
+    let mcp_json = build_mcp_config_json(&mcp_servers);
+    cli_args.extend(["--mcp-config".into(), mcp_json]);
 }
 ```
 
-**Effort:** 15 minutes.
+**Routes in `lib.rs`:**
+```rust
+.route("/api/mcp-servers", get(mcp_servers::list).post(mcp_servers::create))
+.route("/api/mcp-servers/{id}", get(mcp_servers::get_one).put(mcp_servers::update).delete(mcp_servers::delete))
+.route("/api/hooks", get(hooks::list).post(hooks::create))
+.route("/api/hooks/{id}", get(hooks::get_one).put(hooks::update).delete(hooks::delete))
+```
+
+**Frontend api.ts additions:**
+```typescript
+export interface McpServer { id: string; name: string; description: string; transport: string; command?: string; url?: string; args: string[]; env: Record<string,string>; enabled: boolean; metadata: Record<string,unknown>; }
+export interface Hook { id: string; name: string; event: string; hook_type: string; command?: string; url?: string; enabled: boolean; metadata: Record<string,unknown>; }
+// Same CRUD pattern: get*, create*, update*, delete*
+```
+
+**Frontend UI:** Add "MCP" and "Hooks" tabs to Settings page. Same card + Toggle + Modal pattern.
+
+**Effort:** ~4 hours.
 
 ---
 
-## Step 9: Multi-Agent Teams
+### Step 4: Capability Engine
 
-### Backend
+**What:** `POST /api/capability/build` — takes natural language, outputs structured JSON that gets installed into ObjectStore.
 
-**Domain type — new in `domain.rs`:**
+**New file: `crates/rusvel-api/src/capability.rs`**
+
+**Pattern:** Follows `department_chat_handler()` exactly — same streaming SSE, same `ClaudeCliStreamer`, same `StreamEvent` handling. The difference is:
+1. System prompt knows RUSVEL's entity schemas
+2. Claude gets `--allowedTools WebSearch,WebFetch,Bash` to search online registries
+3. On `StreamEvent::Done`, parse the JSON output and insert entities into ObjectStore
+
 ```rust
+pub async fn build_capability(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<CapabilityRequest>,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
+    let prompt = format!("{}\n\nUser request: {}", CAPABILITY_SYSTEM_PROMPT, body.description);
+
+    let streamer = ClaudeCliStreamer::new();
+    let args = vec![
+        "--model".into(), "opus".into(),
+        "--effort".into(), "max".into(),
+        "--allowedTools".into(), "WebSearch WebFetch Bash".into(),
+        "--no-session-persistence".into(),
+    ];
+    let rx = streamer.stream_with_args(&prompt, &args);
+
+    // Same ReceiverStream pattern as department_chat_handler
+    let storage = state.storage.clone();
+    let engine = body.engine.clone();
+
+    let stream = ReceiverStream::new(rx).map(move |event| {
+        match &event {
+            StreamEvent::Delta { text } => /* same delta forwarding */,
+            StreamEvent::Done { full_text, .. } => {
+                // Parse JSON bundle, install into ObjectStore
+                let storage = storage.clone();
+                let engine = engine.clone();
+                let text = full_text.clone();
+                tokio::spawn(async move {
+                    install_capability_bundle(&text, &engine, &storage).await;
+                });
+                /* same done event */
+            },
+            StreamEvent::Error { message } => /* same error forwarding */,
+        }
+    });
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+```
+
+**`install_capability_bundle`** — parses JSON, calls `storage.objects().put("agents", ...)` for each entity type. Same ObjectStore pattern used everywhere.
+
+**The system prompt** defines the JSON schema matching our exact types:
+- `Agent` matches `AgentProfile` fields
+- `Skill` matches `SkillDefinition` fields
+- `Rule` matches `RuleDefinition` fields
+- `McpServer` matches `McpServerDef` fields
+- `Hook` matches `HookDefinition` fields
+
+**Route:**
+```rust
+.route("/api/capability/build", post(capability::build_capability))
+```
+
+**Frontend integration — two options:**
+
+Option A: Dedicated "Build" button in each department's Actions tab:
+```svelte
+<button onclick={() => sendQuickAction('!capability: ' + capInput)}>
+    Build Capability
+</button>
+```
+
+Option B: Detect `!capability:` prefix in `department_chat_handler`:
+```rust
+if body.message.trim_start().starts_with("!capability:") {
+    let desc = body.message.trim_start_matches("!capability:").trim();
+    return capability::build_capability(state, CapabilityRequest { description: desc.into(), engine: Some(engine.into()) }).await;
+}
+```
+
+Both options work — Option B is simpler (no new UI), Option A is more discoverable.
+
+**After installation:** Emit an event so the department's Events tab shows what was installed. The frontend reloads agents/skills/rules tabs to reflect new data.
+
+**Effort:** ~5 hours.
+
+---
+
+### Step 5: Agent Teams + Workflow Execution
+
+**What:** Compose multiple agents into teams. Execute workflows with dependency-ordered steps.
+
+**New files:**
+
+`crates/rusvel-api/src/teams.rs`:
+```rust
+const STORE_KIND: &str = "agent_teams";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentTeam {
-    pub id: AgentTeamId,
+    pub id: String,
     pub name: String,
     pub description: String,
     pub agent_ids: Vec<String>,
-    pub strategy: String,         // "parallel" | "sequential" | "best-of-n"
+    pub strategy: String,  // "parallel" | "sequential"
     pub metadata: serde_json::Value,
 }
-```
 
-**Storage:** `ObjectStore("agent_teams", id, json)`
-
-**New file: `crates/rusvel-api/src/teams.rs`:**
-- CRUD endpoints (same pattern)
-- `POST /api/agent-teams/{id}/run` — executes the team:
-  - Loads agent definitions by `agent_ids`
-  - Spawns `claude -p` per agent with its config
-  - Collects results
-  - Returns combined output
-
-```rust
-pub async fn run_team(State(state), Path(id), Json(body): Json<TeamRunRequest>) -> Result<Json<Vec<AgentResult>>> {
-    let team: AgentTeam = load_from_store("agent_teams", &id, &state.storage).await?;
+// CRUD + run endpoint
+pub async fn run_team(State(state), Path(id), Json(body): Json<RunRequest>)
+    -> Result<Sse<...>, (StatusCode, String)> {
+    let team = load_from_store("agent_teams", &id, &state.storage).await?;
     let agents = load_agents_by_ids(&team.agent_ids, &state.storage).await;
 
     match team.strategy.as_str() {
         "parallel" => {
-            let handles: Vec<_> = agents.iter().map(|agent| {
-                let streamer = ClaudeCliStreamer::new();
-                let prompt = format!("{}\n\n{}", agent.instructions, body.task);
-                let args = build_agent_cli_args(agent);
-                tokio::spawn(async move { collect_full_response(streamer, &prompt, &args).await })
-            }).collect();
-            let results = futures::future::join_all(handles).await;
-            Ok(Json(results.into_iter().filter_map(|r| r.ok()).collect()))
+            // Spawn N claude -p processes, each with agent's config
+            // Collect results via channels, stream progress to client
         }
-        "sequential" => { /* chain outputs */ }
-        _ => Err(...)
+        "sequential" => {
+            // Run one at a time, chain outputs
+        }
     }
 }
 ```
 
-### Frontend
-
-- Team CRUD in a "Teams" tab or dedicated page
-- "Run Team" button → shows parallel progress (spinner per agent)
-- Results view: cards per agent with output
-
-**Effort:** 5 hours.
-
----
-
-## Step 10: Workflow Templates
-
-### Backend
-
-**Domain type — new in `domain.rs`:**
+`crates/rusvel-api/src/workflows.rs`:
 ```rust
+const STORE_KIND: &str = "workflows";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowTemplate {
-    pub id: WorkflowId,
+    pub id: String,
     pub name: String,
     pub description: String,
     pub steps: Vec<WorkflowStep>,
@@ -525,243 +396,110 @@ pub struct WorkflowStep {
     pub depends_on: Vec<String>,
     pub approval_required: bool,
 }
+
+// CRUD + run/status endpoints
 ```
 
-**Storage:** `ObjectStore("workflows", id, json)`
+**Frontend:** Teams and Workflows tabs in Settings or dedicated page.
 
-**Execution:** `POST /api/workflows/{id}/run` → resolves dependency graph → runs steps (using agent config if specified) → stores results as events → pauses at approval gates.
-
-### Frontend
-
-- Workflow template CRUD
-- Pipeline visualization (steps as cards, dependencies as arrows)
-- Run button → live progress
-- Approval gates show as pending items
-
-**Effort:** 4 hours.
+**Effort:** ~6 hours.
 
 ---
 
-## Step 11: Cost & Analytics
+### Step 6: Analytics + Cost Tracking
 
-### Backend
+**What:** Record usage after every chat completion. Expose aggregates via API.
 
-**Collection point:** `department_chat_handler()` already receives `StreamEvent::Done { cost_usd }`. Extend to store in ObjectStore:
-
+**Collection point in `department.rs`** — after `StreamEvent::Done`:
 ```rust
-// After storing assistant message, also store usage record:
 let usage = serde_json::json!({
-    "engine": engine,
+    "engine": engine_str,
     "model": config.model,
     "cost_usd": cost,
     "response_length": msg.content.len(),
-    "conversation_id": conv_id,
     "timestamp": Utc::now().to_rfc3339(),
 });
 let _ = storage.objects().put("usage", &uuid::Uuid::now_v7().to_string(), usage).await;
 ```
 
-**API:**
+**New file: `crates/rusvel-api/src/analytics.rs`:**
 ```rust
-GET /api/analytics/usage?range=7d    → aggregate by day
-GET /api/analytics/cost?group=engine → breakdown by department
-```
+pub async fn get_usage(State(state), Query(params)) -> Result<Json<Vec<UsageSummary>>> {
+    let all = state.storage.objects().list("usage", ObjectFilter::default()).await?;
+    // Aggregate by day/engine/model
+}
 
-### Frontend
-
-Dashboard widgets or Settings section:
-- Cost by department (simple table or bar)
-- Usage over time (list of daily totals)
-- Total spend
-
-**Effort:** 3 hours.
-
----
-
-## Step 12: Preset Library
-
-### Backend
-
-**Ship preset definitions in code** (a `const` in `rusvel-api/src/presets.rs`):
-```rust
-pub fn get_presets() -> Vec<PresetBundle> { ... }
-
-pub struct PresetBundle {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub agents: Vec<AgentProfile>,
-    pub skills: Vec<SkillDefinition>,
-    pub rules: Vec<RuleDefinition>,
+pub async fn get_cost_breakdown(State(state)) -> Result<Json<CostBreakdown>> {
+    // Sum cost_usd grouped by engine
 }
 ```
 
-**API:**
-```rust
-GET  /api/presets           → list available presets
-POST /api/presets/{id}/install   → insert all items into ObjectStore
-POST /api/presets/{id}/uninstall → remove items by metadata.preset_id
-```
+**Frontend:** Dashboard widgets showing spend per department + total.
 
-### Frontend
-
-Settings page "Presets" section:
-- Grid of preset cards (name, description, what's included)
-- Install/Uninstall button per preset
-- Installed badge
-
-**Effort:** 2 hours.
+**Effort:** ~3 hours.
 
 ---
 
-## Step 13: Job Queue Worker + Approval Flow
+### Step 7: Wire MCP `--mcp` Flag
 
-### Backend
-
-**In `main.rs`:** spawn worker loop:
+**In `main.rs`** — add Clap arg + dispatch:
 ```rust
-let job_port = job_port.clone();
-let engines = engines.clone();
-tokio::spawn(async move {
-    loop {
-        if let Ok(Some(job)) = job_port.dequeue().await {
-            match job.kind {
-                JobKind::ContentPublish => {
-                    if job.status == JobStatus::PendingApproval { continue; }
-                    // execute via content-engine
-                }
-                // ... other kinds
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(5)).await;
-    }
-});
+#[arg(long)]
+mcp: bool,
+
+// In main():
+if cli.mcp {
+    let mcp = Arc::new(RusvelMcp::new(forge.clone(), sessions.clone()));
+    return rusvel_mcp::run_stdio(mcp).await.map_err(|e| e.into());
+}
 ```
 
-**Approval API:**
-```rust
-POST /api/jobs/{id}/approve → set status to Ready, worker picks it up
-POST /api/jobs/{id}/reject  → set status to Cancelled
-GET  /api/jobs?status=pending_approval → list items needing approval
-```
-
-### Frontend
-
-- Approval badge in sidebar (count of pending items)
-- Approval page or modal: list pending jobs with context, approve/reject buttons
-
-**Effort:** 4 hours.
+**Effort:** ~15 minutes.
 
 ---
 
 ## Dependency Graph
 
 ```
-Step 1: Department backends ──→ Step 2: Department pages
-                                   ├──→ Step 3: Agents CRUD ──→ Step 9: Agent Teams
-                                   ├──→ Step 4: Skills CRUD  ──→ Step 10: Workflows
-                                   ├──→ Step 5: Rules CRUD
-                                   └──→ Step 6: MCP servers
-Step 7: Hooks (independent after Step 1)
-Step 8: MCP flag (independent)
-Step 11: Analytics (after Step 1 — needs chat usage data)
-Step 12: Presets (after Steps 3, 4, 5)
-Step 13: Job queue + approval (after Step 10)
-```
-
----
-
-## Module Structure (what gets created)
-
-### Backend — new files in `crates/rusvel-api/src/`:
-```
-agents.rs       → CRUD for AgentProfile (already in domain.rs)
-skills.rs       → CRUD for SkillDefinition (new domain type)
-rules.rs        → CRUD for RuleDefinition (new domain type)
-mcp_servers.rs  → CRUD for McpServerDef (new domain type)
-hooks.rs        → CRUD for HookDefinition (new domain type)
-teams.rs        → CRUD + run for AgentTeam (new domain type)
-workflows.rs    → CRUD + run for WorkflowTemplate (new domain type)
-analytics.rs    → Aggregation queries on ObjectStore("usage")
-presets.rs      → Preset definitions + install/uninstall
-```
-
-Each file follows the same pattern:
-1. Deserialize from ObjectStore JSON
-2. Filter by `metadata.engine` for department scoping
-3. Axum handlers with `State<Arc<AppState>>` extraction
-4. Return `Result<Json<T>, (StatusCode, String)>`
-
-### Domain — additions to `crates/rusvel-core/src/domain.rs`:
-```rust
-// Already exists:
-AgentProfile, AgentProfileId, Capability
-
-// New types:
-SkillDefinition, SkillId
-RuleDefinition, RuleId
-McpServerDef, McpServerId
-HookDefinition, HookId
-AgentTeam, AgentTeamId
-WorkflowTemplate, WorkflowStep, WorkflowId
-```
-
-All follow the existing pattern: derive `Debug, Clone, Serialize, Deserialize`, include `metadata: serde_json::Value`.
-
-### Frontend — additions to `frontend/src/lib/api.ts`:
-```typescript
-// Types: Agent, Skill, Rule, McpServer, Hook, AgentTeam, Workflow
-// CRUD functions: getX, createX, updateX, deleteX for each
-// Run functions: runTeam, runWorkflow
-// Analytics: getUsage, getCostBreakdown
-```
-
-### Frontend — new or modified pages:
-```
-routes/content/+page.svelte    → clone Code page pattern
-routes/harvest/+page.svelte    → clone Code page pattern
-routes/gtm/+page.svelte        → clone Code page pattern
-routes/forge/+page.svelte      → extend with department chat
-routes/settings/+page.svelte   → add MCP, Hooks, Presets, Analytics sections
+Step 1: Connect UI to live CRUD ──→ Step 2: Agent @mention
+                                ──→ Step 3: MCP servers + Hooks
+                                         └──→ Step 4: Capability Engine
+                                                   └──→ Step 5: Teams + Workflows
+Step 6: Analytics (independent, after Step 1)
+Step 7: MCP flag (independent)
 ```
 
 ---
 
 ## Effort Summary
 
-| Step | Description | Effort | Depends On |
-|------|-------------|--------|------------|
-| 1 | Wire 4 department backends | 1h | — |
-| 2 | Build 4 department pages | 2h | 1 |
-| 3 | Agents CRUD + wire into chat | 3h | 2 |
-| 4 | Skills CRUD | 2h | 2 |
-| 5 | Rules CRUD + wire into chat | 2h | 2 |
-| 6 | MCP server registry + wire into chat | 3h | 2 |
-| 7 | Hooks registry + wire into chat | 3h | 1 |
-| 8 | Wire MCP `--mcp` flag | 15m | — |
-| 9 | Multi-agent teams | 5h | 3 |
-| 10 | Workflow templates | 4h | 4 |
-| 11 | Cost & analytics | 3h | 1 |
-| 12 | Preset library | 2h | 3, 4, 5 |
-| 13 | Job queue + approval flow | 4h | 10 |
-| **Total** | | **~34 hours** |
+| Step | Description | Effort |
+|------|-------------|--------|
+| 1 | Connect UI to live CRUD (agents, skills, rules) | 4h |
+| 2 | Wire agent @mention into chat | 1h |
+| 3 | MCP servers + hooks CRUD + wire into chat | 4h |
+| 4 | Capability Engine (AI builds capabilities on demand) | 5h |
+| 5 | Agent teams + workflow execution | 6h |
+| 6 | Analytics + cost tracking | 3h |
+| 7 | Wire MCP `--mcp` flag | 15m |
+| **Total** | | **~23 hours** |
 
-At 3-4 hours/day → **9-11 days**.
+At 3-4 hours/day → **6-8 days**.
 
 ---
 
 ## Definition of Done
 
-- [ ] All 5 departments: working chat + config + events
-- [ ] Agents: CRUD in DB, @mention overrides chat config
-- [ ] Skills: CRUD in DB, click-to-fill chat input
-- [ ] Rules: CRUD in DB, auto-inject into system prompt
-- [ ] MCP servers: CRUD in DB, passed to `claude -p --mcp-config`
-- [ ] Hooks: CRUD in DB, fire on chat.completed events
-- [ ] Agent teams: CRUD + parallel/sequential execution
-- [ ] Workflows: CRUD + dependency-ordered execution
-- [ ] Analytics: cost tracking per department/model
-- [ ] Presets: one-click install of curated bundles
-- [ ] MCP `--mcp` flag dispatches server
-- [ ] Job queue worker processes jobs with approval gates
-- [ ] All tests pass, clean build
+- [ ] Agents tab shows real data from API, supports create/delete
+- [ ] Skills tab shows real data from API, click-to-fill works
+- [ ] Rules tab exists with enable/disable toggle, create/delete
+- [ ] @agent-name in chat overrides department config
+- [ ] MCP servers: CRUD + injected as `--mcp-config` into claude calls
+- [ ] Hooks: CRUD + fire on chat.completed
+- [ ] `!capability:` prefix triggers AI-driven capability building
+- [ ] Installed capabilities appear immediately in relevant tabs
+- [ ] Agent teams: create + parallel/sequential execution
+- [ ] Workflows: create + dependency-ordered execution
+- [ ] Usage recorded after every chat, aggregates available via API
+- [ ] `--mcp` flag dispatches MCP server
+- [ ] All tests pass, `cargo build` + `npm run check` clean
