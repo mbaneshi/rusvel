@@ -23,6 +23,7 @@ pub mod routes;
 pub mod rules;
 pub mod skills;
 pub mod system;
+pub mod visual_report;
 pub mod workflows;
 
 use std::net::SocketAddr;
@@ -204,6 +205,19 @@ pub fn build_router_with_frontend(
         .route("/api/system/build", post(system::run_build))
         .route("/api/system/status", get(system::get_status))
         .route("/api/system/fix", post(system::self_fix))
+        // Visual regression testing
+        .route(
+            "/api/system/visual-report",
+            get(visual_report::get_reports).post(visual_report::store_report),
+        )
+        .route(
+            "/api/system/visual-report/self-correct",
+            post(visual_report::self_correct),
+        )
+        .route(
+            "/api/system/visual-test",
+            post(visual_report::run_visual_tests),
+        )
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

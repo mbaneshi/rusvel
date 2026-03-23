@@ -140,6 +140,24 @@ fn tool_definitions() -> serde_json::Value {
                 },
                 "required": ["session_id", "title", "description", "timeframe"]
             }
+        },
+        {
+            "name": "visual_inspect",
+            "description": "Run visual regression tests on the frontend and return results. Captures screenshots of all routes and compares against baselines.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "routes": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Specific routes to test (e.g. [\"/\", \"/dept/forge\"]). Empty array = all routes."
+                    },
+                    "update_baselines": {
+                        "type": "boolean",
+                        "description": "If true, update baseline screenshots instead of comparing"
+                    }
+                }
+            }
         }
     ])
 }
@@ -234,6 +252,43 @@ impl RusvelMcp {
                     .map_err(|e| McpError::InvalidParams(e.to_string()))?;
                 let goal = self.engine.set_goal(&sid, title, desc, timeframe).await?;
                 serde_json::to_value(&goal)?
+            }
+            "visual_inspect" => {
+                let update = args["update_baselines"].as_bool().unwrap_or(false);
+                let mut cmd_args = vec!["playwright", "test", "--project=visual", "--reporter=json"];
+                if update {
+                    cmd_args.push("--update-snapshots");
+                }
+
+                // Find project dir
+                let project_dir = if std::path::Path::new("frontend").exists() {
+                    "frontend".to_string()
+                } else if std::path::Path::new("/Users/bm/all-in-one-rusvel/frontend").exists() {
+                    "/Users/bm/all-in-one-rusvel/frontend".to_string()
+                } else {
+                    return Err(McpError::InvalidParams("Cannot find frontend directory".into()));
+                };
+
+                match tokio::process::Command::new("npx")
+                    .args(&cmd_args)
+                    .current_dir(&project_dir)
+                    .output()
+                    .await
+                {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        serde_json::json!({
+                            "success": output.status.success(),
+                            "stdout": stdout.chars().take(8000).collect::<String>(),
+                            "stderr": stderr.chars().take(2000).collect::<String>(),
+                        })
+                    }
+                    Err(e) => serde_json::json!({
+                        "success": false,
+                        "error": format!("Failed to run playwright: {e}"),
+                    }),
+                }
             }
             other => return Err(McpError::UnknownTool(other.into())),
         };

@@ -187,7 +187,7 @@ async fn run_command(cmd: &str, args: &[&str], cwd: &str) -> CommandResult {
     }
 }
 
-fn find_project_dir() -> String {
+pub fn find_project_dir() -> String {
     // Try common locations
     for path in &[
         std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),

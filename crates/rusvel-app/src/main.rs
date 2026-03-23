@@ -25,7 +25,7 @@ use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
 use rusvel_core::id::AgentProfileId;
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::{EmbeddingPort, SessionPort, StoragePort};
+use rusvel_core::ports::{EmbeddingPort, SessionPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_db::Database;
 use rusvel_embed::FastEmbedAdapter;
@@ -301,6 +301,367 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
         tracing::info!("Seeded {} default rules", rules.len());
     }
 
+    // ── Seed self-improvement rules ────────────────────────────────
+    let existing_rules = objects.list("rules", empty_filter.clone()).await?;
+    let si_rule_names = [
+        "Hexagonal Boundaries",
+        "Crate Size Limit (SI)",
+        "Event Sourcing",
+        "Metadata Evolution",
+        "Test Coverage",
+        "Design Tokens",
+    ];
+    let has_si_rules = existing_rules.iter().any(|r| {
+        r.get("name")
+            .and_then(|n| n.as_str())
+            .is_some_and(|n| si_rule_names.contains(&n))
+    });
+    if !has_si_rules {
+        tracing::info!("Seeding self-improvement rules...");
+        let si_rules = vec![
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Hexagonal Boundaries",
+                "content": "Engines never import adapter crates. They depend only on rusvel-core port traits. Verify Cargo.toml dependencies of every engine crate.",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Crate Size Limit (SI)",
+                "content": "Each crate must stay under 2000 lines. If a crate exceeds this limit, refactor it into smaller focused crates with single responsibility.",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Event Sourcing",
+                "content": "Every significant state change must emit an event via EventPort. Check that all create/update/delete operations in engines call events.emit().",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Metadata Evolution",
+                "content": "All domain types must carry metadata: serde_json::Value for schema evolution (ADR-007). New fields go in metadata first, then promote to typed fields when stable.",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Test Coverage",
+                "content": "Every new feature must include tests. Run cargo test after every change. Engine tests use mock ports, never real adapters.",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Design Tokens",
+                "content": "Frontend uses semantic CSS variables (--r-*) from the RUSVEL design system, not raw Tailwind colors. All colors, spacing, and typography must reference design tokens.",
+                "enabled": true,
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+        ];
+        for rule in &si_rules {
+            let id = rule["id"].as_str().unwrap();
+            objects.put("rules", id, rule.clone()).await?;
+        }
+        tracing::info!("Seeded {} self-improvement rules", si_rules.len());
+    }
+
+    // ── Seed self-improvement agents ────────────────────────────────
+    let si_agent_names = ["arch-reviewer", "si-test-writer", "refactorer", "doc-updater"];
+    let has_si_agents = existing_agents.iter().any(|a| {
+        a.get("name")
+            .and_then(|n| n.as_str())
+            .is_some_and(|n| si_agent_names.contains(&n))
+    });
+    if !has_si_agents {
+        tracing::info!("Seeding self-improvement agents...");
+        let si_agents = vec![
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "arch-reviewer".into(),
+                role: "Architecture reviewer".into(),
+                instructions: "Review code for hexagonal architecture violations. Check that engine crates never import adapter crates. Verify all domain logic flows through port traits defined in rusvel-core. Check Cargo.toml dependencies of engine crates. Flag any direct adapter usage.".into(),
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "opus".into(),
+                },
+                allowed_tools: vec!["read_file".into(), "bash".into(), "list_files".into()],
+                capabilities: vec![Capability::CodeAnalysis],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code", "category": "self-improvement"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "si-test-writer".into(),
+                role: "Test engineer for self-improvement".into(),
+                instructions: "Write tests for untested code. Follow existing test patterns in the codebase. Engine tests use mock ports (never real adapters). Include unit tests, edge cases, and integration tests. Run cargo test to verify.".into(),
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "sonnet".into(),
+                },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code", "category": "self-improvement"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "refactorer".into(),
+                role: "Code refactoring specialist".into(),
+                instructions: "Refactor code to reduce duplication, improve readability, and enforce size limits. Each crate must stay under 2000 lines. Extract shared logic into helper functions. Maintain hexagonal boundaries during refactoring.".into(),
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "sonnet".into(),
+                },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code", "category": "self-improvement"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "doc-updater".into(),
+                role: "Documentation updater".into(),
+                instructions: "Update documentation to match current code state. Read the actual crate structure, count lines, check feature status, and update docs/status/current-state.md and docs/status/gap-analysis.md to reflect reality.".into(),
+                default_model: ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: "haiku".into(),
+                },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::ContentCreation, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code", "category": "self-improvement"}),
+            },
+        ];
+        for agent in &si_agents {
+            let val = serde_json::to_value(agent)?;
+            objects.put("agents", &agent.id.to_string(), val).await?;
+        }
+        tracing::info!("Seeded {} self-improvement agents", si_agents.len());
+    }
+
+    // ── Seed self-improvement skills ────────────────────────────────
+    let si_skill_names = [
+        "/analyze-architecture",
+        "/check-crate-sizes",
+        "/enforce-rules",
+        "/self-review",
+        "/update-docs",
+    ];
+    let existing_skills_all = objects.list("skills", empty_filter.clone()).await?;
+    let has_si_skills = existing_skills_all.iter().any(|s| {
+        s.get("name")
+            .and_then(|n| n.as_str())
+            .is_some_and(|n| si_skill_names.contains(&n))
+    });
+    if !has_si_skills {
+        tracing::info!("Seeding self-improvement skills...");
+        let si_skills = vec![
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "/analyze-architecture",
+                "description": "Scan all engine crates for hexagonal architecture violations",
+                "prompt_template": "Analyze the RUSVEL codebase for architecture violations:\n\n1. Scan all engine crates (forge-engine, code-engine, harvest-engine, content-engine, gtm-engine, finance-engine, product-engine, growth-engine, distro-engine, legal-engine, support-engine, infra-engine)\n2. Check each engine's Cargo.toml — engines must ONLY depend on rusvel-core, never on adapter crates (rusvel-db, rusvel-llm, rusvel-embed, rusvel-vector, etc.)\n3. Check source code for any direct imports of adapter types\n4. Verify all domain logic flows through port traits\n5. List all violations found\n6. Suggest fixes for each violation",
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "/check-crate-sizes",
+                "description": "List all crates with line counts and flag any over 2000 lines",
+                "prompt_template": "Check all RUSVEL crate sizes:\n\n1. For each crate in crates/, count total lines of Rust code (*.rs files)\n2. List all crates sorted by size (largest first)\n3. Flag any crate exceeding 2000 lines with a warning\n4. For flagged crates, suggest how to split them into smaller focused crates\n5. Show the total line count across all crates\n\nRun: find crates/ -name '*.rs' | xargs wc -l | sort -rn",
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "/enforce-rules",
+                "description": "Load all enabled rules and verify each against the codebase",
+                "prompt_template": "Enforce all enabled RUSVEL rules:\n\n1. Load all rules from the rules store (GET /api/rules)\n2. For each enabled rule, verify compliance against the actual codebase:\n   - Hexagonal boundaries: check engine Cargo.toml deps\n   - Crate size limits: count lines per crate\n   - Event sourcing: check engines emit events on state changes\n   - Metadata evolution: verify domain types have metadata field\n   - Test coverage: check for test modules in each crate\n   - Design tokens: check frontend for raw color values vs CSS variables\n3. Report violations with file paths and line numbers\n4. Prioritize fixes by severity",
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "/self-review",
+                "description": "Run tests, check warnings, identify and implement the easiest improvement",
+                "prompt_template": "Perform a self-review of RUSVEL:\n\n1. Run `cargo test` and report results (pass/fail count, any failures)\n2. Run `cargo build 2>&1` and check for warnings\n3. Read docs/status/gap-analysis.md to understand known gaps\n4. Read docs/status/current-state.md for current status\n5. Identify the top 3 improvements that would have the most impact\n6. Implement the easiest one (the one requiring the fewest changes)\n7. Run `cargo test` again to verify the fix\n8. Report what was done",
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "/update-docs",
+                "description": "Update docs/status/current-state.md to match actual code reality",
+                "prompt_template": "Update RUSVEL documentation to match current code state:\n\n1. Read the current crate structure: ls crates/\n2. For each crate, check: lines of code, public API, test count\n3. Read the current docs/status/current-state.md\n4. Update it with accurate information:\n   - Which crates exist and their sizes\n   - Which features are implemented vs stubbed\n   - Which ports have real adapters vs placeholders\n   - Frontend status (pages, components)\n5. Also update docs/status/gap-analysis.md with current gaps\n6. Ensure all dates and version references are current",
+                "metadata": {"engine": "code", "category": "self-improvement"}
+            }),
+        ];
+        for skill in &si_skills {
+            let id = skill["id"].as_str().unwrap();
+            objects.put("skills", id, skill.clone()).await?;
+        }
+        tracing::info!("Seeded {} self-improvement skills", si_skills.len());
+    }
+
+    // ── Seed self-improvement workflow ───────────────────────────────
+    let existing_workflows = objects.list("workflows", empty_filter.clone()).await?;
+    let has_si_workflow = existing_workflows.iter().any(|w| {
+        w.get("name")
+            .and_then(|n| n.as_str())
+            .is_some_and(|n| n == "self-improve")
+    });
+    if !has_si_workflow {
+        tracing::info!("Seeding self-improvement workflow...");
+        let workflow = serde_json::json!({
+            "id": uuid::Uuid::now_v7().to_string(),
+            "name": "self-improve",
+            "description": "Automated self-improvement cycle: review architecture, write tests, refactor issues, update docs",
+            "steps": [
+                {
+                    "agent": "arch-reviewer",
+                    "prompt": "Analyze the codebase for architecture violations and code quality issues. Check all engine crates for adapter imports. Verify port trait usage. List all violations with severity.",
+                    "order": 1
+                },
+                {
+                    "agent": "si-test-writer",
+                    "prompt": "Check test coverage across all crates. Identify untested critical paths. Write tests for any untested code, following existing test patterns. Run cargo test to verify.",
+                    "order": 2
+                },
+                {
+                    "agent": "refactorer",
+                    "prompt": "Fix the top issue found by the architecture review. Refactor to maintain hexagonal boundaries, reduce duplication, and keep crates under 2000 lines. Run cargo test after changes.",
+                    "order": 3
+                },
+                {
+                    "agent": "doc-updater",
+                    "prompt": "Update docs/status/current-state.md with the current state of the codebase. Reflect any changes made by previous steps. Ensure accuracy of crate sizes, feature status, and known gaps.",
+                    "order": 4
+                }
+            ],
+            "metadata": {"category": "self-improvement", "engine": "code"}
+        });
+        let id = workflow["id"].as_str().unwrap().to_string();
+        objects.put("workflows", &id, workflow).await?;
+        tracing::info!("Seeded self-improvement workflow");
+    }
+
+    Ok(())
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Knowledge ingestion — seed RUSVEL's own docs into vector store
+// ════════════════════════════════════════════════════════════════════
+
+/// Chunk text into paragraphs (split on double newlines), filtering out
+/// very short chunks that would produce low-quality embeddings.
+fn chunk_into_paragraphs(text: &str, source: &str) -> Vec<(String, String)> {
+    text.split("\n\n")
+        .map(str::trim)
+        .filter(|p| p.len() >= 50) // skip tiny fragments
+        .enumerate()
+        .map(|(i, para)| {
+            let id = format!("{source}::chunk-{i}");
+            (id, para.to_string())
+        })
+        .collect()
+}
+
+/// Ingest RUSVEL's own documentation into the knowledge base on first run.
+///
+/// Reads key project files, chunks them into paragraphs, embeds each chunk,
+/// and stores them in the vector store. This makes all department chats
+/// aware of RUSVEL's own architecture, conventions, and current state.
+async fn seed_knowledge(
+    embedding: &Arc<dyn EmbeddingPort>,
+    vector_store: &Arc<dyn VectorStorePort>,
+    data_dir: &std::path::Path,
+) -> Result<()> {
+    // Check if knowledge is already populated
+    let count = vector_store.count().await.unwrap_or(0);
+    if count > 0 {
+        tracing::debug!("Knowledge base already has {count} entries, skipping seed");
+        return Ok(());
+    }
+
+    tracing::info!("Seeding knowledge base with RUSVEL docs...");
+
+    // Resolve project root (two levels up from crates/rusvel-app/)
+    // We try the current working directory first, then fall back to
+    // a relative path from the data directory.
+    let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    // Collect (file_path, source_label) pairs to ingest
+    let doc_files: Vec<(PathBuf, &str)> = vec![
+        (project_root.join("CLAUDE.md"), "CLAUDE.md"),
+        (
+            project_root.join("docs/design/architecture-v2.md"),
+            "architecture-v2.md",
+        ),
+        (
+            project_root.join("docs/design/decisions.md"),
+            "decisions.md",
+        ),
+        (
+            project_root.join("docs/status/current-state.md"),
+            "current-state.md",
+        ),
+        (
+            project_root.join("docs/status/gap-analysis.md"),
+            "gap-analysis.md",
+        ),
+        (data_dir.join("profile.toml"), "profile.toml"),
+    ];
+
+    let mut total_chunks = 0usize;
+
+    for (path, source) in &doc_files {
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::debug!("Skipping {source}: {e}");
+                continue;
+            }
+        };
+
+        if content.trim().is_empty() {
+            tracing::debug!("Skipping {source}: empty file");
+            continue;
+        }
+
+        let chunks = chunk_into_paragraphs(&content, source);
+        if chunks.is_empty() {
+            tracing::debug!("Skipping {source}: no substantial paragraphs");
+            continue;
+        }
+
+        // Batch-embed all chunks for this file
+        let texts: Vec<&str> = chunks.iter().map(|(_, text)| text.as_str()).collect();
+        let embeddings = match embedding.embed(&texts).await {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!("Failed to embed {source}: {e}");
+                continue;
+            }
+        };
+
+        // Store each chunk
+        for ((id, text), emb) in chunks.iter().zip(embeddings.into_iter()) {
+            let metadata = serde_json::json!({
+                "source": source,
+                "type": "project-doc",
+                "category": "self-knowledge",
+            });
+            if let Err(e) = vector_store.upsert(id, text, emb, metadata).await {
+                tracing::warn!("Failed to store chunk {id}: {e}");
+            } else {
+                total_chunks += 1;
+            }
+        }
+
+        tracing::debug!("Ingested {source}: {} chunks", chunks.len());
+    }
+
+    tracing::info!("Knowledge base seeded with {total_chunks} chunks from {} docs", doc_files.len());
     Ok(())
 }
 
@@ -706,6 +1067,13 @@ async fn main() -> Result<()> {
                 }
             }
         };
+
+        // 9a. Seed knowledge base with RUSVEL's own docs (if both adapters are available)
+        if let (Some(emb), Some(vs)) = (&embedding, &vector_store) {
+            if let Err(e) = seed_knowledge(emb, vs, &data_dir).await {
+                tracing::warn!("Knowledge seeding failed (non-fatal): {e}");
+            }
+        }
 
         let state = AppState {
             forge: forge.clone(),
