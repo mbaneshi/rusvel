@@ -40,13 +40,19 @@ impl ClaudeCliStreamer {
     /// Stream a prompt through Claude CLI. Returns a receiver that yields
     /// [`StreamEvent`] items as text arrives.
     pub fn stream(&self, prompt: &str) -> mpsc::Receiver<StreamEvent> {
+        self.stream_with_args(prompt, &[])
+    }
+
+    /// Stream with additional CLI arguments (e.g., --model, --effort, --allowedTools).
+    pub fn stream_with_args(&self, prompt: &str, extra_args: &[String]) -> mpsc::Receiver<StreamEvent> {
         let (tx, rx) = mpsc::channel(64);
         let command = self.command.clone();
         let timeout_secs = self.timeout_secs;
         let prompt = prompt.to_string();
+        let extra = extra_args.to_vec();
 
         tokio::spawn(async move {
-            if let Err(e) = run_stream(&command, &prompt, timeout_secs, &tx).await {
+            if let Err(e) = run_stream(&command, &prompt, timeout_secs, &extra, &tx).await {
                 let _ = tx.send(StreamEvent::Error { message: e }).await;
             }
         });
@@ -65,6 +71,7 @@ async fn run_stream(
     command: &str,
     prompt: &str,
     timeout_secs: u64,
+    extra_args: &[String],
     tx: &mpsc::Sender<StreamEvent>,
 ) -> Result<(), String> {
     let mut cmd = Command::new(command);
@@ -72,7 +79,13 @@ async fn run_stream(
         .arg(prompt)
         .arg("--output-format")
         .arg("stream-json")
-        .arg("--verbose");
+        .arg("--verbose")
+        .arg("--no-session-persistence");
+
+    // Apply extra args (model, effort, tools, etc.)
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
 
     // Max subscription env vars (same as ClaudeCliProvider)
     cmd.env_remove("ANTHROPIC_API_KEY");

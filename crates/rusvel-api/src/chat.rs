@@ -22,6 +22,7 @@ use rusvel_core::ports::StoragePort;
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
 use crate::AppState;
+use crate::config::ChatConfig;
 
 // ── Request / Response types ─────────────────────────────────
 
@@ -80,12 +81,24 @@ pub async fn chat_handler(
     };
     let _ = store_message(&state.storage, &user_msg).await;
 
+    // Load chat config (model, effort, tools, etc.)
+    let chat_config: ChatConfig = state
+        .storage
+        .objects()
+        .get("chat_config", "current")
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| serde_json::from_value(v).ok())
+        .unwrap_or_default();
+
     // Build the full prompt: system + history + user message
     let prompt = build_prompt(profile, &history, &body.message);
 
-    // Spawn Claude CLI streamer
+    // Spawn Claude CLI streamer with config flags
     let streamer = ClaudeCliStreamer::new();
-    let rx = streamer.stream(&prompt);
+    let cli_args = chat_config.to_claude_args();
+    let rx = streamer.stream_with_args(&prompt, &cli_args);
 
     // Convert to SSE stream, collecting full text for persistence
     let storage = state.storage.clone();

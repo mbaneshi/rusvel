@@ -7,6 +7,7 @@
 //! and core port traits.
 
 pub mod chat;
+pub mod config;
 pub mod routes;
 
 use std::net::SocketAddr;
@@ -65,10 +66,12 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         // Chat (god agent)
         .route("/api/chat", post(chat::chat_handler))
         .route("/api/chat/conversations", get(chat::list_conversations))
-        .route(
-            "/api/chat/conversations/{id}",
-            get(chat::get_history),
-        )
+        .route("/api/chat/conversations/{id}", get(chat::get_history))
+        // Config (M02, M03, M04)
+        .route("/api/config", get(config::get_config))
+        .route("/api/config", axum::routing::put(config::update_config))
+        .route("/api/config/models", get(config::list_models))
+        .route("/api/config/tools", get(config::list_tools))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

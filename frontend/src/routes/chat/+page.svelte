@@ -3,6 +3,7 @@
 	import { marked } from 'marked';
 	import { streamChat, getConversations, getChatHistory } from '$lib/api';
 	import type { Conversation } from '$lib/api';
+	import ChatTopBar from '$lib/components/chat/ChatTopBar.svelte';
 
 	interface DisplayMessage {
 		role: 'user' | 'assistant' | 'system';
@@ -180,6 +181,9 @@
 
 	<!-- Chat area -->
 	<div class="flex flex-1 flex-col">
+		<!-- Top bar: Model, Effort, Tools -->
+		<ChatTopBar />
+
 		<!-- Messages -->
 		<div bind:this={messagesContainer} class="flex-1 overflow-y-auto">
 			{#if messages.length === 0}

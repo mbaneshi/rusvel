@@ -114,6 +114,49 @@ export async function getEvents(sessionId: string): Promise<Event[]> {
 	return request(`/api/sessions/${sessionId}/events`);
 }
 
+// ── Config (M02, M03, M04) ───────────────────────────────────
+
+export interface ChatConfig {
+	model: string;
+	effort: string;
+	max_budget_usd: number | null;
+	permission_mode: string;
+	allowed_tools: string[];
+	disallowed_tools: string[];
+	max_turns: number | null;
+}
+
+export interface ModelOption {
+	value: string;
+	label: string;
+	description: string;
+}
+
+export interface ToolOption {
+	name: string;
+	description: string;
+	category: string;
+}
+
+export async function getConfig(): Promise<ChatConfig> {
+	return request('/api/config');
+}
+
+export async function updateConfig(config: ChatConfig): Promise<ChatConfig> {
+	return request('/api/config', {
+		method: 'PUT',
+		body: JSON.stringify(config)
+	});
+}
+
+export async function getModels(): Promise<ModelOption[]> {
+	return request('/api/config/models');
+}
+
+export async function getTools(): Promise<ToolOption[]> {
+	return request('/api/config/tools');
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {
