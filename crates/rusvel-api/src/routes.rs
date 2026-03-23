@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::AppState;
 
-/// Parse a path string into a SessionId via UUID.
+/// Parse a path string into a `SessionId` via UUID.
 fn parse_session_id(id: &str) -> Result<SessionId, (StatusCode, String)> {
     let uuid: Uuid = id
         .parse()

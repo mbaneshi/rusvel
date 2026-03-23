@@ -40,7 +40,7 @@ impl ContentAnalytics {
             platform: platform.clone(),
             metrics,
         };
-        let key = format!("{}:{:?}", content_id, platform);
+        let key = format!("{content_id}:{platform:?}");
         self.storage
             .objects()
             .put("content_metrics", &key, serde_json::to_value(&record)?)
@@ -65,11 +65,10 @@ impl ContentAnalytics {
             .await?;
         let mut result = Vec::new();
         for val in all {
-            if let Ok(rec) = serde_json::from_value::<ContentMetricsRecord>(val) {
-                if rec.content_id == content_id {
+            if let Ok(rec) = serde_json::from_value::<ContentMetricsRecord>(val)
+                && rec.content_id == content_id {
                     result.push((rec.platform, rec.metrics));
                 }
-            }
         }
         Ok(result)
     }

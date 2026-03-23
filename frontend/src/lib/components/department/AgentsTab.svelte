@@ -6,7 +6,7 @@
 
 	let {
 		dept,
-		deptHsl,
+		deptHsl
 	}: {
 		dept: string;
 		deptHsl: string;
@@ -22,14 +22,27 @@
 	onMount(() => loadAgents());
 
 	async function loadAgents() {
-		try { agents = await getAgents(dept); } catch { agents = []; }
+		try {
+			agents = await getAgents(dept);
+		} catch {
+			agents = [];
+		}
 	}
 
 	async function handleCreateAgent() {
 		if (!newName.trim()) return;
 		try {
-			await createAgent({ name: newName.trim(), role: newRole, model: newModel, instructions: newInstructions, metadata: { engine: dept } });
-			newName = ''; newRole = ''; newInstructions = ''; showCreate = false;
+			await createAgent({
+				name: newName.trim(),
+				role: newRole,
+				model: newModel,
+				instructions: newInstructions,
+				metadata: { engine: dept }
+			});
+			newName = '';
+			newRole = '';
+			newInstructions = '';
+			showCreate = false;
 			await loadAgents();
 			toast.success('Agent created');
 		} catch (e) {
@@ -50,26 +63,42 @@
 
 <div class="p-3 space-y-2">
 	<button
-		onclick={() => showCreate = !showCreate}
+		onclick={() => (showCreate = !showCreate)}
 		class="w-full rounded-lg border border-dashed border-border py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-		style="border-color: hsl({deptHsl} / 0.3)"
-	>+ New Agent</button>
+		style="border-color: hsl({deptHsl} / 0.3)">+ New Agent</button
+	>
 
 	{#if showCreate}
 		<div class="rounded-lg bg-secondary p-3 space-y-2">
-			<input bind:value={newName} placeholder="Agent name" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none" />
-			<input bind:value={newRole} placeholder="Role description" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none" />
-			<select bind:value={newModel} class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground">
+			<input
+				bind:value={newName}
+				placeholder="Agent name"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
+			/>
+			<input
+				bind:value={newRole}
+				placeholder="Role description"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
+			/>
+			<select
+				bind:value={newModel}
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+			>
 				<option value="sonnet">Sonnet</option>
 				<option value="opus">Opus</option>
 				<option value="haiku">Haiku</option>
 			</select>
-			<textarea bind:value={newInstructions} placeholder="System prompt / instructions" rows="3" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none resize-none"></textarea>
+			<textarea
+				bind:value={newInstructions}
+				placeholder="System prompt / instructions"
+				rows="3"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none resize-none"
+			></textarea>
 			<button
 				onclick={handleCreateAgent}
 				class="w-full rounded-md py-1 text-xs font-medium text-white"
-				style="background: hsl({deptHsl})"
-			>Create</button>
+				style="background: hsl({deptHsl})">Create</button
+			>
 		</div>
 	{/if}
 
@@ -81,11 +110,13 @@
 					<span
 						class="rounded px-1.5 py-0.5 text-[9px]"
 						style="background: hsl({deptHsl} / 0.2); color: hsl({deptHsl})"
-					>{agent.default_model.model}</span>
+						>{agent.default_model.model}</span
+					>
 					<button
 						onclick={() => handleDeleteAgent(agent.id)}
 						class="hidden group-hover:block text-muted-foreground hover:text-red-400 text-[10px]"
-					>x</button>
+						>x</button
+					>
 				</div>
 			</div>
 			<p class="text-[10px] text-muted-foreground">{agent.role}</p>

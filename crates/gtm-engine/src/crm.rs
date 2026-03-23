@@ -17,6 +17,12 @@ use rusvel_core::ports::StoragePort;
 #[serde(transparent)]
 pub struct DealId(Uuid);
 
+impl Default for DealId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DealId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }
@@ -125,7 +131,7 @@ impl CrmManager {
         let vals = self.storage.objects().list(KIND_DEAL, filter).await?;
         let deals: Vec<Deal> = vals
             .into_iter()
-            .map(|v| serde_json::from_value(v))
+            .map(serde_json::from_value)
             .collect::<std::result::Result<Vec<_>, _>>()?;
         match stage_filter {
             Some(stage) => Ok(deals.into_iter().filter(|d| d.stage == stage).collect()),

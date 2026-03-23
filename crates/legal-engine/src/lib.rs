@@ -72,7 +72,7 @@ impl LegalEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for LegalEngine {
     fn kind(&self) -> EngineKind { EngineKind::Legal }
-    fn name(&self) -> &str { "Legal Engine" }
+    fn name(&self) -> &'static str { "Legal Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

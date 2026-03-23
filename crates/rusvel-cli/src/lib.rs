@@ -287,7 +287,7 @@ pub(crate) async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) 
                 return Ok(());
             }
             let active = load_active_session().ok();
-            println!("{:<38}  {:<20}  {:<10}  {}", "ID", "NAME", "KIND", "UPDATED");
+            println!("{:<38}  {:<20}  {:<10}  UPDATED", "ID", "NAME", "KIND");
             println!("{}", "-".repeat(90));
             for s in &sessions {
                 let marker = if active.as_ref() == Some(&s.id) { " *" } else { "" };
@@ -338,7 +338,7 @@ async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()>
                 println!("No goals. Add one: rusvel forge mission goal add <title>");
                 return Ok(());
             }
-            println!("{:<38}  {:<25}  {:<10}  {:<10}  {}", "ID", "TITLE", "TIMEFRAME", "STATUS", "PROGRESS");
+            println!("{:<38}  {:<25}  {:<10}  {:<10}  PROGRESS", "ID", "TITLE", "TIMEFRAME", "STATUS");
             println!("{}", "-".repeat(100));
             for g in &goals {
                 println!("{:<38}  {:<25}  {:<10}  {:<10}  {:.0}%", g.id,
@@ -357,7 +357,7 @@ async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()>
         },
         MissionCmd::Review { period } => {
             let tf: Timeframe = period.into();
-            println!("Generating {:?} review...\n", tf);
+            println!("Generating {tf:?} review...\n");
             let review = engine.review(&session_id, tf).await?;
             println!("Review ({:?})\n{}", review.period, "=".repeat(50));
             print_list("Accomplishments", &review.accomplishments);

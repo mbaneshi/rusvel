@@ -4,7 +4,7 @@
 	let {
 		dept,
 		description,
-		prompts = [],
+		prompts = []
 	}: {
 		dept: string;
 		description: string;
@@ -22,7 +22,9 @@
 <div class="relative">
 	<button
 		onclick={() => (showHelp = !showHelp)}
-		class="rounded-md p-1 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] {showHelp ? 'bg-[var(--secondary)] text-[var(--foreground)]' : ''}"
+		class="rounded-md p-1 text-[var(--muted-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] {showHelp
+			? 'bg-[var(--secondary)] text-[var(--foreground)]'
+			: ''}"
 		title="Help"
 	>
 		<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -33,11 +35,17 @@
 	</button>
 
 	{#if showHelp}
-		<div class="absolute left-0 top-full z-40 mt-1 w-64 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-xl">
+		<div
+			class="absolute left-0 top-full z-40 mt-1 w-64 rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 shadow-xl"
+		>
 			<p class="text-xs text-[var(--muted-foreground)] leading-relaxed">{description}</p>
 			{#if prompts.length > 0}
 				<div class="mt-2 space-y-1">
-					<p class="text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">Try asking</p>
+					<p
+						class="text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]"
+					>
+						Try asking
+					</p>
 					{#each prompts as prompt}
 						<button
 							onclick={() => sendPrompt(prompt)}

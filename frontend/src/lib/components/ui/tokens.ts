@@ -25,10 +25,30 @@ export const priority = {
 
 // ── Engine colors (each engine gets a distinct accent) ───────
 export const engine = {
-	forge: { bg: 'bg-indigo-600/15', text: 'text-indigo-300', border: 'border-indigo-500/30', icon: '=' },
-	code: { bg: 'bg-emerald-600/15', text: 'text-emerald-300', border: 'border-emerald-500/30', icon: '#' },
-	harvest: { bg: 'bg-amber-600/15', text: 'text-amber-300', border: 'border-amber-500/30', icon: '$' },
-	content: { bg: 'bg-purple-600/15', text: 'text-purple-300', border: 'border-purple-500/30', icon: '*' },
+	forge: {
+		bg: 'bg-indigo-600/15',
+		text: 'text-indigo-300',
+		border: 'border-indigo-500/30',
+		icon: '='
+	},
+	code: {
+		bg: 'bg-emerald-600/15',
+		text: 'text-emerald-300',
+		border: 'border-emerald-500/30',
+		icon: '#'
+	},
+	harvest: {
+		bg: 'bg-amber-600/15',
+		text: 'text-amber-300',
+		border: 'border-amber-500/30',
+		icon: '$'
+	},
+	content: {
+		bg: 'bg-purple-600/15',
+		text: 'text-purple-300',
+		border: 'border-purple-500/30',
+		icon: '*'
+	},
 	gtm: { bg: 'bg-cyan-600/15', text: 'text-cyan-300', border: 'border-cyan-500/30', icon: '^' }
 } as const;
 

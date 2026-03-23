@@ -4,8 +4,16 @@
 
 <div class="flex h-screen items-center justify-center bg-background text-foreground">
 	<div class="text-center max-w-md px-6">
-		<div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/15">
-			<svg class="h-8 w-8 text-destructive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+		<div
+			class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/15"
+		>
+			<svg
+				class="h-8 w-8 text-destructive"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.5"
+			>
 				<circle cx="12" cy="12" r="10" />
 				<path d="M12 8v4M12 16h.01" stroke-linecap="round" />
 			</svg>

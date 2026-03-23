@@ -72,7 +72,7 @@ impl InfraEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for InfraEngine {
     fn kind(&self) -> EngineKind { EngineKind::Infra }
-    fn name(&self) -> &str { "Infra Engine" }
+    fn name(&self) -> &'static str { "Infra Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

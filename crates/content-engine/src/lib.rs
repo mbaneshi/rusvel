@@ -256,7 +256,7 @@ impl Engine for ContentEngine {
     fn kind(&self) -> EngineKind {
         EngineKind::Content
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Content Engine"
     }
     fn capabilities(&self) -> Vec<Capability> {

@@ -3,7 +3,7 @@
 //! `POST /api/capability/build` takes a natural language description and:
 //! 1. Uses Claude with WebSearch/WebFetch to discover MCP servers, skills, agents online
 //! 2. Generates a bundle of entities (agents, skills, rules, MCP servers, hooks, workflows)
-//! 3. Persists all entities to ObjectStore
+//! 3. Persists all entities to `ObjectStore`
 //! 4. Returns what was installed
 //!
 //! Also wired into department chat via `!capability <description>` prefix.
@@ -174,7 +174,7 @@ pub async fn build_capability(
 
 // ── Inline variant for department chat (!capability prefix) ──
 
-/// Called from department_chat_handler when message starts with `!capability`.
+/// Called from `department_chat_handler` when message starts with `!capability`.
 pub async fn build_capability_inline(
     engine: &str,
     description: &str,
@@ -282,21 +282,21 @@ pub async fn build_capability_inline(
 
     let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
         Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
-            .map(|event| Ok::<_, Infallible>(event)));
+            .map(Ok::<_, Infallible>));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 // ── Parse + Install ──────────────────────────────────────────
 
-/// Parse a capability bundle from LLM output and install all entities into ObjectStore.
+/// Parse a capability bundle from LLM output and install all entities into `ObjectStore`.
 async fn parse_and_install(
     text: &str,
     engine: &str,
     storage: &Arc<dyn StoragePort>,
 ) -> Result<InstallResult, String> {
     let json_str = extract_json(text).ok_or("No JSON found in response")?;
-    let bundle: CapabilityBundle = serde_json::from_str(&json_str)
+    let bundle: CapabilityBundle = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse capability bundle: {e}"))?;
 
     let mut installed = vec![];
@@ -321,9 +321,7 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = skill.clone();
         inject_metadata(&mut val, engine);
-        val.as_object_mut().map(|m| {
-            m.insert("id".into(), serde_json::Value::String(id.clone()));
-        });
+        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
         if storage.objects().put("skills", &id, val).await.is_ok() {
             let name = skill.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("skill:{name}"));
@@ -335,9 +333,7 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = rule.clone();
         inject_metadata(&mut val, engine);
-        val.as_object_mut().map(|m| {
-            m.insert("id".into(), serde_json::Value::String(id.clone()));
-        });
+        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
         if storage.objects().put("rules", &id, val).await.is_ok() {
             let name = rule.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("rule:{name}"));
@@ -349,9 +345,7 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = mcp.clone();
         inject_metadata(&mut val, engine);
-        val.as_object_mut().map(|m| {
-            m.insert("id".into(), serde_json::Value::String(id.clone()));
-        });
+        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
         if storage.objects().put("mcp_servers", &id, val).await.is_ok() {
             let name = mcp.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("mcp:{name}"));
@@ -363,9 +357,7 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = hook.clone();
         inject_metadata(&mut val, engine);
-        val.as_object_mut().map(|m| {
-            m.insert("id".into(), serde_json::Value::String(id.clone()));
-        });
+        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
         if storage.objects().put("hooks", &id, val).await.is_ok() {
             let name = hook.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("hook:{name}"));
@@ -377,9 +369,7 @@ async fn parse_and_install(
         let id = uuid::Uuid::now_v7().to_string();
         let mut val = wf.clone();
         inject_metadata(&mut val, engine);
-        val.as_object_mut().map(|m| {
-            m.insert("id".into(), serde_json::Value::String(id.clone()));
-        });
+        if let Some(m) = val.as_object_mut() { m.insert("id".into(), serde_json::Value::String(id.clone())); }
         if storage.objects().put("workflows", &id, val).await.is_ok() {
             let name = wf.get("name").and_then(|n| n.as_str()).unwrap_or("unnamed");
             installed.push(format!("workflow:{name}"));

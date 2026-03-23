@@ -67,9 +67,15 @@ async function parseSSE(
 	onChunk: (parsed: Record<string, unknown>) => void,
 	onError: (message: string) => void
 ): Promise<void> {
-	if (!res.ok) { onError(`API error ${res.status}`); return; }
+	if (!res.ok) {
+		onError(`API error ${res.status}`);
+		return;
+	}
 	const reader = res.body?.getReader();
-	if (!reader) { onError('No response body'); return; }
+	if (!reader) {
+		onError('No response body');
+		return;
+	}
 	const decoder = new TextDecoder();
 	let buffer = '';
 	while (true) {
@@ -81,8 +87,11 @@ async function parseSSE(
 		for (const line of lines) {
 			if (line.startsWith('event: ')) continue;
 			if (line.startsWith('data: ')) {
-				try { onChunk(JSON.parse(line.slice(6))); }
-				catch { /* skip unparseable */ }
+				try {
+					onChunk(JSON.parse(line.slice(6)));
+				} catch {
+					/* skip unparseable */
+				}
 			}
 		}
 	}
@@ -203,7 +212,10 @@ export async function getDeptConfig(dept: string): Promise<DepartmentConfig> {
 	return request(`/api/dept/${dept}/config`);
 }
 
-export async function updateDeptConfig(dept: string, config: DepartmentConfig): Promise<DepartmentConfig> {
+export async function updateDeptConfig(
+	dept: string,
+	config: DepartmentConfig
+): Promise<DepartmentConfig> {
 	return request(`/api/dept/${dept}/config`, { method: 'PUT', body: JSON.stringify(config) });
 }
 
@@ -232,11 +244,16 @@ export async function streamDeptChat(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ message, conversation_id: conversationId })
 	});
-	await parseSSE(res, (p) => {
-		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string, p.conversation_id as string);
-		else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
-		else if (p.message) onError(p.message as string);
-	}, onError);
+	await parseSSE(
+		res,
+		(p) => {
+			if (p.text !== undefined && p.cost_usd === undefined)
+				onDelta(p.text as string, p.conversation_id as string);
+			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
+			else if (p.message) onError(p.message as string);
+		},
+		onError
+	);
 }
 
 // ── Agents CRUD ──────────────────────────────────────────────
@@ -511,11 +528,15 @@ export async function streamCapability(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ description, engine })
 	});
-	await parseSSE(res, (p) => {
-		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
-		else if (p.cost_usd !== undefined) onDone(p.text as string);
-		else if (p.message) onError(p.message as string);
-	}, onError);
+	await parseSSE(
+		res,
+		(p) => {
+			if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
+			else if (p.cost_usd !== undefined) onDone(p.text as string);
+			else if (p.message) onError(p.message as string);
+		},
+		onError
+	);
 }
 
 // ── Help (AI-powered) ────────────────────────────────────────
@@ -532,11 +553,15 @@ export async function streamHelp(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ question, context })
 	});
-	await parseSSE(res, (p) => {
-		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
-		else if (p.cost_usd !== undefined) onDone(p.text as string);
-		else if (p.message) onError(p.message as string);
-	}, onError);
+	await parseSSE(
+		res,
+		(p) => {
+			if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string);
+			else if (p.cost_usd !== undefined) onDone(p.text as string);
+			else if (p.message) onError(p.message as string);
+		},
+		onError
+	);
 }
 
 // ── Chat (God Agent) ─────────────────────────────────────────
@@ -553,11 +578,16 @@ export async function streamChat(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ message, conversation_id: conversationId })
 	});
-	await parseSSE(res, (p) => {
-		if (p.text !== undefined && p.cost_usd === undefined) onDelta(p.text as string, p.conversation_id as string);
-		else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
-		else if (p.message) onError(p.message as string);
-	}, onError);
+	await parseSSE(
+		res,
+		(p) => {
+			if (p.text !== undefined && p.cost_usd === undefined)
+				onDelta(p.text as string, p.conversation_id as string);
+			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
+			else if (p.message) onError(p.message as string);
+		},
+		onError
+	);
 }
 
 // ── Department Registry ──────────────────────────────────────
@@ -595,7 +625,7 @@ export async function updateProfile(profile: unknown): Promise<unknown> {
 	const res = await fetch(`${BASE}/api/profile`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify(profile),
+		body: JSON.stringify(profile)
 	});
 	return res.json();
 }

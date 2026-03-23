@@ -1,4 +1,4 @@
-//! Analytics endpoint — aggregate counts across all ObjectStore kinds.
+//! Analytics endpoint — aggregate counts across all `ObjectStore` kinds.
 //!
 //! `GET /api/analytics` returns a JSON object with counts of agents, skills,
 //! rules, MCP servers, hooks, conversations, events, and departments.

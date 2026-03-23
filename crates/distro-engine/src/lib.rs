@@ -72,7 +72,7 @@ impl DistroEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for DistroEngine {
     fn kind(&self) -> EngineKind { EngineKind::Distribution }
-    fn name(&self) -> &str { "Distribution Engine" }
+    fn name(&self) -> &'static str { "Distribution Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

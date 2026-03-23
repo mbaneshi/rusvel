@@ -1,4 +1,4 @@
-//! [`MemoryStore`] — SQLite + FTS5 implementation of [`MemoryPort`].
+//! [`MemoryStore`] — `SQLite` + FTS5 implementation of [`MemoryPort`].
 
 use std::sync::Mutex;
 
@@ -12,7 +12,7 @@ use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::MemoryPort;
 
-/// A session-namespaced memory store backed by SQLite with FTS5 full-text search.
+/// A session-namespaced memory store backed by `SQLite` with FTS5 full-text search.
 ///
 /// Thread-safe via interior `Mutex<Connection>`.
 pub struct MemoryStore {
@@ -20,7 +20,7 @@ pub struct MemoryStore {
 }
 
 impl MemoryStore {
-    /// Open an in-memory SQLite database (useful for tests).
+    /// Open an in-memory `SQLite` database (useful for tests).
     pub fn in_memory() -> std::result::Result<Self, RusvelError> {
         let conn = Connection::open_in_memory()
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
@@ -31,7 +31,7 @@ impl MemoryStore {
         Ok(store)
     }
 
-    /// Open (or create) a SQLite database at the given path.
+    /// Open (or create) a `SQLite` database at the given path.
     pub fn open(path: &str) -> std::result::Result<Self, RusvelError> {
         let conn = Connection::open(path)
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
@@ -174,7 +174,7 @@ impl MemoryStore {
         })
     }
 
-    /// Encode an embedding vector as a byte blob for SQLite storage.
+    /// Encode an embedding vector as a byte blob for `SQLite` storage.
     fn embedding_to_blob(embedding: &[f32]) -> Vec<u8> {
         embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
     }

@@ -19,6 +19,12 @@ const KIND: &str = "legal_compliance";
 #[serde(transparent)]
 pub struct ComplianceCheckId(Uuid);
 
+impl Default for ComplianceCheckId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComplianceCheckId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

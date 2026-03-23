@@ -1,4 +1,4 @@
-//! Agents CRUD — manage AgentProfile definitions stored in ObjectStore.
+//! Agents CRUD — manage `AgentProfile` definitions stored in `ObjectStore`.
 //!
 //! Agents are scoped to departments via `metadata.engine` field.
 //! Global agents (no engine in metadata) appear in all departments.

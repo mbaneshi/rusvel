@@ -19,6 +19,12 @@ const KIND: &str = "distro_keyword";
 #[serde(transparent)]
 pub struct KeywordId(Uuid);
 
+impl Default for KeywordId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeywordId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

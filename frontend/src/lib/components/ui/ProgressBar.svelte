@@ -8,7 +8,7 @@
 		variant = 'brand',
 		label,
 		showValue = false,
-		class: className,
+		class: className
 	}: {
 		value?: number;
 		max?: number;
@@ -24,14 +24,14 @@
 	const sizes: Record<string, string> = {
 		sm: 'h-1',
 		md: 'h-1.5',
-		lg: 'h-2.5',
+		lg: 'h-2.5'
 	};
 
 	const fills: Record<string, string> = {
-		brand:   'bg-primary',
+		brand: 'bg-primary',
 		success: 'bg-success-500',
-		danger:  'bg-destructive',
-		warning: 'bg-warning-500',
+		danger: 'bg-destructive',
+		warning: 'bg-warning-500'
 	};
 </script>
 

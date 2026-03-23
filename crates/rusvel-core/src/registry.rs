@@ -43,13 +43,11 @@ pub struct DepartmentRegistry {
 impl DepartmentRegistry {
     /// Load from a TOML file, falling back to built-in defaults if file missing.
     pub fn load(path: &Path) -> Self {
-        if path.exists() {
-            if let Ok(contents) = std::fs::read_to_string(path) {
-                if let Ok(reg) = toml::from_str(&contents) {
+        if path.exists()
+            && let Ok(contents) = std::fs::read_to_string(path)
+                && let Ok(reg) = toml::from_str(&contents) {
                     return reg;
                 }
-            }
-        }
         Self::defaults()
     }
 
@@ -63,7 +61,7 @@ impl DepartmentRegistry {
         &self.departments
     }
 
-    /// Resolve EngineKind from department id string.
+    /// Resolve `EngineKind` from department id string.
     pub fn engine_kind(&self, id: &str) -> Option<EngineKind> {
         self.get(id).map(|d| d.engine_kind)
     }

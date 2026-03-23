@@ -29,12 +29,14 @@
 	} = $props();
 
 	const variants: Record<Variant, string> = {
-		primary:   'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-		secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 border border-border',
-		ghost:     'text-muted-foreground hover:text-foreground hover:bg-accent',
-		danger:    'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
-		outline:   'border border-border bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground',
-		link:      'text-primary underline-offset-4 hover:underline',
+		primary: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
+		secondary:
+			'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80 border border-border',
+		ghost: 'text-muted-foreground hover:text-foreground hover:bg-accent',
+		danger: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+		outline:
+			'border border-border bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground',
+		link: 'text-primary underline-offset-4 hover:underline'
 	};
 
 	const sizes: Record<Size, string> = {
@@ -42,7 +44,7 @@
 		sm: 'h-8 text-sm px-3 gap-1.5 rounded-md',
 		md: 'h-9 text-sm px-4 gap-2 rounded-lg',
 		lg: 'h-10 text-base px-5 gap-2 rounded-lg',
-		icon: 'h-9 w-9 rounded-lg',
+		icon: 'h-9 w-9 rounded-lg'
 	};
 </script>
 
@@ -61,7 +63,9 @@
 	{...rest}
 >
 	{#if loading}
-		<span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+		<span
+			class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+		></span>
 	{:else if icon}
 		{@render icon()}
 	{/if}

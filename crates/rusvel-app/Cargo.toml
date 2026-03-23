@@ -37,6 +37,10 @@ legal-engine   = { workspace = true }
 support-engine = { workspace = true }
 infra-engine   = { workspace = true }
 
+# ─── RAG ───
+rusvel-embed  = { workspace = true }
+rusvel-vector = { workspace = true }
+
 # ─── Surfaces ───
 rusvel-cli = { workspace = true }
 rusvel-api = { workspace = true }
@@ -58,3 +62,6 @@ uuid               = { workspace = true }
 reqwest            = { workspace = true }
 chrono             = { workspace = true }
 rust-embed         = { workspace = true }
+
+[lints]
+workspace = true

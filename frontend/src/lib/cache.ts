@@ -9,7 +9,11 @@ const DEFAULT_TTL = 60_000; // 1 minute
 /**
  * Returns cached data if fresh, otherwise fetches and caches.
  */
-export async function cached<T>(key: string, fetcher: () => Promise<T>, ttl = DEFAULT_TTL): Promise<T> {
+export async function cached<T>(
+	key: string,
+	fetcher: () => Promise<T>,
+	ttl = DEFAULT_TTL
+): Promise<T> {
 	const entry = store.get(key);
 	if (entry && Date.now() - entry.timestamp < ttl) {
 		return entry.data as T;

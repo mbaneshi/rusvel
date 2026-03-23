@@ -19,6 +19,12 @@ const KIND: &str = "support_article";
 #[serde(transparent)]
 pub struct ArticleId(Uuid);
 
+impl Default for ArticleId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArticleId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

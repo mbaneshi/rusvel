@@ -19,6 +19,12 @@ const KIND: &str = "support_ticket";
 #[serde(transparent)]
 pub struct TicketId(Uuid);
 
+impl Default for TicketId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TicketId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

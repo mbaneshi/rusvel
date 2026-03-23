@@ -1,6 +1,6 @@
 //! Configuration API — manages model, effort, tools, and budget settings.
 //!
-//! Settings are persisted in ObjectStore and used by the chat handler
+//! Settings are persisted in `ObjectStore` and used by the chat handler
 //! to construct `claude -p` commands.
 
 use std::sync::Arc;

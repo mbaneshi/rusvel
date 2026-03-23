@@ -2,7 +2,7 @@
 //!
 //! When a user sends `!build <type>: <description>` in any department,
 //! this module intercepts the message, asks Claude to generate the entity
-//! JSON, parses it, persists it via ObjectStore, and returns a confirmation.
+//! JSON, parses it, persists it via `ObjectStore`, and returns a confirmation.
 
 use std::sync::Arc;
 

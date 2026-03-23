@@ -12,6 +12,8 @@ members = [
     "crates/rusvel-jobs",
     "crates/rusvel-auth",
     "crates/rusvel-config",
+    "crates/rusvel-embed",
+    "crates/rusvel-vector",
 
     # ─── Domain Engines ───
     "crates/forge-engine",
@@ -97,6 +99,12 @@ chrono = { version = "0.4", features = ["serde"] }
 # ID generation
 uuid = { version = "1", features = ["v7", "serde"] }
 
+# Vector DB
+lancedb = "0.16"
+arrow = { version = "53", default-features = false, features = ["json"] }
+arrow-array = "53"
+arrow-schema = "53"
+
 # Embed frontend
 rust-embed = { version = "8", features = ["compression"] }
 
@@ -111,6 +119,8 @@ rusvel-tool = { path = "crates/rusvel-tool" }
 rusvel-jobs = { path = "crates/rusvel-jobs" }
 rusvel-auth = { path = "crates/rusvel-auth" }
 rusvel-config = { path = "crates/rusvel-config" }
+rusvel-embed = { path = "crates/rusvel-embed" }
+rusvel-vector = { path = "crates/rusvel-vector" }
 forge-engine = { path = "crates/forge-engine" }
 code-engine = { path = "crates/code-engine" }
 harvest-engine = { path = "crates/harvest-engine" }
@@ -127,6 +137,23 @@ rusvel-api = { path = "crates/rusvel-api" }
 rusvel-cli = { path = "crates/rusvel-cli" }
 rusvel-mcp = { path = "crates/rusvel-mcp" }
 rusvel-tui = { path = "crates/rusvel-tui" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Allow common pedantic false positives
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+wildcard_imports = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+cast_precision_loss = "allow"
+too_many_lines = "allow"
 
 [profile.release]
 lto = true

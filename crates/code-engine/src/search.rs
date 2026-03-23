@@ -14,7 +14,7 @@ pub struct SearchResult {
 /// A BM25 search index built from (name, content) document pairs.
 pub struct SearchIndex {
     docs: Vec<DocEntry>,
-    /// term -> list of (doc_index, term_freq)
+    /// term -> list of (`doc_index`, `term_freq`)
     inverted: HashMap<String, Vec<(usize, u32)>>,
     avg_dl: f64,
 }
@@ -41,7 +41,7 @@ impl SearchIndex {
         for (idx, (name, file_path, content, line)) in items.iter().enumerate() {
             let tokens = tokenize(content);
             let doc_len = tokens.len() as u32;
-            total_len += doc_len as u64;
+            total_len += u64::from(doc_len);
 
             // Count term frequencies
             let mut tf_map: HashMap<&str, u32> = HashMap::new();
@@ -90,8 +90,8 @@ impl SearchIndex {
             let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
 
             for &(doc_idx, tf) in postings {
-                let dl = self.docs[doc_idx].doc_len as f64;
-                let tf_f = tf as f64;
+                let dl = f64::from(self.docs[doc_idx].doc_len);
+                let tf_f = f64::from(tf);
                 let num = tf_f * (K1 + 1.0);
                 let denom = tf_f + K1 * (1.0 - B + B * dl / self.avg_dl);
                 scores[doc_idx] += idf * num / denom;
@@ -126,7 +126,7 @@ impl SearchIndex {
 fn tokenize(text: &str) -> Vec<String> {
     text.split(|c: char| !c.is_alphanumeric() && c != '_')
         .filter(|s| !s.is_empty())
-        .map(|s| s.to_lowercase())
+        .map(str::to_lowercase)
         .collect()
 }
 

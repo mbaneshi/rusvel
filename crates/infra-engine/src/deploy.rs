@@ -19,6 +19,12 @@ const KIND: &str = "infra_deployment";
 #[serde(transparent)]
 pub struct DeploymentId(Uuid);
 
+impl Default for DeploymentId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeploymentId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

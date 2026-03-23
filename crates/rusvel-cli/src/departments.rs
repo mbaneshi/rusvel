@@ -223,7 +223,7 @@ async fn dept_list(
                 .and_then(|v| v.as_str())
                 .unwrap_or("?");
             let short_id = if id.len() > 8 { &id[..8] } else { id };
-            println!("│  {} {}", short_id, name);
+            println!("│  {short_id} {name}");
         }
         println!("│");
     }
@@ -244,7 +244,7 @@ async fn dept_status(meta: DeptMeta, storage: Arc<dyn StoragePort>) -> Result<()
             .map(|v| v.len())
             .unwrap_or(0);
         total += count;
-        println!("│  {:<20} {:>5} items", collection, count);
+        println!("│  {collection:<20} {count:>5} items");
     }
     println!("│");
     println!("│  Total: {total} items");
@@ -276,7 +276,7 @@ async fn dept_events(meta: DeptMeta, storage: Arc<dyn StoragePort>, limit: usize
             let kind = event.get("kind").and_then(|v| v.as_str()).unwrap_or("?");
             let time = event.get("created_at").and_then(|v| v.as_str()).unwrap_or("?");
             let short_time = if time.len() > 16 { &time[..16] } else { time };
-            println!("│  {} {}", short_time, kind);
+            println!("│  {short_time} {kind}");
         }
     }
     println!("│");

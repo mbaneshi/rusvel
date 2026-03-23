@@ -3,7 +3,7 @@
 //! Included adapters:
 //! - [`OllamaProvider`] — local Ollama instance
 //! - [`ClaudeProvider`] — Anthropic Claude API
-//! - [`OpenAiProvider`] — OpenAI API (also works with compatible proxies)
+//! - [`OpenAiProvider`] — `OpenAI` API (also works with compatible proxies)
 //! - [`MultiProvider`] — routes requests by [`ModelProvider`] to the right adapter
 
 mod claude;

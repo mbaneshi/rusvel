@@ -132,9 +132,9 @@ async fn run_stream(
                             .and_then(|c| c.as_array())
                         {
                             for block in content {
-                                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                                    if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
-                                        if !text.is_empty() {
+                                if block.get("type").and_then(|t| t.as_str()) == Some("text")
+                                    && let Some(text) = block.get("text").and_then(|t| t.as_str())
+                                        && !text.is_empty() {
                                             debug!(len = text.len(), "stream delta");
                                             let _ = tx
                                                 .send(StreamEvent::Delta {
@@ -142,8 +142,6 @@ async fn run_stream(
                                                 })
                                                 .await;
                                         }
-                                    }
-                                }
                             }
                         }
                     }
@@ -154,12 +152,12 @@ async fn run_stream(
                         }
                         cost_usd = parsed
                             .get("total_cost_usd")
-                            .and_then(|c| c.as_f64())
+                            .and_then(serde_json::Value::as_f64)
                             .unwrap_or(0.0);
 
                         let is_error = parsed
                             .get("is_error")
-                            .and_then(|e| e.as_bool())
+                            .and_then(serde_json::Value::as_bool)
                             .unwrap_or(false);
 
                         if is_error {

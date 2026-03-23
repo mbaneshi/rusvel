@@ -1,6 +1,6 @@
 //! Hooks CRUD — lifecycle event automation.
 //!
-//! Hooks fire on events like PreToolUse, PostToolUse, SessionStart, etc.
+//! Hooks fire on events like `PreToolUse`, `PostToolUse`, `SessionStart`, etc.
 //! They can run commands, call HTTP endpoints, or use prompts.
 
 use std::sync::Arc;

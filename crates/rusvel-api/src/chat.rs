@@ -1,7 +1,7 @@
 //! Chat API handler — streaming conversation with the god agent.
 //!
 //! `POST /api/chat` accepts a message and streams the response via SSE.
-//! Conversation history is persisted in ObjectStore.
+//! Conversation history is persisted in `ObjectStore`.
 
 use std::convert::Infallible;
 use std::sync::Arc;

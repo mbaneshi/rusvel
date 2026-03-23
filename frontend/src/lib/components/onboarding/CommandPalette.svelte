@@ -28,40 +28,149 @@
 
 	const commands: Command[] = [
 		// Navigation
-		{ id: 'nav-dashboard', label: 'Dashboard', group: 'Navigation', icon: '~', action: () => navigate('/') },
-		{ id: 'nav-chat', label: 'Chat (God Agent)', group: 'Navigation', icon: '>', action: () => navigate('/chat') },
-		{ id: 'nav-forge', label: 'Forge Department', group: 'Navigation', icon: '=', action: () => navigate('/forge') },
-		{ id: 'nav-code', label: 'Code Department', group: 'Navigation', icon: '#', action: () => navigate('/code') },
-		{ id: 'nav-harvest', label: 'Harvest Department', group: 'Navigation', icon: '$', action: () => navigate('/harvest') },
-		{ id: 'nav-content', label: 'Content Department', group: 'Navigation', icon: '*', action: () => navigate('/content') },
-		{ id: 'nav-gtm', label: 'GTM Department', group: 'Navigation', icon: '^', action: () => navigate('/gtm') },
-		{ id: 'nav-finance', label: 'Finance Department', group: 'Navigation', icon: '%', action: () => navigate('/finance') },
-		{ id: 'nav-product', label: 'Product Department', group: 'Navigation', icon: '@', action: () => navigate('/product') },
-		{ id: 'nav-growth', label: 'Growth Department', group: 'Navigation', icon: '&', action: () => navigate('/growth') },
-		{ id: 'nav-distro', label: 'Distribution Department', group: 'Navigation', icon: '!', action: () => navigate('/distro') },
-		{ id: 'nav-legal', label: 'Legal Department', group: 'Navigation', icon: '\u00A7', action: () => navigate('/legal') },
-		{ id: 'nav-support', label: 'Support Department', group: 'Navigation', icon: '?', action: () => navigate('/support') },
-		{ id: 'nav-infra', label: 'Infra Department', group: 'Navigation', icon: '>', action: () => navigate('/infra') },
-		{ id: 'nav-settings', label: 'Settings', group: 'Navigation', icon: '%', action: () => navigate('/settings') },
+		{
+			id: 'nav-dashboard',
+			label: 'Dashboard',
+			group: 'Navigation',
+			icon: '~',
+			action: () => navigate('/')
+		},
+		{
+			id: 'nav-chat',
+			label: 'Chat (God Agent)',
+			group: 'Navigation',
+			icon: '>',
+			action: () => navigate('/chat')
+		},
+		{
+			id: 'nav-forge',
+			label: 'Forge Department',
+			group: 'Navigation',
+			icon: '=',
+			action: () => navigate('/forge')
+		},
+		{
+			id: 'nav-code',
+			label: 'Code Department',
+			group: 'Navigation',
+			icon: '#',
+			action: () => navigate('/code')
+		},
+		{
+			id: 'nav-harvest',
+			label: 'Harvest Department',
+			group: 'Navigation',
+			icon: '$',
+			action: () => navigate('/harvest')
+		},
+		{
+			id: 'nav-content',
+			label: 'Content Department',
+			group: 'Navigation',
+			icon: '*',
+			action: () => navigate('/content')
+		},
+		{
+			id: 'nav-gtm',
+			label: 'GTM Department',
+			group: 'Navigation',
+			icon: '^',
+			action: () => navigate('/gtm')
+		},
+		{
+			id: 'nav-finance',
+			label: 'Finance Department',
+			group: 'Navigation',
+			icon: '%',
+			action: () => navigate('/finance')
+		},
+		{
+			id: 'nav-product',
+			label: 'Product Department',
+			group: 'Navigation',
+			icon: '@',
+			action: () => navigate('/product')
+		},
+		{
+			id: 'nav-growth',
+			label: 'Growth Department',
+			group: 'Navigation',
+			icon: '&',
+			action: () => navigate('/growth')
+		},
+		{
+			id: 'nav-distro',
+			label: 'Distribution Department',
+			group: 'Navigation',
+			icon: '!',
+			action: () => navigate('/distro')
+		},
+		{
+			id: 'nav-legal',
+			label: 'Legal Department',
+			group: 'Navigation',
+			icon: '\u00A7',
+			action: () => navigate('/legal')
+		},
+		{
+			id: 'nav-support',
+			label: 'Support Department',
+			group: 'Navigation',
+			icon: '?',
+			action: () => navigate('/support')
+		},
+		{
+			id: 'nav-infra',
+			label: 'Infra Department',
+			group: 'Navigation',
+			icon: '>',
+			action: () => navigate('/infra')
+		},
+		{
+			id: 'nav-settings',
+			label: 'Settings',
+			group: 'Navigation',
+			icon: '%',
+			action: () => navigate('/settings')
+		},
 		// Actions
-		{ id: 'act-new-session', label: 'Create New Session', group: 'Actions', icon: '+', action: () => handleCreateSession() },
-		{ id: 'act-plan', label: 'Generate Daily Plan', group: 'Actions', icon: '=', action: () => navigate('/forge') },
-		{ id: 'act-new-chat', label: 'New Chat', group: 'Actions', icon: '>', action: () => navigate('/chat') },
+		{
+			id: 'act-new-session',
+			label: 'Create New Session',
+			group: 'Actions',
+			icon: '+',
+			action: () => handleCreateSession()
+		},
+		{
+			id: 'act-plan',
+			label: 'Generate Daily Plan',
+			group: 'Actions',
+			icon: '=',
+			action: () => navigate('/forge')
+		},
+		{
+			id: 'act-new-chat',
+			label: 'New Chat',
+			group: 'Actions',
+			icon: '>',
+			action: () => navigate('/chat')
+		}
 	];
 
 	let filtered = $derived(
 		query.trim() === ''
 			? commands
-			: commands.filter((c) =>
-					c.label.toLowerCase().includes(query.toLowerCase()) ||
-					c.group.toLowerCase().includes(query.toLowerCase())
+			: commands.filter(
+					(c) =>
+						c.label.toLowerCase().includes(query.toLowerCase()) ||
+						c.group.toLowerCase().includes(query.toLowerCase())
 				)
 	);
 
 	let groups = $derived(
 		[...new Set(filtered.map((c) => c.group))].map((g) => ({
 			name: g,
-			items: filtered.filter((c) => c.group === g),
+			items: filtered.filter((c) => c.group === g)
 		}))
 	);
 
@@ -134,7 +243,13 @@
 		>
 			<!-- Search input -->
 			<div class="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
-				<svg class="h-4 w-4 text-[var(--muted-foreground)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4" /><path d="M10 10l3.5 3.5" /></svg>
+				<svg
+					class="h-4 w-4 text-[var(--muted-foreground)]"
+					viewBox="0 0 16 16"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4" /><path d="M10 10l3.5 3.5" /></svg
+				>
 				<input
 					bind:this={inputEl}
 					bind:value={query}
@@ -142,17 +257,26 @@
 					placeholder="Search commands..."
 					class="flex-1 bg-transparent text-sm text-[var(--foreground)] placeholder-[var(--muted-foreground)] focus:outline-none"
 				/>
-				<kbd class="rounded border border-[var(--border)] bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--muted-foreground)]">esc</kbd>
+				<kbd
+					class="rounded border border-[var(--border)] bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--muted-foreground)]"
+					>esc</kbd
+				>
 			</div>
 
 			<!-- Results -->
 			<div class="max-h-72 overflow-y-auto py-2">
 				{#if filtered.length === 0}
-					<p class="px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">No results found</p>
+					<p class="px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
+						No results found
+					</p>
 				{:else}
 					{#each groups as group}
 						<div class="px-3 pb-1 pt-2">
-							<p class="px-2 text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]">{group.name}</p>
+							<p
+								class="px-2 text-[10px] font-medium uppercase tracking-wider text-[var(--muted-foreground)]"
+							>
+								{group.name}
+							</p>
 						</div>
 						{#each group.items as item, i}
 							{@const globalIdx = filtered.indexOf(item)}
@@ -164,7 +288,10 @@
 									? 'bg-[var(--secondary)] text-[var(--foreground)]'
 									: 'text-[var(--muted-foreground)] hover:bg-[var(--secondary)]'}"
 							>
-								<span class="flex h-5 w-5 items-center justify-center rounded bg-[var(--secondary)] font-mono text-[10px] text-[var(--muted-foreground)]">{item.icon}</span>
+								<span
+									class="flex h-5 w-5 items-center justify-center rounded bg-[var(--secondary)] font-mono text-[10px] text-[var(--muted-foreground)]"
+									>{item.icon}</span
+								>
 								{item.label}
 							</button>
 						{/each}
@@ -173,7 +300,9 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="flex items-center justify-between border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--muted-foreground)]">
+			<div
+				class="flex items-center justify-between border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--muted-foreground)]"
+			>
 				<div class="flex items-center gap-2">
 					<span><kbd class="rounded border border-[var(--border)] px-1">↑↓</kbd> navigate</span>
 					<span><kbd class="rounded border border-[var(--border)] px-1">↵</kbd> select</span>

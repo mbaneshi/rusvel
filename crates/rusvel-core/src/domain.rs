@@ -851,6 +851,28 @@ impl UserProfile {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Vector / RAG types (used by EmbeddingPort + VectorStorePort)
+// ════════════════════════════════════════════════════════════════════
+
+/// A document stored in the vector knowledge base.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VectorEntry {
+    pub id: String,
+    pub content: String,
+    pub source: String,
+    pub created_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
+}
+
+/// A search result from a vector similarity query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VectorSearchResult {
+    pub entry: VectorEntry,
+    /// Cosine similarity score (higher = more relevant).
+    pub score: f64,
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Tests
 // ════════════════════════════════════════════════════════════════════
 

@@ -63,11 +63,10 @@ impl CodeEngine {
         let mut seen = std::collections::HashSet::new();
         let mut file_metrics = Vec::new();
         for sym in &symbols {
-            if seen.insert(sym.file_path.clone()) {
-                if let Ok(fm) = metrics::count_lines(&sym.file_path) {
+            if seen.insert(sym.file_path.clone())
+                && let Ok(fm) = metrics::count_lines(&sym.file_path) {
                     file_metrics.push(fm);
                 }
-            }
         }
 
         let project_metrics =
@@ -153,7 +152,7 @@ impl Engine for CodeEngine {
     fn kind(&self) -> EngineKind {
         EngineKind::Code
     }
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Code Engine"
     }
     fn capabilities(&self) -> Vec<Capability> {

@@ -18,6 +18,12 @@ const KIND: &str = "distro_partner";
 #[serde(transparent)]
 pub struct PartnerId(Uuid);
 
+impl Default for PartnerId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PartnerId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

@@ -190,7 +190,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                 if let Some(ref dept) = department {
                     match words[0] {
                         "back" | ".." => {
-                            println!("Left {} department.", dept);
+                            println!("Left {dept} department.");
                             department = None;
                             // Update completer
                             let c = Box::new(RusvelCompleter { department: None });
@@ -198,7 +198,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             continue;
                         }
                         "list" => {
-                            let kind = words.get(1).map(|s| s.to_string());
+                            let kind = words.get(1).map(std::string::ToString::to_string);
                             let limit = 20;
                             let action = crate::departments::DeptAction::List { kind, limit };
                             let cmd = dept_to_cmd(dept, action);
@@ -243,7 +243,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                     "use" => {
                         if let Some(&dept_name) = words.get(1) {
                             if departments::department_names().contains(&dept_name) {
-                                println!("Switched to {} department.", dept_name);
+                                println!("Switched to {dept_name} department.");
                                 department = Some(dept_name.to_string());
                                 let c = Box::new(RusvelCompleter {
                                     department: department.clone(),
@@ -302,7 +302,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                         let sub = words.get(1).copied().unwrap_or("status");
                         let action = match sub {
                             "list" => {
-                                let kind = words.get(2).map(|s| s.to_string());
+                                let kind = words.get(2).map(std::string::ToString::to_string);
                                 crate::departments::DeptAction::List { kind, limit: 20 }
                             }
                             "events" => crate::departments::DeptAction::Events { limit: 10 },
@@ -354,7 +354,7 @@ fn dept_to_cmd(dept: &str, action: departments::DeptAction) -> Option<department
 
 fn print_help() {
     println!(
-        r#"
+        r"
 RUSVEL Interactive Shell
 ════════════════════════
 
@@ -382,6 +382,6 @@ Other:
   help / ?            Show this help
 
 Tab for autocomplete. Ctrl+R to search history.
-"#
+"
     );
 }

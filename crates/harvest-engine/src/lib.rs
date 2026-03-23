@@ -281,7 +281,7 @@ impl Engine for HarvestEngine {
         EngineKind::Harvest
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Harvest Engine"
     }
 

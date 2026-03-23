@@ -68,13 +68,11 @@ impl TuiApp {
                 frame.render_widget(events_widget(&self.recent_events), grid[3]);
             })?;
 
-            if event::poll(std::time::Duration::from_millis(100))? {
-                if let CtEvent::Key(key) = event::read()? {
-                    if matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
+            if event::poll(std::time::Duration::from_millis(100))?
+                && let CtEvent::Key(key) = event::read()?
+                    && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
                         break;
                     }
-                }
-            }
         }
 
         disable_raw_mode()?;

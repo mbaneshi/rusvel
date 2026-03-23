@@ -120,11 +120,10 @@ fn extract_name(
     }
     // Most items have a `name` child
     for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            if child.kind() == "identifier" || child.kind() == "type_identifier" {
+        if let Some(child) = node.child(i)
+            && (child.kind() == "identifier" || child.kind() == "type_identifier") {
                 return node_text(&child, source);
             }
-        }
     }
     "<anonymous>".into()
 }
@@ -139,12 +138,11 @@ fn build_impl_name(node: &tree_sitter::Node<'_>, source: &[u8]) -> String {
 
 fn has_visibility_modifier(node: &tree_sitter::Node<'_>, source: &[u8]) -> bool {
     for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            if child.kind() == "visibility_modifier" {
+        if let Some(child) = node.child(i)
+            && child.kind() == "visibility_modifier" {
                 let text = node_text(&child, source);
                 return text.starts_with("pub");
             }
-        }
     }
     false
 }

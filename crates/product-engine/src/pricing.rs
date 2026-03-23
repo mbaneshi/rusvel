@@ -11,6 +11,12 @@ use rusvel_core::ports::StoragePort;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct PricingTierId(Uuid);
+impl Default for PricingTierId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PricingTierId { pub fn new() -> Self { Self(Uuid::now_v7()) } }
 impl std::fmt::Display for PricingTierId { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) } }
 

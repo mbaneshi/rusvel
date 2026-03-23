@@ -13,16 +13,20 @@
 	});
 
 	async function loadEvents() {
-		try { events = await getDeptEvents(dept); }
-		catch (e) {
+		try {
+			events = await getDeptEvents(dept);
+		} catch (e) {
 			events = [];
 			toast.error(`Failed to load events: ${e instanceof Error ? e.message : e}`);
 		}
 	}
 
 	function formatTime(iso: string): string {
-		try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-		catch { return iso; }
+		try {
+			return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		} catch {
+			return iso;
+		}
 	}
 </script>
 
@@ -35,12 +39,16 @@
 				<div class="flex items-center gap-1.5">
 					<span
 						class="rounded px-1 py-0.5 text-[9px] font-mono"
-						style="background-color: hsl({deptHsl}/.15); color: hsl({deptHsl})"
-					>{event.kind}</span>
+						style="background-color: hsl({deptHsl}/.15); color: hsl({deptHsl})">{event.kind}</span
+					>
 					<span class="text-[9px] text-muted-foreground">{formatTime(event.created_at)}</span>
 				</div>
 			</div>
 		{/each}
 	{/if}
-	<button onclick={loadEvents} class="w-full rounded-md bg-secondary py-1.5 text-[10px] text-muted-foreground hover:text-foreground">Refresh</button>
+	<button
+		onclick={loadEvents}
+		class="w-full rounded-md bg-secondary py-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+		>Refresh</button
+	>
 </div>

@@ -1,4 +1,4 @@
-//! The 10 core port traits that define RUSVEL's hexagonal boundary.
+//! The 12 core port traits that define RUSVEL's hexagonal boundary.
 //!
 //! Engines depend **only** on these traits. Concrete implementations
 //! live in adapter crates (`rusvel-llm`, `rusvel-db`, …) and are
@@ -18,6 +18,8 @@
 //! | [`SessionPort`] | Session → Run → Thread hierarchy |
 //! | [`AuthPort`] | Opaque credential handles |
 //! | [`ConfigPort`] | Settings + per-session overrides |
+//! | [`EmbeddingPort`] | Text → dense vector embeddings |
+//! | [`VectorStorePort`] | Similarity search over embeddings |
 //!
 //! **Not here (ADR-006):** `HarvestPort` and `PublishPort` are
 //! engine-internal traits, not cross-cutting concerns.
@@ -234,7 +236,7 @@ pub trait MemoryPort: Send + Sync {
 //  7. JobPort — central job queue  (ADR-003)
 // ════════════════════════════════════════════════════════════════════
 
-/// Central job queue replacing AutomationPort + SchedulePort.
+/// Central job queue replacing `AutomationPort` + `SchedulePort`.
 ///
 /// All async work goes through this one substrate. A worker pool
 /// routes jobs to the correct engine based on [`JobKind`].
@@ -306,7 +308,72 @@ pub trait AuthPort: Send + Sync {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  10. ConfigPort — settings + per-session overrides
+//  10. ConfigPort — settings + per-session overrides  (original #10)
+// ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+//  11. EmbeddingPort — text → vector embeddings
+// ════════════════════════════════════════════════════════════════════
+
+/// Generate dense vector embeddings from text.
+///
+/// Used by the RAG knowledge system to embed documents and queries.
+/// Adapter implementations wrap local models (fastembed) or remote
+/// APIs (`OpenAI`, Cohere, etc.).
+#[async_trait]
+pub trait EmbeddingPort: Send + Sync {
+    /// Embed multiple texts in a single batch call.
+    async fn embed(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>>;
+
+    /// Convenience: embed a single text string.
+    async fn embed_one(&self, text: &str) -> Result<Vec<f32>>;
+
+    /// The model name used for embeddings (e.g. `"all-MiniLM-L6-v2"`).
+    fn model_name(&self) -> &str;
+
+    /// The dimensionality of the embedding vectors.
+    fn dimensions(&self) -> usize;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  12. VectorStorePort — similarity search over embeddings
+// ════════════════════════════════════════════════════════════════════
+
+/// Persistent vector store for RAG knowledge retrieval.
+///
+/// Stores document chunks alongside their embedding vectors and
+/// supports similarity search. Adapter implementations wrap `LanceDB`,
+/// Qdrant, or in-memory stores.
+#[async_trait]
+pub trait VectorStorePort: Send + Sync {
+    /// Insert or update a vector entry.
+    async fn upsert(
+        &self,
+        id: &str,
+        content: &str,
+        embedding: Vec<f32>,
+        metadata: serde_json::Value,
+    ) -> Result<()>;
+
+    /// Find the most similar entries to a query embedding.
+    async fn search(
+        &self,
+        query_embedding: &[f32],
+        limit: usize,
+    ) -> Result<Vec<VectorSearchResult>>;
+
+    /// Delete an entry by ID.
+    async fn delete(&self, id: &str) -> Result<()>;
+
+    /// List entries (most recent first).
+    async fn list(&self, limit: usize) -> Result<Vec<VectorEntry>>;
+
+    /// Return the total number of entries.
+    async fn count(&self) -> Result<usize>;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  13. ConfigPort — settings + per-session overrides
 // ════════════════════════════════════════════════════════════════════
 
 /// Application and per-session configuration.

@@ -36,7 +36,7 @@ pub struct MockSource;
 
 #[async_trait]
 impl HarvestSource for MockSource {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "mock"
     }
 

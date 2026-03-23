@@ -32,10 +32,10 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 ## Architecture
 
 ```
-┌─────────────────── SURFACES ───────────────────┐
-│  CLI (Clap)  │  TUI (Ratatui)  │  Web (Svelte) │
-│                  MCP Server                      │
-└──────────────────────┬─────────────────────────┘
+┌──────────────────────── SURFACES ─────────────────────────┐
+│  CLI (Clap)  │  REPL (reedline)  │  TUI (Ratatui)        │
+│  Web (Svelte)│  MCP Server                                │
+└──────────────────────────┬────────────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
 │              DOMAIN ENGINES                     │
@@ -162,47 +162,63 @@ AgentTask { agent_id, workflow, status, cost, events }
 Session { id, workspace, agents, memory_scope, created_at }
 ```
 
-## CLI UX
+## Three-Tier CLI UX
 
+### Tier 1 — One-shot Commands
 ```bash
 # Start the web dashboard
 $ rusvel
 
-# Agent orchestration
-$ rusvel forge run "find rust gigs and draft pitches"
-$ rusvel forge status
-$ rusvel forge agents list
+# Session management
+$ rusvel session create my-startup
+$ rusvel session list
+$ rusvel session switch <id>
 
-# Code intelligence
-$ rusvel code analyze ./my-project
-$ rusvel code search "authentication"
-$ rusvel code learn ./unfamiliar-repo
+# Forge engine
+$ rusvel forge mission today
+$ rusvel forge mission goals
+$ rusvel forge mission review --period week
 
-# Opportunity discovery
-$ rusvel harvest scan --source upwork --skills rust,svelte
-$ rusvel harvest score
-$ rusvel harvest propose <opportunity-id>
-
-# Content creation
-$ rusvel content draft "how I built RUSVEL"
-$ rusvel content adapt --platform twitter,linkedin
-$ rusvel content publish --schedule "tomorrow 9am"
-$ rusvel content metrics
-
-# Business operations
-$ rusvel ops pipeline
-$ rusvel ops invoice create <client>
-$ rusvel ops sop list
-
-# Daily planning
-$ rusvel mission today
-$ rusvel mission goals
-$ rusvel mission review --weekly
-
-# Networking
-$ rusvel connect outreach --campaign "rust-clients"
-$ rusvel connect followup
+# Department commands (all 11 departments)
+$ rusvel finance status
+$ rusvel finance list --kind transactions
+$ rusvel growth events
+$ rusvel harvest status
+$ rusvel content list
+$ rusvel infra status
+$ rusvel legal events
+$ rusvel support list --kind tickets
+$ rusvel product status
+$ rusvel distro list
+$ rusvel gtm status
 ```
+
+### Tier 2 — Interactive REPL Shell
+```bash
+$ rusvel shell
+RUSVEL Interactive Shell
+Type 'help' for commands, 'exit' to quit.
+
+rusvel> use finance              # Switch to department context
+rusvel:finance> status           # Department-scoped commands
+rusvel:finance> list transactions
+rusvel:finance> events
+rusvel:finance> back             # Leave department context
+rusvel> session list             # Session management
+rusvel> status                   # All departments overview
+rusvel> exit
+```
+- Tab autocomplete for commands and departments
+- Persistent history (`~/.rusvel/shell_history.txt`)
+- Ctrl+R for history search
+
+### Tier 3 — TUI Dashboard
+```bash
+$ rusvel --tui                   # Full-screen terminal dashboard
+```
+- 4-panel layout: Tasks, Goals, Pipeline, Events
+- Loads live data from storage
+- Press `q` or `Esc` to exit
 
 ## First Vertical Slice
 

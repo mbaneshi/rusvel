@@ -7,7 +7,7 @@
 
 	let {
 		dept,
-		deptHsl,
+		deptHsl
 	}: {
 		dept: string;
 		deptHsl: string;
@@ -22,14 +22,27 @@
 	onMount(() => loadSkills());
 
 	async function loadSkills() {
-		try { skills = await getSkills(dept); } catch { skills = []; }
+		try {
+			skills = await getSkills(dept);
+		} catch {
+			skills = [];
+		}
 	}
 
 	async function handleCreateSkill() {
 		if (!newName.trim()) return;
 		try {
-			await createSkill({ id: '', name: newName.trim(), description: newDesc, prompt_template: newPrompt, metadata: { engine: dept } });
-			newName = ''; newDesc = ''; newPrompt = ''; showCreate = false;
+			await createSkill({
+				id: '',
+				name: newName.trim(),
+				description: newDesc,
+				prompt_template: newPrompt,
+				metadata: { engine: dept }
+			});
+			newName = '';
+			newDesc = '';
+			newPrompt = '';
+			showCreate = false;
 			await loadSkills();
 			toast.success('Skill created');
 		} catch (e) {
@@ -54,21 +67,34 @@
 
 <div class="p-3 space-y-2">
 	<button
-		onclick={() => showCreate = !showCreate}
+		onclick={() => (showCreate = !showCreate)}
 		class="w-full rounded-lg border border-dashed border-border py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-		style="border-color: hsl({deptHsl} / 0.3)"
-	>+ New Skill</button>
+		style="border-color: hsl({deptHsl} / 0.3)">+ New Skill</button
+	>
 
 	{#if showCreate}
 		<div class="rounded-lg bg-secondary p-3 space-y-2">
-			<input bind:value={newName} placeholder="Skill name (e.g. /wire-engine)" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none" />
-			<input bind:value={newDesc} placeholder="Description" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none" />
-			<textarea bind:value={newPrompt} placeholder="Prompt template" rows="3" class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none resize-none"></textarea>
+			<input
+				bind:value={newName}
+				placeholder="Skill name (e.g. /wire-engine)"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
+			/>
+			<input
+				bind:value={newDesc}
+				placeholder="Description"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none"
+			/>
+			<textarea
+				bind:value={newPrompt}
+				placeholder="Prompt template"
+				rows="3"
+				class="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground focus:outline-none resize-none"
+			></textarea>
 			<button
 				onclick={handleCreateSkill}
 				class="w-full rounded-md py-1 text-xs font-medium text-white"
-				style="background: hsl({deptHsl})"
-			>Create</button>
+				style="background: hsl({deptHsl})">Create</button
+			>
 		</div>
 	{/if}
 
@@ -78,14 +104,21 @@
 			role="button"
 			tabindex="0"
 			onclick={() => useSkill(skill)}
-			onkeydown={(e) => { if (e.key === 'Enter') useSkill(skill); }}
+			onkeydown={(e) => {
+				if (e.key === 'Enter') useSkill(skill);
+			}}
 		>
 			<div class="flex items-center justify-between">
-				<span class="text-xs font-mono font-medium" style="color: hsl({deptHsl})">{skill.name}</span>
+				<span class="text-xs font-mono font-medium" style="color: hsl({deptHsl})">{skill.name}</span
+				>
 				<button
-					onclick={(e) => { e.stopPropagation(); handleDeleteSkill(skill.id); }}
+					onclick={(e) => {
+						e.stopPropagation();
+						handleDeleteSkill(skill.id);
+					}}
 					class="hidden group-hover:block text-muted-foreground hover:text-red-400 text-[10px]"
-				>x</button>
+					>x</button
+				>
 			</div>
 			<p class="text-[10px] text-muted-foreground">{skill.description}</p>
 		</div>

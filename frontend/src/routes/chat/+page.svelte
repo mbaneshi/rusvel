@@ -87,10 +87,7 @@
 					conversationId = convId;
 					const last = messages[messages.length - 1];
 					if (last?.role === 'assistant') {
-						messages = [
-							...messages.slice(0, -1),
-							{ ...last, content: last.content + deltaText }
-						];
+						messages = [...messages.slice(0, -1), { ...last, content: last.content + deltaText }];
 					}
 					scrollToBottom();
 				},
@@ -101,7 +98,9 @@
 						{ role: 'assistant', content: fullText, streaming: false }
 					];
 					sending = false;
-					getConversations().then((c) => (conversations = c)).catch(() => {});
+					getConversations()
+						.then((c) => (conversations = c))
+						.catch(() => {});
 				},
 				(msg) => {
 					error = msg;
@@ -155,7 +154,9 @@
 		</div>
 		<div class="flex-1 overflow-y-auto p-2">
 			{#if conversations.length === 0}
-				<p class="p-3 text-center text-xs text-muted-foreground/50">No conversations yet.<br />Start chatting below.</p>
+				<p class="p-3 text-center text-xs text-muted-foreground/50">
+					No conversations yet.<br />Start chatting below.
+				</p>
 			{:else}
 				{#each conversations as conv}
 					<button
@@ -185,17 +186,23 @@
 			{#if messages.length === 0}
 				<div class="flex h-full items-center justify-center p-6">
 					<div class="text-center">
-						<div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-chart-4/20">
+						<div
+							class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-chart-4/20"
+						>
 							<span class="text-3xl font-bold text-primary">R</span>
 						</div>
 						<h2 class="text-xl font-semibold text-foreground">RUSVEL Assistant</h2>
 						<p class="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-							Your AI companion that knows your products, skills, and mission. Plan your day, draft content, strategize, or just think out loud.
+							Your AI companion that knows your products, skills, and mission. Plan your day, draft
+							content, strategize, or just think out loud.
 						</p>
 						<div class="mt-6 flex flex-wrap justify-center gap-2">
 							{#each ['Plan my day', 'Draft a blog post', 'Review my goals', 'What should I focus on?'] as suggestion}
 								<button
-									onclick={() => { inputText = suggestion; sendMessage(); }}
+									onclick={() => {
+										inputText = suggestion;
+										sendMessage();
+									}}
 									class="rounded-full border border-border bg-secondary/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
 								>
 									{suggestion}
@@ -209,9 +216,15 @@
 					{#each messages as msg, i}
 						{@const isUser = msg.role === 'user'}
 						{@const showAvatar = i === 0 || messages[i - 1]?.role !== msg.role}
-						<div class="flex gap-3 {isUser ? 'justify-end' : 'justify-start'} {showAvatar ? 'mt-4' : 'mt-1'}">
+						<div
+							class="flex gap-3 {isUser ? 'justify-end' : 'justify-start'} {showAvatar
+								? 'mt-4'
+								: 'mt-1'}"
+						>
 							{#if !isUser && showAvatar}
-								<div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/40 to-chart-4/30 text-xs font-bold text-primary">
+								<div
+									class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary/40 to-chart-4/30 text-xs font-bold text-primary"
+								>
 									R
 								</div>
 							{:else if !isUser}
@@ -219,30 +232,50 @@
 							{/if}
 
 							{#if isUser}
-								<div class="max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+								<div
+									class="max-w-[75%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground"
+								>
 									<p class="whitespace-pre-wrap">{msg.content}</p>
 								</div>
 								{#if showAvatar}
-									<div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-xs font-bold text-muted-foreground">
+									<div
+										class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-xs font-bold text-muted-foreground"
+									>
 										M
 									</div>
 								{:else}
 									<div class="w-8 flex-shrink-0"></div>
 								{/if}
 							{:else}
-								<div class="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary px-4 py-3 text-sm text-foreground relative group">
+								<div
+									class="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary px-4 py-3 text-sm text-foreground relative group"
+								>
 									{#if msg.streaming && !msg.content}
 										<div class="flex items-center gap-1.5">
-											<div class="h-2 w-2 animate-bounce rounded-full bg-primary" style="animation-delay: 0ms"></div>
-											<div class="h-2 w-2 animate-bounce rounded-full bg-primary" style="animation-delay: 150ms"></div>
-											<div class="h-2 w-2 animate-bounce rounded-full bg-primary" style="animation-delay: 300ms"></div>
+											<div
+												class="h-2 w-2 animate-bounce rounded-full bg-primary"
+												style="animation-delay: 0ms"
+											></div>
+											<div
+												class="h-2 w-2 animate-bounce rounded-full bg-primary"
+												style="animation-delay: 150ms"
+											></div>
+											<div
+												class="h-2 w-2 animate-bounce rounded-full bg-primary"
+												style="animation-delay: 300ms"
+											></div>
 										</div>
 									{:else}
 										<Streamdown
 											content={msg.content}
 											parseIncompleteMarkdown={!!msg.streaming}
 											baseTheme="shadcn"
-											animation={{ enabled: !!msg.streaming, type: 'blur', duration: 300, tokenize: 'word' }}
+											animation={{
+												enabled: !!msg.streaming,
+												type: 'blur',
+												duration: 300,
+												tokenize: 'word'
+											}}
 										/>
 										{#if msg.streaming}
 											<span class="inline-block h-4 w-0.5 animate-pulse bg-primary"></span>
@@ -255,7 +288,14 @@
 											class="absolute top-1 right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded bg-secondary text-muted-foreground hover:text-foreground text-[10px]"
 											title="Copy message"
 										>
-											<svg class="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1" /><path d="M3 11V3h8" /></svg>
+											<svg
+												class="h-3 w-3"
+												viewBox="0 0 16 16"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.5"
+												><rect x="5" y="5" width="8" height="8" rx="1" /><path d="M3 11V3h8" /></svg
+											>
 										</button>
 									{/if}
 								</div>
@@ -268,9 +308,13 @@
 
 		<!-- Error -->
 		{#if error}
-			<div class="mx-6 mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+			<div
+				class="mx-6 mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+			>
 				{error}
-				<button onclick={() => error = ''} class="ml-2 text-destructive hover:text-destructive/80">dismiss</button>
+				<button onclick={() => (error = '')} class="ml-2 text-destructive hover:text-destructive/80"
+					>dismiss</button
+				>
 			</div>
 		{/if}
 
@@ -293,10 +337,19 @@
 					class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-30"
 				>
 					{#if sending}
-						<div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
+						<div
+							class="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground"
+						></div>
 					{:else}
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-							<path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-4 w-4"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+						>
+							<path
+								d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"
+							/>
 						</svg>
 					{/if}
 				</button>

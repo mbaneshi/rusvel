@@ -163,11 +163,10 @@ impl AgentPort for AgentRuntime {
             // Check if stopped between iterations.
             {
                 let runs = self.runs.read().await;
-                if let Some(state) = runs.get(run_id) {
-                    if state.status == AgentStatus::Stopped {
+                if let Some(state) = runs.get(run_id)
+                    && state.status == AgentStatus::Stopped {
                         return Err(RusvelError::Agent("run was stopped".into()));
                     }
-                }
             }
 
             let request = Self::build_request(&config, &messages);

@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
 use rusvel_core::domain::{EventFilter, UserProfile};
 use rusvel_core::id::EventId;
-use rusvel_core::ports::StoragePort;
+use rusvel_core::ports::{EmbeddingPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentDef;
 use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
@@ -59,7 +59,7 @@ fn resolve_dept_config(
     let mut base = dept_def.default_config.clone();
 
     // Set system prompt from registry + user context
-    let user_context = profile.map(|p| p.to_system_prompt()).unwrap_or_default();
+    let user_context = profile.map(rusvel_core::UserProfile::to_system_prompt).unwrap_or_default();
     if base.system_prompt.is_none() {
         base.system_prompt = Some(format!("{}\n\n{user_context}", dept_def.system_prompt));
     }
@@ -103,7 +103,7 @@ impl From<(&str, ResolvedConfig)> for DepartmentConfig {
 }
 
 impl DepartmentConfig {
-    /// Convert incoming DepartmentConfig update into a LayeredConfig for storage.
+    /// Convert incoming `DepartmentConfig` update into a `LayeredConfig` for storage.
     fn to_layered(&self) -> LayeredConfig {
         LayeredConfig {
             model: Some(self.model.clone()),
@@ -227,7 +227,7 @@ pub async fn dept_chat(
     // !build interceptor
     if let Some(build_cmd) = crate::build_cmd::parse_build_command(&body.message) {
         let storage = state.storage.clone();
-        let engine_owned = dept.to_string();
+        let engine_owned = dept.clone();
         let conv_id = conversation_id.clone();
         let ns = namespace.clone();
 
@@ -267,7 +267,7 @@ pub async fn dept_chat(
 
         let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
             Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
-                .map(|event| Ok::<_, Infallible>(event)));
+                .map(Ok::<_, Infallible>));
         return Ok(Sse::new(stream).keep_alive(KeepAlive::default()));
     }
 
@@ -279,8 +279,8 @@ pub async fn dept_chat(
     };
 
     // @agent-name mention override
-    if let Some(agent_name) = extract_agent_mention(&body.message) {
-        if let Ok(agents) = state.storage.objects()
+    if let Some(agent_name) = extract_agent_mention(&body.message)
+        && let Ok(agents) = state.storage.objects()
             .list("agents", rusvel_core::domain::ObjectFilter::default()).await
         {
             let found = agents.into_iter()
@@ -294,7 +294,6 @@ pub async fn dept_chat(
                 }
             }
         }
-    }
 
     // Load enabled rules and append to system prompt
     let rules = crate::rules::load_rules_for_engine(&state, &dept).await;
@@ -304,6 +303,18 @@ pub async fn dept_chat(
             resolved.system_prompt.push_str(&format!("[{}]: {}\n", rule.name, rule.content));
         }
     }
+
+    // RAG: retrieve relevant knowledge
+    if let (Some(embed_port), Some(vector_store)) = (&state.embedding, &state.vector_store)
+        && let Ok(query_emb) = embed_port.embed_one(&body.message).await {
+            let results = vector_store.search(&query_emb, 5).await.unwrap_or_default();
+            if !results.is_empty() {
+                resolved.system_prompt.push_str("\n\n--- Relevant Knowledge ---\n");
+                for r in &results {
+                    resolved.system_prompt.push_str(&format!("[score: {:.2}] {}\n", r.score, r.entry.content));
+                }
+            }
+        }
 
     // Build prompt
     let prompt = build_dept_prompt(&resolved.system_prompt, &history, &effective_message);
@@ -353,7 +364,7 @@ pub async fn dept_chat(
                             session_id: None,
                             run_id: None,
                             source: eng,
-                            kind: format!("{}.chat.completed", eng),
+                            kind: format!("{eng}.chat.completed"),
                             payload: serde_json::json!({
                                 "conversation_id": conv_id_inner,
                                 "cost_usd": cost,
@@ -363,7 +374,7 @@ pub async fn dept_chat(
                             metadata: serde_json::json!({}),
                         }).await;
                         crate::hook_dispatch::dispatch_hooks(
-                            &format!("{}.chat.completed", eng),
+                            &format!("{eng}.chat.completed"),
                             serde_json::json!({
                                 "conversation_id": conv_id_inner,
                                 "cost_usd": cost,
@@ -415,9 +426,7 @@ pub async fn dept_conversations(
         .map(|(id, mut msgs)| {
             msgs.sort_by(|a, b| a.created_at.cmp(&b.created_at));
             let title = msgs.iter()
-                .find(|m| m.role == "user")
-                .map(|m| if m.content.len() > 60 { format!("{}...", &m.content[..57]) } else { m.content.clone() })
-                .unwrap_or_else(|| "New conversation".into());
+                .find(|m| m.role == "user").map_or_else(|| "New conversation".into(), |m| if m.content.len() > 60 { format!("{}...", &m.content[..57]) } else { m.content.clone() });
             let updated_at = msgs.last().map(|m| m.created_at.clone()).unwrap_or_default();
             ConversationSummary { id, title, updated_at, message_count: msgs.len() }
         })

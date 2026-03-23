@@ -1,4 +1,4 @@
-//! Workflows CRUD + execution — multi-step agent pipelines stored in ObjectStore.
+//! Workflows CRUD + execution — multi-step agent pipelines stored in `ObjectStore`.
 //!
 //! A workflow defines a sequence of steps, each referencing an agent by name
 //! and providing a prompt template. Execution runs each step through `claude -p`

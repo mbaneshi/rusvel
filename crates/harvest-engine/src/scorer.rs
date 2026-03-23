@@ -102,7 +102,7 @@ impl OpportunityScorer {
         }
     }
 
-    /// LLM-based scoring via AgentPort.
+    /// LLM-based scoring via `AgentPort`.
     async fn score_with_agent(
         &self,
         agent: &Arc<dyn AgentPort>,
@@ -118,9 +118,7 @@ impl OpportunityScorer {
              Required skills: {}\n\n\
              Respond with ONLY a JSON object: {{\"score\": 0.X, \"reasoning\": \"...\"}}",
             self.skills.join(", "),
-            self.min_budget
-                .map(|b| format!("${b}"))
-                .unwrap_or_else(|| "none".into()),
+            self.min_budget.map_or_else(|| "none".into(), |b| format!("${b}")),
             raw.title,
             raw.description,
             raw.budget.as_deref().unwrap_or("not specified"),

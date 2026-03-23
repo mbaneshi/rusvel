@@ -116,8 +116,11 @@
 
 							{#if job.payload && typeof job.payload === 'object'}
 								<pre
-									class="mb-3 max-h-24 overflow-auto rounded bg-gray-900 p-2 text-xs text-gray-400"
-								>{JSON.stringify(job.payload, null, 2)}</pre>
+									class="mb-3 max-h-24 overflow-auto rounded bg-gray-900 p-2 text-xs text-gray-400">{JSON.stringify(
+										job.payload,
+										null,
+										2
+									)}</pre>
 							{/if}
 
 							<div class="flex gap-2">
@@ -169,16 +172,8 @@
 		<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
 			<h3 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-400">Engines</h3>
 			<div class="space-y-2">
-				{#each [
-					{ name: 'Forge', tests: 15, status: 'Active' },
-					{ name: 'Code', tests: 6, status: 'Built' },
-					{ name: 'Harvest', tests: 12, status: 'Built' },
-					{ name: 'Content', tests: 7, status: 'Built' },
-					{ name: 'GoToMarket', tests: 5, status: 'Built' }
-				] as engine}
-					<div
-						class="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-2"
-					>
+				{#each [{ name: 'Forge', tests: 15, status: 'Active' }, { name: 'Code', tests: 6, status: 'Built' }, { name: 'Harvest', tests: 12, status: 'Built' }, { name: 'Content', tests: 7, status: 'Built' }, { name: 'GoToMarket', tests: 5, status: 'Built' }] as engine}
+					<div class="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-2">
 						<span class="text-sm text-gray-200">{engine.name}</span>
 						<div class="flex items-center gap-3">
 							<span class="text-xs text-gray-500">{engine.tests} tests</span>

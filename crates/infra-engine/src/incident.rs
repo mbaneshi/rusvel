@@ -19,6 +19,12 @@ const KIND: &str = "infra_incident";
 #[serde(transparent)]
 pub struct IncidentId(Uuid);
 
+impl Default for IncidentId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IncidentId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

@@ -24,7 +24,7 @@
 	// Static nav items (non-department pages)
 	const staticNavBefore = [
 		{ href: '/chat', label: 'Chat', icon: '>', tour: 'nav-chat' },
-		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' },
+		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' }
 	];
 	const staticNavAfter = [
 		{ href: '/settings', label: 'Settings', icon: '%', tour: 'nav-settings' }
@@ -40,9 +40,9 @@
 			href: `/dept/${d.id}`,
 			label: d.name,
 			icon: d.icon,
-			tour: d.id === 'forge' ? 'nav-forge' : '',
+			tour: d.id === 'forge' ? 'nav-forge' : ''
 		})),
-		...staticNavAfter,
+		...staticNavAfter
 	]);
 
 	let currentSessions: import('$lib/api').SessionSummary[] = $state([]);
@@ -131,9 +131,14 @@
 				class="flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
 			>
 				<!-- Logo -->
-				<div class="flex items-center justify-between border-b border-sidebar-border px-4 py-3" data-tour="sidebar-logo">
+				<div
+					class="flex items-center justify-between border-b border-sidebar-border px-4 py-3"
+					data-tour="sidebar-logo"
+				>
 					<div class="flex items-center gap-3">
-						<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+						<div
+							class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
+						>
 							R
 						</div>
 						{#if width > 100}
@@ -145,14 +150,22 @@
 						class="rounded-md p-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
 						title="Collapse sidebar"
 					>
-						<svg class="h-4 w-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L5 8l5 5" /></svg>
+						<svg
+							class="h-4 w-4"
+							viewBox="0 0 16 16"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.5"><path d="M10 3L5 8l5 5" /></svg
+						>
 					</button>
 				</div>
 
 				<!-- Session Switcher -->
 				{#if width > 100}
 					<div class="border-b border-sidebar-border px-4 py-3" data-tour="session-switcher">
-						<label for="session-select" class="mb-1 block text-xs font-medium text-muted-foreground">Session</label>
+						<label for="session-select" class="mb-1 block text-xs font-medium text-muted-foreground"
+							>Session</label
+						>
 						{#if loading}
 							<div class="text-sm text-muted-foreground">Loading...</div>
 						{:else if currentSessions.length === 0}
@@ -206,7 +219,10 @@
 				<!-- Navigation -->
 				<nav class="flex-1 overflow-y-auto px-2 py-2">
 					{#each navItems as item}
-						{@const isActive = item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
+						{@const isActive =
+							item.href === '/'
+								? page.url.pathname === '/'
+								: page.url.pathname.startsWith(item.href)}
 						<a
 							href={item.href}
 							data-tour={item.tour || undefined}
@@ -216,7 +232,11 @@
 								: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
 							title={item.label}
 						>
-							<span class="w-5 flex-shrink-0 text-center font-mono text-xs {isActive ? 'text-sidebar-primary' : 'text-muted-foreground/50'}">{item.icon}</span>
+							<span
+								class="w-5 flex-shrink-0 text-center font-mono text-xs {isActive
+									? 'text-sidebar-primary'
+									: 'text-muted-foreground/50'}">{item.icon}</span
+							>
 							{#if width > 100}
 								{item.label}
 							{/if}
@@ -232,14 +252,19 @@
 						{:else}
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-muted-foreground/50">API: localhost:3000</span>
-								<kbd class="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">⌘K</kbd>
+								<kbd
+									class="rounded border border-border bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground"
+									>⌘K</kbd
+								>
 							</div>
 						{/if}
 					</div>
 				{/if}
 			</Pane>
 
-			<PaneResizer class="w-1 cursor-col-resize bg-transparent hover:bg-primary/50 active:bg-primary/70 transition-colors" />
+			<PaneResizer
+				class="w-1 cursor-col-resize bg-transparent hover:bg-primary/50 active:bg-primary/70 transition-colors"
+			/>
 
 			<Pane class="overflow-hidden">
 				<main class="h-full overflow-hidden">
@@ -249,7 +274,9 @@
 		</PaneGroup>
 	{:else}
 		<!-- Collapsed sidebar — just icons -->
-		<aside class="flex w-12 flex-shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-3 gap-1">
+		<aside
+			class="flex w-12 flex-shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-3 gap-1"
+		>
 			<button
 				onclick={toggleSidebar}
 				class="mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90"
@@ -259,7 +286,8 @@
 				R
 			</button>
 			{#each navItems as item}
-				{@const isActive = item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
+				{@const isActive =
+					item.href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(item.href)}
 				<a
 					href={item.href}
 					data-tour={item.tour || undefined}

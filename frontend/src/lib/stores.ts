@@ -29,7 +29,7 @@ const defaultOnboarding: OnboardingState = {
 	deptChatUsed: false,
 	agentCreated: false,
 	dismissed: false,
-	tourCompleted: false,
+	tourCompleted: false
 };
 
 function loadOnboarding(): OnboardingState {
@@ -65,7 +65,7 @@ function createOnboardingStore() {
 				}
 				return next;
 			});
-		},
+		}
 	};
 }
 

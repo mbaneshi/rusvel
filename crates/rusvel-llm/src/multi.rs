@@ -44,7 +44,7 @@ impl MultiProvider {
     fn get(&self, provider: &ModelProvider) -> rusvel_core::error::Result<&dyn LlmPort> {
         self.providers
             .get(provider)
-            .map(|arc| arc.as_ref())
+            .map(std::convert::AsRef::as_ref)
             .ok_or_else(|| {
                 RusvelError::Llm(format!("no adapter registered for provider {provider:?}"))
             })

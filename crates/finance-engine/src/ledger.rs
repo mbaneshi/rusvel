@@ -12,6 +12,12 @@ use rusvel_core::ports::StoragePort;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct TransactionId(Uuid);
+impl Default for TransactionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransactionId { pub fn new() -> Self { Self(Uuid::now_v7()) } }
 impl std::fmt::Display for TransactionId { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) } }
 

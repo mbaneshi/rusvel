@@ -10,7 +10,7 @@
 		deptChatUsed: false,
 		agentCreated: false,
 		dismissed: false,
-		tourCompleted: false,
+		tourCompleted: false
 	});
 	let expanded = $state(true);
 
@@ -24,11 +24,17 @@
 	});
 
 	const steps = [
-		{ key: 'sessionCreated' as const, label: 'Create your first session', action: () => { /* sidebar handles this */ } },
+		{
+			key: 'sessionCreated' as const,
+			label: 'Create your first session',
+			action: () => {
+				/* sidebar handles this */
+			}
+		},
 		{ key: 'goalAdded' as const, label: 'Add a goal', action: () => goto('/forge') },
 		{ key: 'planGenerated' as const, label: 'Generate a daily plan', action: () => goto('/forge') },
 		{ key: 'deptChatUsed' as const, label: 'Chat with a department', action: () => goto('/code') },
-		{ key: 'agentCreated' as const, label: 'Create an agent', action: () => goto('/forge') },
+		{ key: 'agentCreated' as const, label: 'Create an agent', action: () => goto('/forge') }
 	];
 
 	let completedCount = $derived(steps.filter((s) => ob[s.key]).length);
@@ -43,14 +49,24 @@
 			class="flex w-full items-center justify-between px-4 py-3 text-left"
 		>
 			<div class="flex items-center gap-2">
-				<div class="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+				<div
+					class="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+				>
 					{completedCount}
 				</div>
 				<span class="text-sm font-medium text-foreground">Getting Started</span>
 			</div>
 			<div class="flex items-center gap-1">
 				<span class="text-[10px] text-muted-foreground">{completedCount}/{steps.length}</span>
-				<svg class="h-3.5 w-3.5 text-muted-foreground transition-transform {expanded ? 'rotate-180' : ''}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4" /></svg>
+				<svg
+					class="h-3.5 w-3.5 text-muted-foreground transition-transform {expanded
+						? 'rotate-180'
+						: ''}"
+					viewBox="0 0 16 16"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.5"><path d="M4 6l4 4 4-4" /></svg
+				>
 			</div>
 		</button>
 
@@ -70,13 +86,17 @@
 						onclick={step.action}
 						disabled={ob[step.key]}
 						class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs transition-colors
-							{ob[step.key]
-							? 'text-muted-foreground line-through'
-							: 'text-foreground hover:bg-secondary'}"
+							{ob[step.key] ? 'text-muted-foreground line-through' : 'text-foreground hover:bg-secondary'}"
 					>
 						{#if ob[step.key]}
-							<div class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-chart-2/30">
-								<svg class="h-2.5 w-2.5 text-chart-2" viewBox="0 0 12 12" fill="currentColor"><path d="M10.28 2.28a.75.75 0 00-1.06-1.06L4.5 5.94 2.78 4.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l5.25-5.25z" /></svg>
+							<div
+								class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-chart-2/30"
+							>
+								<svg class="h-2.5 w-2.5 text-chart-2" viewBox="0 0 12 12" fill="currentColor"
+									><path
+										d="M10.28 2.28a.75.75 0 00-1.06-1.06L4.5 5.94 2.78 4.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.06 0l5.25-5.25z"
+									/></svg
+								>
 							</div>
 						{:else}
 							<div class="h-4 w-4 flex-shrink-0 rounded-full border border-border"></div>

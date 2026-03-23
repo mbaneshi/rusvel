@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  commands:
+    rust-fmt:
+      glob: "*.rs"
+      run: cargo fmt --all --check
+    rust-clippy:
+      glob: "*.rs"
+      run: cargo clippy --workspace --all-targets -- -D warnings
+    frontend-check:
+      glob: "frontend/src/**/*.{svelte,ts,js}"
+      run: cd frontend && npx prettier --check "src/**/*.{svelte,ts,js,css}"
+
+pre-push:
+  commands:
+    rust-test:
+      run: cargo test --workspace

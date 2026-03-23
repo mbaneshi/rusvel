@@ -66,7 +66,7 @@ impl ProductEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for ProductEngine {
     fn kind(&self) -> EngineKind { EngineKind::Product }
-    fn name(&self) -> &str { "Product Engine" }
+    fn name(&self) -> &'static str { "Product Engine" }
     fn capabilities(&self) -> Vec<Capability> {
         vec![Capability::Custom("roadmap".into()), Capability::Custom("pricing".into()), Capability::Custom("feedback".into())]
     }

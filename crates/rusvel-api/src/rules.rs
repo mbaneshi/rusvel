@@ -97,7 +97,7 @@ pub async fn delete_rule(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Load enabled rules for a department (used by department_chat_handler).
+/// Load enabled rules for a department (used by `department_chat_handler`).
 pub async fn load_rules_for_engine(
     state: &Arc<AppState>,
     engine: &str,

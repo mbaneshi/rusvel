@@ -66,7 +66,7 @@ impl GrowthEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for GrowthEngine {
     fn kind(&self) -> EngineKind { EngineKind::Growth }
-    fn name(&self) -> &str { "Growth Engine" }
+    fn name(&self) -> &'static str { "Growth Engine" }
     fn capabilities(&self) -> Vec<Capability> {
         vec![Capability::Custom("funnel".into()), Capability::Custom("cohort".into()), Capability::Custom("kpi".into())]
     }

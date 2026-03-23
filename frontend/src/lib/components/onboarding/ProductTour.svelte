@@ -12,7 +12,7 @@
 		deptChatUsed: false,
 		agentCreated: false,
 		dismissed: false,
-		tourCompleted: false,
+		tourCompleted: false
 	});
 
 	onboarding.subscribe((v) => (ob = v));
@@ -32,28 +32,31 @@
 						element: '[data-tour="sidebar-logo"]',
 						popover: {
 							title: 'Welcome to RUSVEL',
-							description: 'Your AI-powered virtual agency. Every department has its own AI agent ready to help.',
+							description:
+								'Your AI-powered virtual agency. Every department has its own AI agent ready to help.',
 							side: 'right',
-							align: 'start',
-						},
+							align: 'start'
+						}
 					},
 					{
 						element: '[data-tour="session-switcher"]',
 						popover: {
 							title: 'Sessions',
-							description: 'Sessions are your workspaces. Create one for each project, lead, or campaign.',
+							description:
+								'Sessions are your workspaces. Create one for each project, lead, or campaign.',
 							side: 'right',
-							align: 'start',
-						},
+							align: 'start'
+						}
 					},
 					{
 						element: '[data-tour="nav-forge"]',
 						popover: {
 							title: 'Forge Department',
-							description: 'Your mission control. Set goals, generate daily plans, and run reviews here.',
+							description:
+								'Your mission control. Set goals, generate daily plans, and run reviews here.',
 							side: 'right',
-							align: 'start',
-						},
+							align: 'start'
+						}
 					},
 					{
 						element: '[data-tour="nav-chat"]',
@@ -61,8 +64,8 @@
 							title: 'God Agent Chat',
 							description: 'Chat with the central AI that has authority over all departments.',
 							side: 'right',
-							align: 'start',
-						},
+							align: 'start'
+						}
 					},
 					{
 						element: '[data-tour="nav-settings"]',
@@ -70,13 +73,13 @@
 							title: 'Settings',
 							description: 'Check system health, engine status, and configure your instance.',
 							side: 'right',
-							align: 'start',
-						},
-					},
+							align: 'start'
+						}
+					}
 				],
 				onDestroyed: () => {
 					onboarding.complete('tourCompleted');
-				},
+				}
 			});
 
 			driverObj.drive();

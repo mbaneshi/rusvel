@@ -4,7 +4,7 @@
 	let {
 		orientation = 'horizontal',
 		class: className,
-		label,
+		label
 	}: {
 		orientation?: 'horizontal' | 'vertical';
 		class?: string;

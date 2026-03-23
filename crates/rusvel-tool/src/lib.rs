@@ -96,13 +96,12 @@ fn validate_args(schema: &serde_json::Value, args: &serde_json::Value) -> Result
     // Check required fields if the schema declares them.
     if let Some(required) = schema.get("required").and_then(|v| v.as_array()) {
         for req in required {
-            if let Some(key) = req.as_str() {
-                if !args_obj.contains_key(key) {
+            if let Some(key) = req.as_str()
+                && !args_obj.contains_key(key) {
                     return Err(RusvelError::Validation(format!(
                         "missing required parameter: {key}"
                     )));
                 }
-            }
         }
     }
 
@@ -124,7 +123,10 @@ impl ToolPort for ToolRegistry {
         let mut map = self.tools.write().unwrap();
         // Only insert the definition if the tool isn't already registered
         // (preserves existing handler if re-registering definition).
-        if !map.contains_key(&name) {
+        if map.contains_key(&name) {
+            // Update definition, keep handler.
+            map.get_mut(&name).unwrap().definition = tool;
+        } else {
             let handler: ToolHandler = Arc::new(|_args| {
                 Box::pin(async { Err(RusvelError::Tool("no handler registered".into())) })
             });
@@ -132,9 +134,6 @@ impl ToolPort for ToolRegistry {
                 definition: tool,
                 handler,
             });
-        } else {
-            // Update definition, keep handler.
-            map.get_mut(&name).unwrap().definition = tool;
         }
         Ok(())
     }

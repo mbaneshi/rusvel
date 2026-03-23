@@ -19,6 +19,12 @@ const KIND: &str = "support_nps";
 #[serde(transparent)]
 pub struct NpsResponseId(Uuid);
 
+impl Default for NpsResponseId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NpsResponseId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

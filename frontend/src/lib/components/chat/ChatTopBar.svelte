@@ -28,7 +28,11 @@
 
 	onMount(async () => {
 		try {
-			const [cfg, mdls, tls] = await Promise.all([cached('global-config', getConfig), cached('models', getModels), cached('tools', getTools)]);
+			const [cfg, mdls, tls] = await Promise.all([
+				cached('global-config', getConfig),
+				cached('models', getModels),
+				cached('tools', getTools)
+			]);
 			config = cfg;
 			models = mdls;
 			tools = tls;
@@ -117,7 +121,13 @@
 		class="flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]
 			{showTools ? 'border-[var(--ring)] text-[var(--foreground)]' : ''}"
 	>
-		<svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+		<svg
+			class="h-3.5 w-3.5"
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.5"
+		>
 			<path d="M9.5 2.5L13.5 6.5L6 14H2V10L9.5 2.5Z" stroke-linejoin="round" />
 		</svg>
 		Tools
@@ -131,11 +141,15 @@
 
 	<!-- Save indicator -->
 	{#if saving}
-		<div class="h-3 w-3 animate-spin rounded-full border border-[var(--muted-foreground)] border-t-[var(--primary)]"></div>
+		<div
+			class="h-3 w-3 animate-spin rounded-full border border-[var(--muted-foreground)] border-t-[var(--primary)]"
+		></div>
 	{/if}
 
 	<!-- Model badge -->
-	<span class="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-[10px] text-[var(--muted-foreground)]">
+	<span
+		class="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-[10px] text-[var(--muted-foreground)]"
+	>
 		{config.model} · {config.effort}
 	</span>
 </div>
@@ -155,9 +169,17 @@
 						: 'border-[var(--border)] bg-[var(--secondary)] text-[var(--muted-foreground)] line-through opacity-60'}"
 				>
 					{#if enabled}
-						<svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/></svg>
+						<svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"
+							><path
+								d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"
+							/></svg
+						>
 					{:else}
-						<svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"/></svg>
+						<svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"
+							><path
+								d="M3.72 3.72a.75.75 0 011.06 0L8 6.94l3.22-3.22a.75.75 0 111.06 1.06L9.06 8l3.22 3.22a.75.75 0 11-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 01-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 010-1.06z"
+							/></svg
+						>
 					{/if}
 					{tool.name}
 				</button>

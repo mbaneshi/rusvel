@@ -8,7 +8,7 @@
 		active = $bindable(''),
 		variant = 'underline',
 		class: className,
-		onchange,
+		onchange
 	}: {
 		tabs: Tab[];
 		active?: string;
@@ -24,11 +24,7 @@
 </script>
 
 <div
-	class={cn(
-		'flex gap-1',
-		variant === 'underline' && 'border-b border-border',
-		className,
-	)}
+	class={cn('flex gap-1', variant === 'underline' && 'border-b border-border', className)}
 	role="tablist"
 >
 	{#each tabs as tab}
@@ -44,14 +40,14 @@
 					'px-3 py-2 -mb-px border-b-2',
 					active === tab.id
 						? 'border-primary text-foreground'
-						: 'border-transparent text-muted-foreground hover:text-foreground',
+						: 'border-transparent text-muted-foreground hover:text-foreground'
 				],
 				variant === 'pills' && [
 					'px-3 py-1.5 rounded-lg',
 					active === tab.id
 						? 'bg-primary text-primary-foreground'
-						: 'text-muted-foreground hover:text-foreground hover:bg-accent',
-				],
+						: 'text-muted-foreground hover:text-foreground hover:bg-accent'
+				]
 			)}
 		>
 			{tab.label}

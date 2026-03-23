@@ -1,4 +1,4 @@
-//! Skills CRUD — reusable prompt templates stored in ObjectStore.
+//! Skills CRUD — reusable prompt templates stored in `ObjectStore`.
 //!
 //! Skills are scoped to departments via `metadata.engine` field.
 
@@ -99,7 +99,7 @@ pub async fn delete_skill(
 /// Resolve a `/skill-name` invocation in a chat message.
 ///
 /// If the message starts with `/` followed by a skill name (case-insensitive,
-/// hyphens and underscores normalized), looks up the skill in ObjectStore,
+/// hyphens and underscores normalized), looks up the skill in `ObjectStore`,
 /// interpolates `{{input}}` with the remaining text, and returns the expanded prompt.
 ///
 /// Returns `None` if no skill matches.
@@ -147,7 +147,7 @@ pub async fn resolve_skill(
 
     // Match by normalized name (spaces/underscores → hyphens, case-insensitive)
     let skill = skills.into_iter().find(|s| {
-        let normalized_name = s.name.to_lowercase().replace(' ', "-").replace('_', "-");
+        let normalized_name = s.name.to_lowercase().replace([' ', '_'], "-");
         normalized_name == normalized_slug
     })?;
 

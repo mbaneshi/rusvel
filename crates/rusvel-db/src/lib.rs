@@ -4,7 +4,7 @@
 //!
 //! Uses `rusqlite` with WAL mode for concurrent reads. All five
 //! sub-stores (events, objects, sessions, jobs, metrics) are backed
-//! by a single SQLite database with proper indexes.
+//! by a single `SQLite` database with proper indexes.
 
 mod migrations;
 mod store;

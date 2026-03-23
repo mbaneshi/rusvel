@@ -15,11 +15,11 @@
 	} = $props();
 
 	const sizes: Record<string, string> = {
-		sm:   'max-w-2xl',
-		md:   'max-w-4xl',
-		lg:   'max-w-6xl',
-		xl:   'max-w-7xl',
-		full: 'max-w-full',
+		sm: 'max-w-2xl',
+		md: 'max-w-4xl',
+		lg: 'max-w-6xl',
+		xl: 'max-w-7xl',
+		full: 'max-w-full'
 	};
 </script>
 

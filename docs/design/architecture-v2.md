@@ -23,11 +23,11 @@
 ## Revised Architecture
 
 ```
-┌─────────────────── SURFACES ───────────────────┐
-│  CLI (Clap)  │  TUI (Ratatui)  │  Web (Svelte) │
-│                  MCP Server                      │
-│           rust-embed serves SPA at /             │
-└──────────────────────┬─────────────────────────┘
+┌──────────────────────── SURFACES ─────────────────────────┐
+│  CLI (Clap)  │  REPL (reedline)  │  TUI (Ratatui)        │
+│  Web (Svelte)│  MCP Server                                │
+│           rust-embed serves SPA at /                      │
+└──────────────────────────┬────────────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
 │         DEPARTMENT REGISTRY (12 depts)           │
@@ -512,8 +512,8 @@ all-in-one-rusvel/
 │   ├── infra-engine/       ← CI/CD, deployments, monitoring, incidents
 │   │
 │   ├── rusvel-api/         ← Axum HTTP + SSE + dept routing + hook dispatch + capability
-│   ├── rusvel-cli/         ← Clap CLI
-│   ├── rusvel-tui/         ← Ratatui TUI
+│   ├── rusvel-cli/         ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
+│   ├── rusvel-tui/         ← TUI dashboard (Ratatui) — wired via --tui flag
 │   ├── rusvel-mcp/         ← MCP server (stdio + SSE)
 │   └── rusvel-app/         ← Binary entry point (composition root)
 │
@@ -523,3 +523,11 @@ all-in-one-rusvel/
 ```
 
 27 crates (was 20). 12 department engines + 9 adapters + 4 surfaces + rusvel-core + rusvel-app.
+
+### Three-Tier Terminal Interface
+
+The CLI surface provides three ways to interact from the terminal:
+
+1. **One-shot commands** (`rusvel <dept> <action>`) — Clap 4 with 11 department subcommands + session/forge. Pipe-friendly, scriptable.
+2. **Interactive REPL** (`rusvel shell`) — reedline-powered prompt with Tab completion, history, department context switching (`use finance` → `rusvel:finance> `).
+3. **TUI dashboard** (`rusvel --tui`) — Ratatui full-screen dashboard with Tasks, Goals, Pipeline, Events panels. Loads live data from storage.

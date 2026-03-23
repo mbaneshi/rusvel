@@ -1,6 +1,6 @@
 //! Hook dispatch — fires matching hooks when events occur.
 //!
-//! Hooks are stored in ObjectStore["hooks"]. When an event fires (e.g.,
+//! Hooks are stored in `ObjectStore`["hooks"]. When an event fires (e.g.,
 //! `code.chat.completed`), this module finds all enabled hooks whose `event`
 //! field matches, and executes them asynchronously (fire-and-forget).
 //!
@@ -18,7 +18,7 @@ use crate::hooks::HookDefinition;
 
 /// Dispatch all matching hooks for an event. Runs asynchronously — does not block.
 ///
-/// Call this after emitting events (e.g., in department_chat_handler, workflow execution).
+/// Call this after emitting events (e.g., in `department_chat_handler`, workflow execution).
 /// Each matched hook spawns its own tokio task; errors are logged, not propagated.
 pub fn dispatch_hooks(
     event_kind: &str,
@@ -78,7 +78,7 @@ async fn load_matching_hooks(
 
 /// Check if a hook's event + matcher pattern matches the given event kind.
 ///
-/// - Exact match: hook.event == event_kind
+/// - Exact match: hook.event == `event_kind`
 /// - Wildcard: hook.matcher == "*" matches any event
 /// - Suffix match: hook.event == "chat.completed" matches "code.chat.completed"
 fn matches_event(hook_event: &str, hook_matcher: &str, event_kind: &str) -> bool {
@@ -105,7 +105,7 @@ async fn execute_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Res
     }
 }
 
-/// Run a shell command. The event payload is available as $HOOK_PAYLOAD env var.
+/// Run a shell command. The event payload is available as $`HOOK_PAYLOAD` env var.
 async fn execute_command_hook(hook: &HookDefinition, payload: &serde_json::Value) -> Result<(), String> {
     let payload_str = serde_json::to_string(payload).unwrap_or_default();
 

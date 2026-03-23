@@ -84,13 +84,9 @@ pub fn pipeline_widget(stats: &HashMap<String, usize>) -> BarChart<'_> {
     let stages = ["Cold", "Contacted", "Qualified", "ProposalSent", "Won", "Lost"];
     let bars: Vec<Bar<'_>> = stages
         .iter()
-        .filter_map(|s| {
+        .map(|s| {
             let val = *stats.get(*s).unwrap_or(&0);
-            if val > 0 || true {
-                Some(Bar::default().label((*s).into()).value(val as u64))
-            } else {
-                None
-            }
+            Bar::default().label((*s).into()).value(val as u64)
         })
         .collect();
 

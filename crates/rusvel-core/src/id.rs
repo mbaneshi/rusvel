@@ -10,7 +10,7 @@ use uuid::Uuid;
 ///   `Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize`
 ///
 /// And provides:
-///   - `new()` — random UUIDv7 (time-ordered)
+///   - `new()` — random `UUIDv7` (time-ordered)
 ///   - `from_uuid(uuid)` — wrap an existing UUID
 ///   - `as_uuid()` — borrow the inner value
 ///   - `Display` — delegates to the inner UUID

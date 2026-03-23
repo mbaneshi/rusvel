@@ -9,7 +9,7 @@
 		confirmLabel = 'Confirm',
 		cancelLabel = 'Cancel',
 		variant = 'danger' as 'primary' | 'danger',
-		onconfirm,
+		onconfirm
 	}: {
 		open?: boolean;
 		title?: string;
@@ -28,7 +28,7 @@
 
 <Dialog bind:open {title} {description}>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => open = false}>{cancelLabel}</Button>
-		<Button variant={variant} onclick={handleConfirm}>{confirmLabel}</Button>
+		<Button variant="ghost" onclick={() => (open = false)}>{cancelLabel}</Button>
+		<Button {variant} onclick={handleConfirm}>{confirmLabel}</Button>
 	{/snippet}
 </Dialog>

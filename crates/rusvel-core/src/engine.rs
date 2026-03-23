@@ -18,7 +18,7 @@ use crate::error::Result;
 /// | Code | Code intelligence (Rust-only v0) |
 /// | Harvest | Opportunity discovery |
 /// | Content | Creation & publishing |
-/// | GoToMarket | CRM + outreach + ops |
+/// | `GoToMarket` | CRM + outreach + ops |
 ///
 /// Engines depend **only** on port traits from `rusvel-core`.
 /// They receive concrete adapters at construction time via

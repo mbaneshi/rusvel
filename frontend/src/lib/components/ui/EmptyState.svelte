@@ -9,7 +9,7 @@
 		title,
 		description,
 		class: className,
-		actions,
+		actions
 	}: {
 		icon?: IconName;
 		title: string;

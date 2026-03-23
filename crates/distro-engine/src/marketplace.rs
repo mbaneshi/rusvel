@@ -18,6 +18,12 @@ const KIND: &str = "distro_listing";
 #[serde(transparent)]
 pub struct ListingId(Uuid);
 
+impl Default for ListingId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ListingId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

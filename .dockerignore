@@ -1,0 +1,13 @@
+target/
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+.git/
+old/
+good-repo/
+*.db
+*.db-shm
+*.db-wal
+.env*
+.rusvel/
+.claude/

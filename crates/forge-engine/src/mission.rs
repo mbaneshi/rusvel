@@ -1,6 +1,6 @@
 //! Mission sub-module: goals, daily planning, and reviews.
 //!
-//! All persistence goes through [`StoragePort`] (ObjectStore) and all
+//! All persistence goes through [`StoragePort`] (`ObjectStore`) and all
 //! AI work goes through [`AgentPort`] — never concrete adapters (ADR-010).
 
 use chrono::{NaiveDate, Utc};

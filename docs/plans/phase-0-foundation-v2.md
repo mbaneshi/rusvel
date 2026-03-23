@@ -76,21 +76,24 @@
 - [ ] Respects session boundaries
 - [ ] Integration test: create session → set goals → generate today → verify plan + events
 
-## Milestone 0.4 — CLI Surface
+## Milestone 0.4 — CLI Surface (3-Tier)
 
-**Wire forge engine to CLI.**
+**Wire forge engine to CLI with three interaction modes.**
 
-- [ ] `rusvel-cli` with Clap 4
-- [ ] `rusvel session create <name>` → creates session, prints ID
-- [ ] `rusvel session list` → lists sessions
-- [ ] `rusvel session switch <id>` → sets active session
-- [ ] `rusvel forge mission today` → daily plan for active session
-- [ ] `rusvel forge mission goals` → list goals
-- [ ] `rusvel forge mission goal add "..."` → create goal
-- [ ] `rusvel forge mission review --weekly` → weekly review
-- [ ] `rusvel-app` binary wires adapters → engine → CLI
-- [ ] Pretty terminal output
-- [ ] End-to-end test: binary produces output
+- [x] `rusvel-cli` with Clap 4
+- [x] `rusvel session create <name>` → creates session, prints ID
+- [x] `rusvel session list` → lists sessions
+- [x] `rusvel session switch <id>` → sets active session
+- [x] `rusvel forge mission today` → daily plan for active session
+- [x] `rusvel forge mission goals` → list goals
+- [x] `rusvel forge mission goal add "..."` → create goal
+- [x] `rusvel forge mission review --weekly` → weekly review
+- [x] `rusvel-app` binary wires adapters → engine → CLI
+- [x] Pretty terminal output
+- [x] End-to-end test: binary produces output
+- [x] **Tier 1 — Department subcommands:** `rusvel <dept> status|list|events` for all 11 departments
+- [x] **Tier 2 — Interactive REPL:** `rusvel shell` with reedline (autocomplete, history, `use <dept>` context switching)
+- [x] **Tier 3 — TUI dashboard:** `rusvel --tui` wired to ratatui (Tasks, Goals, Pipeline, Events panels)
 
 ## Milestone 0.5 — API + Web Surface
 
@@ -152,7 +155,7 @@
 - Harvest Engine (Phase 2) — just a stub
 - Content Engine (Phase 2) — just a stub
 - GoToMarket Engine (Phase 3) — just a stub
-- TUI surface (Phase 2)
+- ~~TUI surface (Phase 2)~~ — Moved to Phase 0, basic dashboard wired via `--tui`
 - Cloud LLM adapters: Claude/OpenAI/Gemini (Phase 1, Ollama only now)
 - Semantic vector search in memory (Phase 1, FTS5 only now)
 - Multi-language code parsing (Phase 1, Rust only)

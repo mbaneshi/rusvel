@@ -72,7 +72,7 @@ impl SupportEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for SupportEngine {
     fn kind(&self) -> EngineKind { EngineKind::Support }
-    fn name(&self) -> &str { "Support Engine" }
+    fn name(&self) -> &'static str { "Support Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

@@ -11,6 +11,12 @@ use rusvel_core::ports::StoragePort;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FunnelStageId(Uuid);
+impl Default for FunnelStageId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FunnelStageId { pub fn new() -> Self { Self(Uuid::now_v7()) } }
 impl std::fmt::Display for FunnelStageId { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) } }
 

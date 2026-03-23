@@ -15,7 +15,7 @@ pub struct Proposal {
     pub metadata: serde_json::Value,
 }
 
-/// Generates tailored proposals using the AgentPort.
+/// Generates tailored proposals using the `AgentPort`.
 pub struct ProposalGenerator {
     agent: Arc<dyn AgentPort>,
 }
@@ -50,9 +50,7 @@ impl ProposalGenerator {
             opportunity.description,
             opportunity.url.as_deref().unwrap_or("N/A"),
             opportunity
-                .value_estimate
-                .map(|v| format!("${v}"))
-                .unwrap_or_else(|| "not specified".into()),
+                .value_estimate.map_or_else(|| "not specified".into(), |v| format!("${v}")),
             profile,
         );
 

@@ -23,21 +23,24 @@
 	} = $props();
 
 	const variants: Record<Variant, string> = {
-		default:  'bg-card text-card-foreground border border-border shadow-sm',
+		default: 'bg-card text-card-foreground border border-border shadow-sm',
 		bordered: 'bg-transparent border border-border',
-		raised:   'bg-card text-card-foreground shadow-lg',
-		ghost:    'bg-transparent',
+		raised: 'bg-card text-card-foreground shadow-lg',
+		ghost: 'bg-transparent'
 	};
 
 	const paddings: Record<string, string> = {
 		none: '',
-		sm:   'p-3',
-		md:   'p-5',
-		lg:   'p-6',
+		sm: 'p-3',
+		md: 'p-5',
+		lg: 'p-6'
 	};
 </script>
 
-<div class={cn('rounded-xl', variants[variant], !header && !footer && paddings[padding], className)} {...rest}>
+<div
+	class={cn('rounded-xl', variants[variant], !header && !footer && paddings[padding], className)}
+	{...rest}
+>
 	{#if header}
 		<div class={cn('border-b border-border', paddings[padding])}>
 			{@render header()}

@@ -15,7 +15,7 @@ export const deptColorMap: Record<string, string> = {
 	lime: '84 85% 43%',
 	pink: '330 81% 60%',
 	teal: '173 80% 36%',
-	violet: '263 70% 50%',
+	violet: '263 70% 50%'
 };
 
 export function getDeptColor(color: string): string {

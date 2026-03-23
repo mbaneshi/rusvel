@@ -33,7 +33,7 @@
 	const sizes: Record<Size, string> = {
 		sm: 'h-8 text-sm px-2.5',
 		md: 'h-9 text-sm px-3',
-		lg: 'h-10 text-base px-4',
+		lg: 'h-10 text-base px-4'
 	};
 
 	const inputId = `input-${Math.random().toString(36).slice(2, 9)}`;
@@ -65,9 +65,7 @@
 				'disabled:opacity-50 disabled:pointer-events-none',
 				sizes[size],
 				icon && 'pl-10',
-				error
-					? 'border-destructive focus-visible:outline-destructive'
-					: 'border-input',
+				error ? 'border-destructive focus-visible:outline-destructive' : 'border-input'
 			)}
 			{...rest}
 		/>

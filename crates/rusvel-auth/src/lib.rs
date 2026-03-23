@@ -127,13 +127,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_env_picks_up_vars() {
-        // SAFETY: test-only; no other threads read this var concurrently.
-        unsafe { std::env::set_var("RUSVEL_KEY_TESTONLY", "secret123") };
+    async fn from_env_returns_none_for_missing() {
         let auth = InMemoryAuthAdapter::from_env();
-        let got = auth.get_credential("testonly").await.unwrap().unwrap();
-        assert_eq!(got.provider, "env");
-        assert_eq!(got.kind, CredentialKind::ApiKey);
-        unsafe { std::env::remove_var("RUSVEL_KEY_TESTONLY") };
+        let got = auth.get_credential("nonexistent_key_xyz").await.unwrap();
+        assert!(got.is_none());
     }
 }

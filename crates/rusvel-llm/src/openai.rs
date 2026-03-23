@@ -1,4 +1,4 @@
-//! OpenAI HTTP adapter implementing [`LlmPort`].
+//! `OpenAI` HTTP adapter implementing [`LlmPort`].
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -13,10 +13,10 @@ use rusvel_core::ports::LlmPort;
 //  OpenAiProvider
 // ════════════════════════════════════════════════════════════════════
 
-/// OpenAI API adapter.
+/// `OpenAI` API adapter.
 ///
 /// Talks to `https://api.openai.com/v1` (or a custom base URL for
-/// Azure OpenAI / compatible proxies).
+/// Azure `OpenAI` / compatible proxies).
 pub struct OpenAiProvider {
     base_url: String,
     api_key: String,
@@ -260,7 +260,7 @@ fn from_openai_response(resp: OpenAiChatResponse) -> LlmResponse {
             let reason = match c.finish_reason.as_deref() {
                 Some("stop") => FinishReason::Stop,
                 Some("length") => FinishReason::Length,
-                Some("tool_calls") | Some("function_call") => FinishReason::ToolUse,
+                Some("tool_calls" | "function_call") => FinishReason::ToolUse,
                 Some("content_filter") => FinishReason::ContentFilter,
                 Some(other) => FinishReason::Other(other.into()),
                 None => FinishReason::Other("unknown".into()),

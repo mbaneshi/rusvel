@@ -19,6 +19,12 @@ const KIND: &str = "infra_health_check";
 #[serde(transparent)]
 pub struct HealthCheckId(Uuid);
 
+impl Default for HealthCheckId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HealthCheckId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

@@ -17,6 +17,7 @@ pub mod department;
 pub mod help;
 pub mod hook_dispatch;
 pub mod hooks;
+pub mod knowledge;
 pub mod mcp_servers;
 pub mod routes;
 pub mod rules;
@@ -35,7 +36,7 @@ use tower_http::trace::TraceLayer;
 
 use forge_engine::ForgeEngine;
 use rusvel_core::domain::UserProfile;
-use rusvel_core::ports::{EventPort, SessionPort, StoragePort};
+use rusvel_core::ports::{EmbeddingPort, EventPort, SessionPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentRegistry;
 
 /// Shared application state injected into all handlers.
@@ -46,6 +47,8 @@ pub struct AppState {
     pub storage: Arc<dyn StoragePort>,
     pub profile: Option<UserProfile>,
     pub registry: DepartmentRegistry,
+    pub embedding: Option<Arc<dyn EmbeddingPort>>,
+    pub vector_store: Option<Arc<dyn VectorStorePort>>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -120,6 +123,12 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/hooks", get(hooks::list_hooks).post(hooks::create_hook))
         .route("/api/hooks/{id}", axum::routing::put(hooks::update_hook).delete(hooks::delete_hook))
         .route("/api/hooks/events", get(hooks::list_hook_events))
+        // Knowledge (RAG)
+        .route("/api/knowledge", get(knowledge::list_knowledge))
+        .route("/api/knowledge/ingest", post(knowledge::ingest_knowledge))
+        .route("/api/knowledge/search", post(knowledge::search_knowledge))
+        .route("/api/knowledge/stats", get(knowledge::knowledge_stats))
+        .route("/api/knowledge/{id}", axum::routing::delete(knowledge::delete_knowledge))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

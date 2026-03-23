@@ -56,9 +56,7 @@ impl ContentWriter {
         let body = extract_text(&output.content);
         let title = body
             .lines()
-            .find(|l| l.starts_with("# "))
-            .map(|l| l.trim_start_matches("# ").to_string())
-            .unwrap_or_else(|| topic.to_string());
+            .find(|l| l.starts_with("# ")).map_or_else(|| topic.to_string(), |l| l.trim_start_matches("# ").to_string());
 
         Ok(ContentItem {
             id: ContentId::new(),

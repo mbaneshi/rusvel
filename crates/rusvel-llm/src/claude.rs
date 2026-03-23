@@ -218,7 +218,7 @@ fn from_claude_response(resp: ClaudeResponse) -> LlmResponse {
     }
 
     let finish_reason = match resp.stop_reason.as_deref() {
-        Some("end_turn") | Some("stop") => FinishReason::Stop,
+        Some("end_turn" | "stop") => FinishReason::Stop,
         Some("max_tokens") => FinishReason::Length,
         Some("tool_use") => FinishReason::ToolUse,
         Some(other) => FinishReason::Other(other.into()),

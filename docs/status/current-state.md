@@ -1,175 +1,198 @@
-# RUSVEL — Current State & Next Steps
+# RUSVEL — Current State
 
-> Last updated: 2026-03-22
-> Phase: 0 (Foundation) — partially complete
-
----
-
-## Where We Want to Reach (The Vision)
-
-RUSVEL is a **solo builder's AI-powered virtual agency** — one binary that gives a single person the leverage of an entire agency. It orchestrates AI agents across five domains:
-
-| Engine | What it does |
-|--------|-------------|
-| **Forge** | Agent orchestration + mission planning (goals, daily plans, reviews) |
-| **Code** | Code intelligence (parse, analyze, search, metrics) |
-| **Harvest** | Opportunity discovery (scrape CDPs, score gigs, generate proposals) |
-| **Content** | Content creation & publishing (draft → adapt → schedule → publish) |
-| **GoToMarket** | CRM, outreach sequences, invoicing, deal pipeline |
-
-The end state: you say `rusvel forge mission today` and it plans your day across all five engines. You say `rusvel harvest scan` and it finds gigs. You say `rusvel content draft "topic"` and it writes, adapts for platforms, schedules with your approval. All from one binary, local-first, with AI agents doing the work.
+> Last verified: 2026-03-23 (generated from live codebase inspection)
 
 ---
 
-## What's Built & Working (Verified 2026-03-22)
+## 1. Numbers at a Glance
 
-### Compiles & Tests Pass
-- **20 crates**, ~13,700 lines of Rust
-- **149 tests**, all passing, < 1 second total
-- Compiles clean (1 dead-code warning in forge-engine)
-
-### Fully Functional (tested end-to-end)
-
-| Feature | CLI Command | Status |
-|---------|------------|--------|
-| Create session | `rusvel session create <name>` | Works — persists to SQLite |
-| List sessions | `rusvel session list` | Works — shows active marker |
-| Switch session | `rusvel session switch <id>` | Works |
-| Add goal | `rusvel forge mission goal add <title>` | Works — persists + emits event |
-| List goals | `rusvel forge mission goals` | Works |
-| API server | `cargo run` (no subcommand) | Starts on :3000 |
-| Health check | `GET /api/health` | Works |
-
-### AI-Powered Features (via Claude Max subscription)
-
-| Feature | CLI Command | Status |
-|---------|------------|--------|
-| Daily plan | `rusvel forge mission today` | Works — calls Claude via `claude -p` CLI |
-| Weekly review | `rusvel forge mission review` | Works — same Claude CLI path |
-
-**LLM wiring:** Uses `ClaudeCliProvider::max_subscription()` which spawns `claude -p` with env vars for Max subscription ($0 API credits). The Claude CLI JSON output (array format) is parsed correctly, including markdown code fence stripping for JSON responses.
-
-### Built with Tests, but NO CLI/API Surface
-
-These engines have real logic and passing tests, but you can't reach them from the CLI or API:
-
-| Engine | Lines | Tests | What it can do (in code) |
-|--------|-------|-------|-------------------------|
-| **content-engine** | ~1,000 | 7 | Draft content, adapt for platforms (Twitter/LinkedIn/etc.), schedule via calendar, publish with approval gates, track analytics |
-| **harvest-engine** | ~1,000 | 12 | Define sources (Upwork/LinkedIn/GitHub), scan with scoring pipeline, generate proposals, manage opportunity pipeline (Cold→Won/Lost) |
-| **gtm-engine** | ~870 | 5 | CRM contacts, outreach sequences (multi-step with delays), invoicing, deal stage management |
-| **code-engine** | ~880 | 6 | Parse Rust files, build dependency graphs, BM25 search across codebase, code metrics (lines, complexity) |
-
-### Built but Not Wired
-
-| Component | What it does | What's missing |
-|-----------|-------------|----------------|
-| **rusvel-agent workflow** | Sequential, Parallel, Loop execution patterns | No CLI/API to trigger workflows |
-| **10 agent personas** | CodeWriter, Tester, SecurityAuditor, ContentWriter, etc. | `hire_persona()` exists but no CLI command |
-| **rusvel-mcp** | MCP server (stdio JSON-RPC) | Imported but `--mcp` flag not dispatched in main |
-| **rusvel-tui** | Terminal UI layout + widgets | Not wired into main |
-| **Multi-provider LLM** | Ollama + Claude API + Claude CLI + OpenAI | Claude CLI wired; MultiProvider router unused |
-| **Job queue worker** | `JobPort` with enqueue/dequeue/approve | No worker loop to process jobs |
-| **rust-embed** | Embed frontend in binary | Not integrated (serving from filesystem instead) |
+| Metric | Count |
+|---|---|
+| Workspace crates | 27 |
+| Rust lines of code | 22,015 |
+| Passing tests | 192 (0 failures, 1 ignored) |
+| API route registrations | 44 |
+| API modules | 16 (`agents`, `analytics`, `approvals`, `build_cmd`, `capability`, `chat`, `config`, `department`, `help`, `hook_dispatch`, `hooks`, `mcp_servers`, `routes`, `rules`, `skills`, `workflows`) |
+| Frontend pages | 4 (`/`, `/chat`, `/settings`, `/dept/[id]`) |
+| Frontend Svelte components | 37 (32 lib components + 4 pages + layout) |
+| Frontend files (`.svelte` + `.ts`) | 50 |
+| Frontend lines | 5,039 |
 
 ---
 
-## Phase 0 Milestones (from `phase-0-foundation-v2.md`)
+## 2. Build Health
 
-| Milestone | Description | Status |
-|-----------|-------------|--------|
-| **0.1** | rusvel-core: 10 port traits + domain types | DONE |
-| **0.2** | Adapters: db, llm, event, memory, tool, auth, config, jobs | DONE |
-| **0.3** | Forge Engine: agent orchestration + mission | DONE — Claude CLI wired, generates plans |
-| **0.4** | CLI: `rusvel forge mission today` works | DONE — full flow works end-to-end |
-| **0.5** | API + Web: Axum HTTP + SvelteKit dashboard | DONE — API + frontend served from same :3000 |
-| **0.6** | MCP: stdio + SSE server | BUILT, not wired |
-
-**Phase 0 Definition of Done (not yet met):**
-- [x] `rusvel forge mission today` works end-to-end (CLI → Agent → Claude CLI → plan)
-- [x] Same flow works via API (`GET /api/sessions/:id/mission/today`)
-- [x] Same flow works via web dashboard (http://localhost:3000/forge)
-- [ ] MCP server exposes forge commands (deferred)
-- [ ] Central job queue processes at least one job type
-- [ ] Human approval model wired (not just defined)
-- [ ] Single binary < 50MB with embedded frontend (currently serves from filesystem)
+| Check | Status |
+|---|---|
+| `cargo build` | Clean — 0 errors, 0 warnings |
+| `cargo test` | All 192 pass, 0 failures |
+| `svelte-check` | 0 errors, 0 warnings (561 files checked) |
 
 ---
 
-## The 5-Phase Roadmap (from `roadmap-v2.md`)
+## 3. What Works End-to-End
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| **0** | Foundation + Forge mission vertical slice | **IN PROGRESS** — 70% |
-| **1** | Agent runtime (workflows, graph), Code intelligence, multi-LLM, embeddings, observability | Code engine built but not exposed |
-| **2** | Harvest + Content revenue engines, TUI dashboard | Engines built, need CLI + approval flow |
-| **3** | GoToMarket complete: CRM, outreach, invoicing, email/LinkedIn adapters | Engine built, need CLI + real adapters |
-| **4** | Cross-engine intelligence: Forge orchestrates all engines, learning from outcomes | Not started |
-| **5** | Ecosystem: plugins, A2A protocol, browser extension, community personas | Not started |
+These features are wired from binary entry point through adapters to the frontend.
 
----
+**API server startup** — `rusvel-app/main.rs` boots all adapters (SQLite WAL, Claude CLI LLM, EventBus, MemoryStore, ToolRegistry, JobQueue, AgentRuntime), builds ForgeEngine, seeds default data, spawns job worker, loads department registry, starts Axum on `:3000` with graceful shutdown.
 
-## Architecture Principles (from 10 ADRs)
+**First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session.
 
-These are the rules we committed to. The code follows them:
+**Embedded frontend** — `rust-embed` compiles `frontend/build/` into the binary. Falls back through filesystem locations, then extracts embedded assets to temp dir.
 
-1. **5 engines, not 7** — Ops+Connect merged to GoToMarket, Mission folded into Forge (ADR-001, ADR-002)
-2. **Single job queue** — no per-engine scheduling; one SQLite queue for all async work (ADR-003)
-3. **5 canonical stores** — Events, Objects, Sessions, Jobs, Metrics (ADR-004)
-4. **Event.kind is String** — engines define their own constants, core stays minimal (ADR-005)
-5. **HarvestPort/PublishPort are engine-internal** — not core ports (ADR-006)
-6. **metadata: serde_json::Value on everything** — schema evolution without migrations (ADR-007)
-7. **Human-in-the-loop from day one** — publish and outreach require approval (ADR-008)
-8. **Engines use AgentPort, never LlmPort** — clean boundary (ADR-009)
-9. **Engines depend only on rusvel-core traits** — never import adapter crates (ADR-010)
+**Department chat (SSE streaming)** — Parameterized `POST /api/dept/{dept}/chat` streams Claude CLI output via SSE. Includes:
+- Three-layer config cascade: registry defaults + stored overrides + user context
+- `@agent-name` mentions override model/instructions/tools from ObjectStore
+- `/skill-name` resolution expands skill prompt templates inline
+- `!build` command interceptor creates entities (agents, skills, rules, etc.) from natural language
+- Rules loaded from ObjectStore and appended to system prompt
+- MCP server config loaded per-department and passed to `claude -p`
+- Hook dispatch fires asynchronously after `{engine}.chat.completed` events
+- Conversation persistence via namespaced ObjectStore
 
----
+**God agent chat** — `POST /api/chat` with SSE streaming, conversation history, profile context.
 
-## Immediate Next Steps (Priority Order)
+**Session management** — Full CRUD: create, list, get sessions via API + CLI.
 
-### 1. Fix LLM wiring (unblocks everything)
-Wire `MultiProvider` in `rusvel-app/main.rs` with Ollama as default provider. Change agent default model to one that's actually installed (e.g., `qwen3:14b`). This makes `forge mission today` and `forge mission review` work.
+**Mission planning** — `GET /api/sessions/{id}/mission/today` generates daily plans via ForgeEngine. CLI: `rusvel forge mission today`.
 
-### 2. Complete Phase 0 vertical slice
-- Test `mission today` end-to-end (CLI → Agent → Ollama → plan output)
-- Test same via API endpoint
-- Wire `--mcp` flag dispatch (one if-branch in main.rs)
+**Goal management** — CRUD for goals scoped to sessions.
 
-### 3. Expose one more engine via CLI
-Add `rusvel content draft "topic"` or `rusvel harvest scan` — prove the architecture works for a second engine, not just forge.
+**Event system** — EventBus emits + persists events; `GET /api/sessions/{id}/events` and `GET /api/dept/{dept}/events` query them.
 
-### 4. Wire job queue worker loop
-The queue can enqueue jobs but nothing processes them. Add a simple worker that dequeues and dispatches to engines.
+**Entity CRUD endpoints** — Full REST for:
+- Agents (`/api/agents`) — list, create, get, update, delete
+- Skills (`/api/skills`) — list, create, get, update, delete
+- Rules (`/api/rules`) — list, create, get, update, delete
+- MCP servers (`/api/mcp-servers`) — list, create, update, delete
+- Hooks (`/api/hooks`) — list, create, update, delete + event listing
+- Workflows (`/api/workflows`) — list, create, get, update, delete + execute
 
-### 5. Build real frontend
-The SvelteKit shell exists. Build the dashboard: session list, goal view, daily plan display, approval UI.
+**Approval flow (ADR-008)** — `GET /api/approvals` lists jobs in `AwaitingApproval` status; `POST .../approve` and `.../reject` change state. Job worker skips approval-gated jobs.
 
----
+**Capability Engine** — `POST /api/capability/build` uses Claude with web tools to discover MCP servers/skills online, generates a bundle, and auto-installs entities. Also available inline via `!capability` prefix in department chat.
 
-## Available LLM Models (local Ollama, verified running)
+**Workflow execution** — `POST /api/workflows/{id}/run` runs multi-step agent pipelines sequentially, feeding each step's output into the next. Supports variable substitution via `{{key}}` templates.
 
-```
-qwen3:30b-a3b     18 GB
-qwen3:14b          9.3 GB
-qwen2.5-coder:14b  9.0 GB
-gemma3:27b         17 GB
-gemma3:latest      3.3 GB
-deepseek-r1:14b    9.0 GB
-llama3.1:8b        4.9 GB
-qwen2.5:7b         4.7 GB
-```
+**Hook dispatch** — Three hook types: `command` (shell), `http` (POST), `prompt` (claude -p). Fires asynchronously on event match with exact, wildcard, and suffix matching.
+
+**Seed data** — On first run, seeds 5 default agents (rust-engine, svelte-ui, test-writer, content-writer, proposal-writer), 5 skills (Code Review, Blog Draft, Proposal Draft, Test Generator, Daily Standup), and 3 rules (Hexagonal Architecture, Human Approval Gate, Crate Size Limit).
+
+**MCP server (stdio)** — `--mcp` flag dispatches to `rusvel_mcp::run_stdio()` for JSON-RPC over stdin/stdout.
+
+**CLI surface** — `rusvel session create`, `rusvel forge mission today`, `--mcp` flag.
+
+**Background job worker** — Polls job queue every 5 seconds, handles ContentPublish, HarvestScan, OutreachSend, CodeAnalyze (all placeholder implementations), marks complete/failed.
 
 ---
 
-## Reference Repos (key sources we're drawing from)
+## 4. Built but Needs More Work
 
-| Repo | What we took | Status |
-|------|-------------|--------|
-| **forge-project** | Event bus, safety controls, WebSocket | Partially integrated (events, safety guard) |
-| **agentforge-hq** | 100+ personas, org chart, approval | Personas integrated (10 built-in) |
-| **codeilus** | Parse→graph→metrics→search pipeline | Integrated into code-engine |
-| **contentforge** | Platform adapters, AI pipeline, TUI | Integrated into content-engine |
-| **smart-standalone-harvestor** | CDP scraping, scoring, proposals | Integrated into harvest-engine |
-| **solo-os** | Business domains, CRM patterns | Integrated into gtm-engine |
-| **adk-rust** | Agent traits, session model, multi-LLM | Influenced rusvel-core + rusvel-agent |
-| **windmill** | SQLite job queue, worker patterns | Influenced rusvel-jobs |
+**Job worker handlers** — All job kinds (ContentPublish, HarvestScan, OutreachSend, CodeAnalyze) return placeholder JSON. No real engine logic is invoked.
+
+**Engine crates (7 new engines)** — These 7 newer engines exist with domain types, port traits, and tests, but are not wired into the API or job worker:
+- `distro-engine` (518 lines, 2 tests) — distribution/publishing
+- `finance-engine` (391 lines, 3 tests) — invoicing/accounting
+- `growth-engine` (349 lines, 3 tests) — growth analytics
+- `infra-engine` (570 lines, 2 tests) — infrastructure/deployment
+- `legal-engine` (546 lines, 2 tests) — contracts/compliance
+- `product-engine` (370 lines, 3 tests) — product management
+- `support-engine` (549 lines, 2 tests) — customer support
+
+**Original engines** — `content-engine`, `harvest-engine`, `gtm-engine`, and `code-engine` have domain logic and tests but limited integration with the API beyond their department chat endpoints.
+
+**TUI surface** — `rusvel-tui` (267 lines) has layout + widgets defined but is not launched from main.
+
+**Frontend settings page** — Route exists (`/settings`) but scope of configuration UI is unclear.
+
+**Frontend workflow builder** — `WorkflowBuilder.svelte` and `AgentNode.svelte` components exist but are not yet connected to a route.
+
+**Analytics** — `GET /api/analytics` endpoint exists (82 lines) but unclear what data it aggregates.
+
+**Help endpoint** — `POST /api/help` (109 lines) exists, likely AI-powered, but is a thin wrapper.
+
+---
+
+## 5. Not Built Yet
+
+- **Real engine execution in job worker** — Job handler match arms are placeholders; no crate-level engine logic is invoked for async jobs.
+- **Content publishing pipeline** — content-engine has domain types but no end-to-end publish flow through the API.
+- **Harvest scan automation** — harvest-engine has scoring/proposal types but no automated source scanning.
+- **Outreach sending** — gtm-engine has deal stages/sequences but no actual email/message sending.
+- **Code analysis pipeline** — code-engine has parser/BM25 search but no triggered analysis flow.
+- **Authentication/authorization** — `rusvel-auth` (139 lines) is in-memory from env vars; no middleware on API routes.
+- **Frontend for approvals** — API exists but no UI for reviewing/approving jobs.
+- **Frontend for workflows** — CRUD API + execution exist but no page wired to the builder components.
+- **Frontend for agents/skills/rules management** — CRUD APIs exist but no dedicated management UI (entities are managed via `!build` in chat or direct API calls).
+- **Billing/metering** — Cost tracking exists in chat events (`cost_usd`) but no aggregation or budget enforcement.
+- **Multi-user** — Single-user only; no auth middleware, no user scoping.
+- **Frontend embedding in release binary** — `rust-embed` is configured and works, but requires `frontend/build/` to exist at compile time.
+
+---
+
+## 6. Test Breakdown by Crate
+
+| Crate | Tests |
+|---|---|
+| rusvel-llm | 44 |
+| rusvel-core | 19 |
+| forge-engine | 15 |
+| rusvel-agent | 12 (+ 4 integration) |
+| rusvel-db | 11 |
+| rusvel-api | 11 |
+| rusvel-memory | 8 |
+| content-engine | 7 |
+| harvest-engine | 7 |
+| rusvel-jobs | 7 |
+| code-engine | 6 |
+| rusvel-config | 6 |
+| gtm-engine | 5 |
+| rusvel-auth | 5 |
+| rusvel-tool | 5 |
+| finance-engine | 3 |
+| growth-engine | 3 |
+| product-engine | 3 |
+| rusvel-event | 3 |
+| distro-engine | 2 |
+| infra-engine | 2 |
+| legal-engine | 2 |
+| support-engine | 2 |
+| **Total** | **192** |
+
+Crates with 0 tests: `rusvel-app`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`.
+
+---
+
+## 7. Crate Size Ranking (Rust lines)
+
+| Crate | Lines |
+|---|---|
+| rusvel-api | 3,724 |
+| rusvel-llm | 2,203 |
+| rusvel-core | 2,063 |
+| rusvel-db | 1,518 |
+| content-engine | 1,158 |
+| harvest-engine | 1,154 |
+| rusvel-cli | 1,063 |
+| rusvel-agent | 1,017 |
+| code-engine | 903 |
+| forge-engine | 901 |
+| gtm-engine | 870 |
+| rusvel-app | 670 |
+| infra-engine | 570 |
+| support-engine | 549 |
+| legal-engine | 546 |
+| distro-engine | 518 |
+| rusvel-memory | 481 |
+| rusvel-jobs | 405 |
+| finance-engine | 391 |
+| product-engine | 370 |
+| growth-engine | 349 |
+| rusvel-tool | 288 |
+| rusvel-config | 285 |
+| rusvel-mcp | 280 |
+| rusvel-tui | 267 |
+| rusvel-event | 178 |
+| rusvel-auth | 139 |
+
+Note: `rusvel-api` (3,724 lines) and `rusvel-llm` (2,203 lines) exceed the 2,000-line crate size limit from ADR. `rusvel-core` (2,063 lines) is borderline.

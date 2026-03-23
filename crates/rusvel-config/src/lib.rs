@@ -64,11 +64,10 @@ impl TomlConfig {
     /// Get a value with session overlay: session value wins over global.
     pub fn get_for_session(&self, session_id: &str, key: &str) -> Result<Option<Value>> {
         let sessions = self.sessions.read().map_err(lock_err)?;
-        if let Some(session_map) = sessions.get(session_id) {
-            if let Some(v) = session_map.get(key) {
+        if let Some(session_map) = sessions.get(session_id)
+            && let Some(v) = session_map.get(key) {
                 return Ok(Some(v.clone()));
             }
-        }
         drop(sessions);
         self.get_value(key)
     }
@@ -98,9 +97,7 @@ impl ConfigPort for TomlConfig {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 fn dirs_or_home() -> PathBuf {
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
+    std::env::var("HOME").map_or_else(|_| PathBuf::from("."), PathBuf::from)
 }
 
 fn lock_err<T>(_: T) -> RusvelError {

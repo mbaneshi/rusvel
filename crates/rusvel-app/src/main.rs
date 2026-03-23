@@ -25,7 +25,7 @@ use rusvel_cli::Cli;
 use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::{SessionPort, StoragePort};
+use rusvel_core::ports::{EmbeddingPort, SessionPort, StoragePort};
 use rusvel_db::Database;
 use rusvel_event::EventBus;
 use rusvel_jobs::JobQueue;
@@ -34,6 +34,8 @@ use rusvel_core::id::AgentProfileId;
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
 use rusvel_tool::ToolRegistry;
+use rusvel_embed::FastEmbedAdapter;
+use rusvel_vector::LanceVectorStore;
 
 // ════════════════════════════════════════════════════════════════════
 //  Embedded frontend assets (built from frontend/build/)
@@ -57,12 +59,11 @@ fn extract_embedded_frontend() -> Option<PathBuf> {
     for path in FrontendAssets::iter() {
         if let Some(content) = FrontendAssets::get(&path) {
             let out = dir.join(path.as_ref());
-            if let Some(parent) = out.parent() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
+            if let Some(parent) = out.parent()
+                && let Err(e) = std::fs::create_dir_all(parent) {
                     tracing::warn!("Failed to create dir {}: {e}", parent.display());
                     continue;
                 }
-            }
             if let Err(e) = std::fs::write(&out, content.data.as_ref()) {
                 tracing::warn!("Failed to write {}: {e}", out.display());
                 continue;
@@ -393,7 +394,7 @@ style = "direct"
     )?;
 
     // Load and return the profile we just created
-    Ok(UserProfile::load(&data_dir.join("profile.toml")).ok())
+    Ok(UserProfile::load(data_dir.join("profile.toml")).ok())
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -561,16 +562,14 @@ async fn main() -> Result<()> {
     } else if cli.tui {
         // --tui flag: launch TUI dashboard
         tracing::info!("Launching TUI dashboard...");
-        let session_name = crate::rusvel_dir()
+        let session_name = if crate::rusvel_dir()
             .join("active_session")
-            .exists()
-            .then(|| {
+            .exists() { {
                 std::fs::read_to_string(rusvel_dir().join("active_session"))
                     .unwrap_or_default()
                     .trim()
                     .to_string()
-            })
-            .unwrap_or_else(|| "(no session)".into());
+            } } else { "(no session)".into() };
 
         // Load data from storage for the dashboard
         let objects = storage_port.objects();
@@ -621,6 +620,35 @@ async fn main() -> Result<()> {
         let registry = DepartmentRegistry::load(&data_dir.join("departments.toml"));
         tracing::info!("Loaded {} departments from registry", registry.departments.len());
 
+        // Initialize embedding + vector store for RAG (graceful if either fails)
+        let (embedding, embed_dims): (Option<Arc<dyn rusvel_core::ports::EmbeddingPort>>, usize) =
+            match FastEmbedAdapter::new() {
+                Ok(adapter) => {
+                    let dims = adapter.dimensions();
+                    tracing::info!("Embedding adapter ready ({}, {}d)", adapter.model_name(), dims);
+                    (Some(Arc::new(adapter)), dims)
+                }
+                Err(e) => {
+                    tracing::warn!("Embedding adapter unavailable: {e}");
+                    (None, 384)
+                }
+            };
+
+        let vector_store: Option<Arc<dyn rusvel_core::ports::VectorStorePort>> = {
+            let lance_path = data_dir.join("knowledge.lance");
+            let lance_str = lance_path.to_string_lossy().to_string();
+            match LanceVectorStore::open(&lance_str, embed_dims).await {
+                Ok(vs) => {
+                    tracing::info!("Vector store ready at {}", lance_path.display());
+                    Some(Arc::new(vs))
+                }
+                Err(e) => {
+                    tracing::warn!("Vector store unavailable: {e}");
+                    None
+                }
+            }
+        };
+
         let state = AppState {
             forge: forge.clone(),
             sessions: sessions.clone(),
@@ -628,6 +656,8 @@ async fn main() -> Result<()> {
             storage: db.clone() as Arc<dyn StoragePort>,
             profile,
             registry,
+            embedding,
+            vector_store,
         };
 
         // Look for frontend build in known locations (filesystem first)

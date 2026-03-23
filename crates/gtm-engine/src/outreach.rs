@@ -17,6 +17,12 @@ use rusvel_core::ports::{AgentPort, JobPort, StoragePort};
 #[serde(transparent)]
 pub struct SequenceId(Uuid);
 
+impl Default for SequenceId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SequenceId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }
@@ -30,6 +36,12 @@ impl std::fmt::Display for SequenceId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FollowUpId(Uuid);
+
+impl Default for FollowUpId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl FollowUpId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
@@ -191,8 +203,7 @@ impl OutreachManager {
                 rusvel_core::domain::Part::Text(t) => Some(t),
                 _ => None,
             })
-            .collect::<Vec<_>>()
-            .join("");
+            .collect::<String>();
         Ok(text)
     }
 }

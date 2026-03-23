@@ -274,13 +274,12 @@ fn extract_text(content: &Content) -> String {
 fn map_reqwest_error(e: reqwest::Error) -> RusvelError {
     if e.is_connect() {
         RusvelError::Llm(format!(
-            "cannot connect to Ollama — is it running? ({})",
-            e
+            "cannot connect to Ollama — is it running? ({e})"
         ))
     } else if e.is_timeout() {
-        RusvelError::Llm(format!("Ollama request timed out: {}", e))
+        RusvelError::Llm(format!("Ollama request timed out: {e}"))
     } else {
-        RusvelError::Llm(format!("Ollama HTTP error: {}", e))
+        RusvelError::Llm(format!("Ollama HTTP error: {e}"))
     }
 }
 
@@ -290,7 +289,7 @@ fn map_ollama_http_error(status: u16, body: &str) -> RusvelError {
             kind: "model".into(),
             id: body.to_string(),
         },
-        _ => RusvelError::Llm(format!("Ollama returned HTTP {}: {}", status, body)),
+        _ => RusvelError::Llm(format!("Ollama returned HTTP {status}: {body}")),
     }
 }
 

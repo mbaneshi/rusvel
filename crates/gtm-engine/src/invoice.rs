@@ -17,6 +17,12 @@ use rusvel_core::ports::StoragePort;
 #[serde(transparent)]
 pub struct InvoiceId(Uuid);
 
+impl Default for InvoiceId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InvoiceId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }
@@ -82,7 +88,7 @@ impl InvoiceManager {
         items: Vec<LineItem>,
         due_date: DateTime<Utc>,
     ) -> Result<InvoiceId> {
-        let total: f64 = items.iter().map(|li| li.subtotal()).sum();
+        let total: f64 = items.iter().map(LineItem::subtotal).sum();
         let inv = Invoice {
             id: InvoiceId::new(),
             session_id,
@@ -112,7 +118,7 @@ impl InvoiceManager {
         let vals = self.storage.objects().list(KIND_INVOICE, filter).await?;
         let invoices: Vec<Invoice> = vals
             .into_iter()
-            .map(|v| serde_json::from_value(v))
+            .map(serde_json::from_value)
             .collect::<std::result::Result<Vec<_>, _>>()?;
         match status_filter {
             Some(s) => Ok(invoices.into_iter().filter(|i| i.status == s).collect()),

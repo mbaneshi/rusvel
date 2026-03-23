@@ -74,7 +74,7 @@ impl JobPort for JobQueue {
         let pos = jobs.iter().position(|j| {
             j.status == JobStatus::Queued
                 && (kinds.is_empty() || kinds.contains(&j.kind))
-                && j.scheduled_at.map_or(true, |t| t <= now)
+                && j.scheduled_at.is_none_or(|t| t <= now)
         });
 
         if let Some(idx) = pos {
@@ -191,11 +191,10 @@ impl JobPort for JobQueue {
     async fn list(&self, filter: JobFilter) -> Result<Vec<Job>> {
         let jobs = self.jobs.lock().await;
         let iter = jobs.iter().filter(|j| {
-            if let Some(ref sid) = filter.session_id {
-                if &j.session_id != sid {
+            if let Some(ref sid) = filter.session_id
+                && &j.session_id != sid {
                     return false;
                 }
-            }
             if !filter.kinds.is_empty() && !filter.kinds.contains(&j.kind) {
                 return false;
             }

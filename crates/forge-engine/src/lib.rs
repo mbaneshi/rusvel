@@ -85,7 +85,7 @@ impl ForgeEngine {
 #[async_trait]
 impl Engine for ForgeEngine {
     fn kind(&self) -> EngineKind { EngineKind::Forge }
-    fn name(&self) -> &str { "Forge Engine" }
+    fn name(&self) -> &'static str { "Forge Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

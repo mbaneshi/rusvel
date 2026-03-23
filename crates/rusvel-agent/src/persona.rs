@@ -28,7 +28,7 @@ impl PersonaCatalog {
         Self { personas }
     }
 
-    /// Deserialize a catalog from a JSON string (array of AgentProfile).
+    /// Deserialize a catalog from a JSON string (array of `AgentProfile`).
     pub fn from_json(json: &str) -> serde_json::Result<Self> {
         let profiles: Vec<AgentProfile> = serde_json::from_str(json)?;
         Ok(Self::from_profiles(profiles))

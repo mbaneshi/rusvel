@@ -7,12 +7,12 @@
 ## Phase 0 — Foundation ← YOU ARE HERE
 > Prove the architecture with one vertical slice.
 
-**Deliverable:** `rusvel forge mission today` via CLI, Web, MCP.
+**Deliverable:** `rusvel forge mission today` via CLI, Web, MCP, REPL, TUI.
 
 - rusvel-core (10 ports + shared types + approval model)
 - Adapters: config, db (5 stores), event, llm (Ollama), memory (FTS5), tool, jobs, auth
 - forge-engine (agent orchestration + mission goals/planning)
-- Surfaces: CLI, API, Web (SvelteKit), MCP
+- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API, Web (SvelteKit), MCP
 - 4 stub engines (code, harvest, content, gtm)
 
 **Proves:** Ports + adapters + session hierarchy + job queue + events + streaming LLM.
@@ -43,7 +43,8 @@
 
 - harvest-engine: CDP scraping (Upwork adapter), AI scoring, proposal generation
 - content-engine: Markdown authoring, AI adaptation, DEV.to + Twitter adapters, scheduling
-- rusvel-tui: Ratatui terminal dashboard (pipeline + content calendar)
+- rusvel-tui: Expand TUI dashboard with per-department tabs (pipeline + content calendar)
+  - Note: Basic TUI dashboard already wired in Phase 0 via `--tui` flag
 - Human approval workflow: agent proposes → human approves → system executes
 - Inbox/Capture: funnel links, emails, docs into sessions
 

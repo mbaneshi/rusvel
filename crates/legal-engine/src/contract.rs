@@ -19,6 +19,12 @@ const KIND: &str = "legal_contract";
 #[serde(transparent)]
 pub struct ContractId(Uuid);
 
+impl Default for ContractId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContractId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

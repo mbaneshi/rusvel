@@ -22,12 +22,16 @@
 		3: 'text-xl font-semibold',
 		4: 'text-lg font-semibold',
 		5: 'text-base font-semibold',
-		6: 'text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]',
+		6: 'text-sm font-semibold uppercase tracking-wider text-[var(--muted-foreground)]'
 	};
 
 	let tag = $derived(`h${level}`);
 </script>
 
-<svelte:element this={tag} class={cn(styles[level], 'text-[var(--foreground)]', className)} {...rest}>
+<svelte:element
+	this={tag}
+	class={cn(styles[level], 'text-[var(--foreground)]', className)}
+	{...rest}
+>
 	{@render children()}
 </svelte:element>

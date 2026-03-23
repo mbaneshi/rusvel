@@ -71,7 +71,7 @@ impl FinanceEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for FinanceEngine {
     fn kind(&self) -> EngineKind { EngineKind::Finance }
-    fn name(&self) -> &str { "Finance Engine" }
+    fn name(&self) -> &'static str { "Finance Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![

@@ -10,7 +10,6 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json;
 
 use rusvel_core::error::RusvelError;
 use rusvel_core::ports::*;
@@ -29,7 +28,7 @@ use crate::migrations;
 /// SQLite-backed storage adapter.
 ///
 /// Thread-safe via an internal `Mutex<Connection>`. For the single-writer
-/// nature of SQLite this is the simplest correct approach.
+/// nature of `SQLite` this is the simplest correct approach.
 pub struct Database {
     conn: Mutex<Connection>,
 }
@@ -168,7 +167,7 @@ impl EventStore for Database {
 
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT ?{idx}"));
-            param_values.push(Box::new(limit as i64));
+            param_values.push(Box::new(i64::from(limit)));
             let _ = idx;
         }
 
@@ -177,7 +176,7 @@ impl EventStore for Database {
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|b| b.as_ref()).collect();
+            param_values.iter().map(std::convert::AsRef::as_ref).collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| Ok(row_to_event(row)))
@@ -310,7 +309,7 @@ impl ObjectStore for Database {
 
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT ?{idx}"));
-            param_values.push(Box::new(limit as i64));
+            param_values.push(Box::new(i64::from(limit)));
             idx += 1;
         }
         if let Some(offset) = filter.offset {
@@ -322,7 +321,7 @@ impl ObjectStore for Database {
                 idx += 1;
             }
             sql.push_str(&format!(" OFFSET ?{idx}"));
-            param_values.push(Box::new(offset as i64));
+            param_values.push(Box::new(i64::from(offset)));
             let _ = idx;
         }
 
@@ -331,7 +330,7 @@ impl ObjectStore for Database {
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|b| b.as_ref()).collect();
+            param_values.iter().map(std::convert::AsRef::as_ref).collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| {
@@ -704,7 +703,7 @@ impl JobStore for Database {
             param_values.push(Box::new(ks.clone()));
         }
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|b| b.as_ref()).collect();
+            param_values.iter().map(std::convert::AsRef::as_ref).collect();
 
         let mut stmt = conn
             .prepare(&sql)
@@ -828,7 +827,7 @@ impl JobStore for Database {
 
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT ?{idx}"));
-            param_values.push(Box::new(limit as i64));
+            param_values.push(Box::new(i64::from(limit)));
             let _ = idx;
         }
 
@@ -837,7 +836,7 @@ impl JobStore for Database {
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|b| b.as_ref()).collect();
+            param_values.iter().map(std::convert::AsRef::as_ref).collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| Ok(row_to_job(row)))
@@ -947,7 +946,7 @@ impl MetricStore for Database {
 
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT ?{idx}"));
-            param_values.push(Box::new(limit as i64));
+            param_values.push(Box::new(i64::from(limit)));
             let _ = idx;
         }
 
@@ -956,7 +955,7 @@ impl MetricStore for Database {
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
 
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|b| b.as_ref()).collect();
+            param_values.iter().map(std::convert::AsRef::as_ref).collect();
 
         let rows = stmt
             .query_map(params_refs.as_slice(), |row| {

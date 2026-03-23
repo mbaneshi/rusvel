@@ -16,7 +16,7 @@ pub struct PipelineStats {
     pub by_stage: HashMap<String, usize>,
 }
 
-/// Manages the opportunity pipeline backed by ObjectStore.
+/// Manages the opportunity pipeline backed by `ObjectStore`.
 pub struct Pipeline {
     storage: Arc<dyn StoragePort>,
 }

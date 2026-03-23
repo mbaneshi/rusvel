@@ -56,9 +56,7 @@
 			'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
 			'transition-colors resize-none',
 			'disabled:opacity-50 disabled:pointer-events-none',
-			error
-				? 'border-destructive'
-				: 'border-input',
+			error ? 'border-destructive' : 'border-input'
 		)}
 		{...rest}
 	></textarea>

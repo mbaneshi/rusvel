@@ -8,7 +8,7 @@ use rusqlite::Connection;
 /// Each migration is a (version, sql) pair.
 const MIGRATIONS: &[(u32, &str)] = &[(1, MIGRATION_001)];
 
-const MIGRATION_001: &str = r#"
+const MIGRATION_001: &str = r"
 -- ════════════════════════════════════════════════════════════════
 --  Events (append-only event log)
 -- ════════════════════════════════════════════════════════════════
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS metrics (
 
 CREATE INDEX IF NOT EXISTS idx_metrics_name        ON metrics(name);
 CREATE INDEX IF NOT EXISTS idx_metrics_recorded_at ON metrics(recorded_at);
-"#;
+";
 
 /// Apply all pending migrations to the database.
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {

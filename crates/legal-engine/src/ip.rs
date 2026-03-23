@@ -19,6 +19,12 @@ const KIND: &str = "legal_ip";
 #[serde(transparent)]
 pub struct IpAssetId(Uuid);
 
+impl Default for IpAssetId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IpAssetId {
     pub fn new() -> Self { Self(Uuid::now_v7()) }
 }

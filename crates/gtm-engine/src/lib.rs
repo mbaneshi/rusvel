@@ -1,4 +1,4 @@
-//! GoToMarket engine — CRM, outreach, and ops.
+//! `GoToMarket` engine — CRM, outreach, and ops.
 
 use std::sync::Arc;
 
@@ -81,7 +81,7 @@ impl GtmEngine {
 #[async_trait]
 impl rusvel_core::engine::Engine for GtmEngine {
     fn kind(&self) -> EngineKind { EngineKind::GoToMarket }
-    fn name(&self) -> &str { "GoToMarket Engine" }
+    fn name(&self) -> &'static str { "GoToMarket Engine" }
 
     fn capabilities(&self) -> Vec<Capability> {
         vec![
