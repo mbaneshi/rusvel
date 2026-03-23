@@ -25,11 +25,13 @@
 
 // ── Modules ────────────────────────────────────────────────────────
 
+pub mod config;
 pub mod domain;
 pub mod engine;
 pub mod error;
 pub mod id;
 pub mod ports;
+pub mod registry;
 
 // ── Convenience re-exports ─────────────────────────────────────────
 //
