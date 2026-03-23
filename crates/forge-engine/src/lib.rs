@@ -26,6 +26,7 @@ pub use safety::SafetyGuard;
 ///
 /// All ports are injected via the constructor; the engine never
 /// instantiates concrete adapter types.
+#[allow(dead_code)]
 pub struct ForgeEngine {
     pub(crate) agent: Arc<dyn AgentPort>,
     pub(crate) events: Arc<dyn EventPort>,
@@ -116,7 +117,6 @@ impl Engine for ForgeEngine {
 mod tests {
     use super::*;
     use rusvel_core::error::{Result, RusvelError};
-    use rusvel_core::id::*;
     use std::sync::Mutex;
 
     // ── Mocks ──────────────────────────────────────────────────────
@@ -195,11 +195,11 @@ mod tests {
     struct MockStorage { objects: MockObjectStore }
     impl MockStorage { fn new() -> Self { Self { objects: MockObjectStore::new() } } }
     impl StoragePort for MockStorage {
-        fn events(&self) -> &dyn EventStore { unimplemented!() }
+        fn events(&self) -> &dyn EventStore { panic!("not used in tests") }
         fn objects(&self) -> &dyn ObjectStore { &self.objects }
-        fn sessions(&self) -> &dyn SessionStore { unimplemented!() }
-        fn jobs(&self) -> &dyn JobStore { unimplemented!() }
-        fn metrics(&self) -> &dyn MetricStore { unimplemented!() }
+        fn sessions(&self) -> &dyn SessionStore { panic!("not used in tests") }
+        fn jobs(&self) -> &dyn JobStore { panic!("not used in tests") }
+        fn metrics(&self) -> &dyn MetricStore { panic!("not used in tests") }
     }
 
     struct MockJobs;

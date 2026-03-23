@@ -195,11 +195,11 @@ mod tests {
 
     struct FakeStorage;
     impl StoragePort for FakeStorage {
-        fn events(&self) -> &dyn EventStore { unimplemented!() }
+        fn events(&self) -> &dyn EventStore { panic!("not used in tests") }
         fn objects(&self) -> &dyn ObjectStore { &FakeObjectStore }
-        fn sessions(&self) -> &dyn SessionStore { unimplemented!() }
-        fn jobs(&self) -> &dyn JobStore { unimplemented!() }
-        fn metrics(&self) -> &dyn MetricStore { unimplemented!() }
+        fn sessions(&self) -> &dyn SessionStore { panic!("not used in tests") }
+        fn jobs(&self) -> &dyn JobStore { panic!("not used in tests") }
+        fn metrics(&self) -> &dyn MetricStore { panic!("not used in tests") }
     }
 
     struct FakeEventPort(Mutex<Vec<Event>>);
