@@ -6,10 +6,13 @@
 //! and event queries. All domain logic is delegated to the Forge engine
 //! and core port traits.
 
+pub mod agents;
 pub mod chat;
 pub mod config;
 pub mod department;
 pub mod routes;
+pub mod rules;
+pub mod skills;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -104,6 +107,15 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/dept/forge/config", get(department::forge_config_get))
         .route("/api/dept/forge/config", axum::routing::put(department::forge_config_update))
         .route("/api/dept/forge/events", get(department::forge_events))
+        // Agents CRUD
+        .route("/api/agents", get(agents::list_agents).post(agents::create_agent))
+        .route("/api/agents/{id}", get(agents::get_agent).put(agents::update_agent).delete(agents::delete_agent))
+        // Skills CRUD
+        .route("/api/skills", get(skills::list_skills).post(skills::create_skill))
+        .route("/api/skills/{id}", get(skills::get_skill).put(skills::update_skill).delete(skills::delete_skill))
+        // Rules CRUD
+        .route("/api/rules", get(rules::list_rules).post(rules::create_rule))
+        .route("/api/rules/{id}", get(rules::get_rule).put(rules::update_rule).delete(rules::delete_rule))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

@@ -228,8 +228,18 @@ pub async fn department_chat_handler(
     };
     let _ = store_namespaced_message(&state.storage, &namespace, &user_msg).await;
 
-    // Build prompt with department system prompt
-    let prompt = build_dept_prompt(&config.system_prompt, &history, &body.message);
+    // Load enabled rules and append to system prompt
+    let rules = crate::rules::load_rules_for_engine(&state, engine).await;
+    let mut system_prompt = config.system_prompt.clone();
+    if !rules.is_empty() {
+        system_prompt.push_str("\n\n--- Rules ---\n");
+        for rule in &rules {
+            system_prompt.push_str(&format!("[{}]: {}\n", rule.name, rule.content));
+        }
+    }
+
+    // Build prompt with enriched system prompt
+    let prompt = build_dept_prompt(&system_prompt, &history, &body.message);
 
     // Resolve engine kind for event emission
     let engine_kind = match engine {
