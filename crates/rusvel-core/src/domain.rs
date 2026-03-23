@@ -285,7 +285,7 @@ pub struct ThreadMessage {
 //  Engine kind
 // ════════════════════════════════════════════════════════════════════
 
-/// The five domain engines (architecture-v2).
+/// Domain engines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EngineKind {
     Forge,
@@ -293,6 +293,13 @@ pub enum EngineKind {
     Harvest,
     Content,
     GoToMarket,
+    Finance,
+    Product,
+    Growth,
+    Distribution,
+    Legal,
+    Support,
+    Infra,
 }
 
 impl std::fmt::Display for EngineKind {
@@ -303,6 +310,13 @@ impl std::fmt::Display for EngineKind {
             Self::Harvest => write!(f, "harvest"),
             Self::Content => write!(f, "content"),
             Self::GoToMarket => write!(f, "gtm"),
+            Self::Finance => write!(f, "finance"),
+            Self::Product => write!(f, "product"),
+            Self::Growth => write!(f, "growth"),
+            Self::Distribution => write!(f, "distro"),
+            Self::Legal => write!(f, "legal"),
+            Self::Support => write!(f, "support"),
+            Self::Infra => write!(f, "infra"),
         }
     }
 }

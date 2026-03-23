@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule, getMcpServers, createMcpServer, deleteMcpServer, getHooks, createHook, updateHook, deleteHook, getDeptEvents, getDeptConfig, updateDeptConfig } from '$lib/api';
-	import type { Agent, Skill, Rule, McpServer, Hook, Event, DepartmentConfig } from '$lib/api';
+	import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule, getMcpServers, createMcpServer, deleteMcpServer, getHooks, createHook, updateHook, deleteHook, getDeptEvents, getDeptConfig, updateDeptConfig, getWorkflows, createWorkflow, deleteWorkflow, runWorkflow } from '$lib/api';
+	import type { Agent, Skill, Rule, McpServer, Hook, Event, DepartmentConfig, Workflow, WorkflowStepDef, WorkflowRunResult } from '$lib/api';
 
 	let {
 		dept,
@@ -52,12 +52,24 @@
 	let newHookEvent = $state('PostToolUse');
 	let newHookAction = $state('');
 
+	// Workflows
+	let workflows: Workflow[] = $state([]);
+	let showCreateWorkflow = $state(false);
+	let newWfName = $state('');
+	let newWfDesc = $state('');
+	let newWfSteps: WorkflowStepDef[] = $state([]);
+	let newStepAgent = $state('');
+	let newStepPrompt = $state('');
+	let runningWorkflowId: string | null = $state(null);
+	let workflowResults: WorkflowRunResult | null = $state(null);
+
 	onMount(() => {
 		loadAgents();
 		loadSkills();
 		loadRules();
 		loadMcp();
 		loadHooks();
+		loadWorkflows();
 		loadConfig();
 	});
 
@@ -67,6 +79,7 @@
 	async function loadMcp() { try { mcpServers = await getMcpServers(dept); } catch { mcpServers = []; } }
 	async function loadHooks() { try { hooks = await getHooks(dept); } catch { hooks = []; } }
 	async function loadEvents() { try { events = await getDeptEvents(dept); } catch { events = []; } }
+	async function loadWorkflows() { try { workflows = await getWorkflows(); } catch { workflows = []; } }
 	async function loadConfig() { try { config = await getDeptConfig(dept); } catch {} }
 
 	function sendQuickAction(prompt: string) {
@@ -133,6 +146,43 @@
 	async function handleToggleHook(hook: Hook) { await updateHook(hook.id, { ...hook, enabled: !hook.enabled }); await loadHooks(); }
 	async function handleDeleteHook(id: string) { await deleteHook(id); await loadHooks(); }
 
+	function addWorkflowStep() {
+		if (!newStepAgent.trim() || !newStepPrompt.trim()) return;
+		newWfSteps = [...newWfSteps, { agent_name: newStepAgent.trim(), prompt_template: newStepPrompt.trim(), step_type: 'sequential' }];
+		newStepAgent = '';
+		newStepPrompt = '';
+	}
+
+	function removeWorkflowStep(index: number) {
+		newWfSteps = newWfSteps.filter((_, i) => i !== index);
+	}
+
+	async function handleCreateWorkflow() {
+		if (!newWfName.trim() || newWfSteps.length === 0) return;
+		await createWorkflow({ name: newWfName.trim(), description: newWfDesc, steps: newWfSteps, metadata: { engine: dept } });
+		newWfName = ''; newWfDesc = ''; newWfSteps = []; showCreateWorkflow = false;
+		await loadWorkflows();
+	}
+
+	async function handleDeleteWorkflow(id: string) {
+		await deleteWorkflow(id);
+		await loadWorkflows();
+	}
+
+	async function handleRunWorkflow(id: string) {
+		runningWorkflowId = id;
+		workflowResults = null;
+		try {
+			workflowResults = await runWorkflow(id);
+		} catch (e: unknown) {
+			workflowResults = null;
+			const msg = e instanceof Error ? e.message : String(e);
+			alert(`Workflow failed: ${msg}`);
+		} finally {
+			runningWorkflowId = null;
+		}
+	}
+
 	async function addDir() {
 		if (!config) return;
 		const dir = prompt('Add directory path:');
@@ -171,6 +221,7 @@
 		{#each [
 			{ id: 'actions', label: 'Actions' },
 			{ id: 'agents', label: `Agents (${agents.length})` },
+			{ id: 'workflows', label: `Flows (${workflows.length})` },
 			{ id: 'skills', label: `Skills (${skills.length})` },
 			{ id: 'rules', label: `Rules (${rules.length})` },
 			{ id: 'mcp', label: `MCP (${mcpServers.length})` },
@@ -235,6 +286,99 @@
 				{/each}
 				{#if agents.length === 0 && !showCreateAgent}
 					<p class="text-center text-[10px] text-[var(--r-fg-subtle)] py-2">No agents. Create one above.</p>
+				{/if}
+			</div>
+
+		<!-- WORKFLOWS -->
+		{:else if activeTab === 'workflows'}
+			<div class="p-3 space-y-2">
+				<button onclick={() => showCreateWorkflow = !showCreateWorkflow} class="w-full rounded-lg border border-dashed border-[var(--r-border-default)] py-1.5 text-xs text-[var(--r-fg-subtle)] hover:border-{color}-500/30 hover:text-[var(--r-fg-default)]">
+					+ New Workflow
+				</button>
+				{#if showCreateWorkflow}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-3 space-y-2">
+						<input bind:value={newWfName} placeholder="Workflow name" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+						<input bind:value={newWfDesc} placeholder="Description (optional)" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none" />
+
+						<div class="border-t border-[var(--r-border-default)] pt-2">
+							<p class="text-[10px] font-medium text-[var(--r-fg-subtle)] mb-1">Steps ({newWfSteps.length})</p>
+							{#each newWfSteps as step, i}
+								<div class="flex items-center gap-1 mb-1 rounded bg-[var(--r-bg-surface)] px-2 py-1">
+									<span class="text-[9px] text-[var(--r-fg-muted)]">{i + 1}.</span>
+									<span class="text-[10px] font-medium text-{color}-400">@{step.agent_name}</span>
+									<span class="text-[10px] text-[var(--r-fg-muted)] truncate flex-1">{step.prompt_template.slice(0, 30)}{step.prompt_template.length > 30 ? '...' : ''}</span>
+									<button onclick={() => removeWorkflowStep(i)} class="text-[var(--r-fg-subtle)] hover:text-danger-400 text-[10px]">x</button>
+								</div>
+							{/each}
+
+							<div class="space-y-1 mt-1">
+								<select bind:value={newStepAgent} class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)]">
+									<option value="">Select agent...</option>
+									{#each agents as agent}
+										<option value={agent.name}>{agent.name}</option>
+									{/each}
+								</select>
+								<textarea bind:value={newStepPrompt} placeholder="Prompt for this step" rows="2" class="w-full rounded-md border border-[var(--r-border-default)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--r-fg-default)] focus:outline-none resize-none"></textarea>
+								<button onclick={addWorkflowStep} class="w-full rounded-md bg-[var(--r-bg-surface)] py-1 text-[10px] text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)]">+ Add Step</button>
+							</div>
+						</div>
+
+						<button onclick={handleCreateWorkflow} disabled={!newWfName.trim() || newWfSteps.length === 0} class="w-full rounded-md bg-{color}-600 py-1 text-xs font-medium text-white hover:bg-{color}-500 disabled:opacity-40 disabled:cursor-not-allowed">Create Workflow</button>
+					</div>
+				{/if}
+				{#each workflows as wf}
+					<div class="rounded-lg bg-[var(--r-bg-raised)] p-2.5 group">
+						<div class="flex items-center justify-between mb-1">
+							<span class="text-xs font-medium text-[var(--r-fg-default)]">{wf.name}</span>
+							<div class="flex items-center gap-1">
+								<span class="rounded bg-{color}-900/30 px-1.5 py-0.5 text-[9px] text-{color}-400">{wf.steps.length} steps</span>
+								<button onclick={() => handleDeleteWorkflow(wf.id)} class="hidden group-hover:block text-[var(--r-fg-subtle)] hover:text-danger-400 text-[10px]">x</button>
+							</div>
+						</div>
+						{#if wf.description}
+							<p class="text-[10px] text-[var(--r-fg-muted)] mb-1">{wf.description}</p>
+						{/if}
+						<div class="space-y-0.5 mb-2">
+							{#each wf.steps as step, i}
+								<div class="flex items-center gap-1 text-[9px] text-[var(--r-fg-subtle)]">
+									<span class="text-[var(--r-fg-muted)]">{i + 1}.</span>
+									<span class="font-mono text-{color}-400">@{step.agent_name}</span>
+									<span class="truncate">{step.prompt_template.slice(0, 25)}{step.prompt_template.length > 25 ? '...' : ''}</span>
+								</div>
+							{/each}
+						</div>
+						<button
+							onclick={() => handleRunWorkflow(wf.id)}
+							disabled={runningWorkflowId === wf.id}
+							class="w-full rounded-md bg-{color}-600/80 py-1 text-[10px] font-medium text-white hover:bg-{color}-500 disabled:opacity-50"
+						>
+							{runningWorkflowId === wf.id ? 'Running...' : 'Run Workflow'}
+						</button>
+					</div>
+				{/each}
+				{#if workflows.length === 0 && !showCreateWorkflow}
+					<p class="text-center text-[10px] text-[var(--r-fg-subtle)] py-2">No workflows. Create one to chain agents together.</p>
+				{/if}
+
+				<!-- Workflow Results -->
+				{#if workflowResults}
+					<div class="mt-3 rounded-lg border border-{color}-500/30 bg-[var(--r-bg-raised)] p-3 space-y-2">
+						<div class="flex items-center justify-between">
+							<span class="text-xs font-medium text-{color}-300">Results: {workflowResults.workflow_name}</span>
+							<span class="text-[9px] text-[var(--r-fg-subtle)]">${workflowResults.total_cost_usd.toFixed(4)}</span>
+						</div>
+						{#each workflowResults.steps as result}
+							<div class="rounded bg-[var(--r-bg-surface)] p-2">
+								<div class="flex items-center gap-1 mb-1">
+									<span class="text-[9px] text-[var(--r-fg-muted)]">Step {result.step_index + 1}</span>
+									<span class="text-[10px] font-mono text-{color}-400">@{result.agent_name}</span>
+									<span class="text-[9px] text-[var(--r-fg-subtle)] ml-auto">${result.cost_usd.toFixed(4)}</span>
+								</div>
+								<p class="text-[10px] text-[var(--r-fg-default)] whitespace-pre-wrap max-h-32 overflow-y-auto">{result.output}</p>
+							</div>
+						{/each}
+						<button onclick={() => workflowResults = null} class="w-full rounded-md bg-[var(--r-bg-surface)] py-1 text-[10px] text-[var(--r-fg-subtle)] hover:text-[var(--r-fg-default)]">Dismiss</button>
+					</div>
 				{/if}
 			</div>
 

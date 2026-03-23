@@ -375,6 +375,68 @@ export async function getHookEvents(): Promise<string[]> {
 	return request('/api/hooks/events');
 }
 
+// ── Workflows CRUD + Execution ────────────────────────────────
+
+export interface WorkflowStepDef {
+	agent_name: string;
+	prompt_template: string;
+	step_type: string;
+}
+
+export interface Workflow {
+	id: string;
+	name: string;
+	description: string;
+	steps: WorkflowStepDef[];
+	metadata: Record<string, unknown>;
+}
+
+export interface StepResult {
+	step_index: number;
+	agent_name: string;
+	prompt: string;
+	output: string;
+	cost_usd: number;
+}
+
+export interface WorkflowRunResult {
+	workflow_id: string;
+	workflow_name: string;
+	steps: StepResult[];
+	total_cost_usd: number;
+}
+
+export async function getWorkflows(): Promise<Workflow[]> {
+	return request('/api/workflows');
+}
+
+export async function createWorkflow(workflow: {
+	name: string;
+	description?: string;
+	steps: WorkflowStepDef[];
+	metadata?: Record<string, unknown>;
+}): Promise<Workflow> {
+	return request('/api/workflows', { method: 'POST', body: JSON.stringify(workflow) });
+}
+
+export async function updateWorkflow(id: string, workflow: Workflow): Promise<Workflow> {
+	return request(`/api/workflows/${id}`, { method: 'PUT', body: JSON.stringify(workflow) });
+}
+
+export async function deleteWorkflow(id: string): Promise<void> {
+	await fetch(`${BASE}/api/workflows/${id}`, { method: 'DELETE' });
+}
+
+export async function runWorkflow(
+	id: string,
+	variables?: Record<string, string>
+): Promise<WorkflowRunResult> {
+	return request(`/api/workflows/${id}/run`, {
+		method: 'POST',
+		body: JSON.stringify({ variables: variables ?? {} })
+	});
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {

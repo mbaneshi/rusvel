@@ -29,6 +29,13 @@ code-engine    = { workspace = true }
 harvest-engine = { workspace = true }
 content-engine = { workspace = true }
 gtm-engine     = { workspace = true }
+finance-engine = { workspace = true }
+product-engine = { workspace = true }
+growth-engine  = { workspace = true }
+distro-engine  = { workspace = true }
+legal-engine   = { workspace = true }
+support-engine = { workspace = true }
+infra-engine   = { workspace = true }
 
 # ─── Surfaces ───
 rusvel-cli = { workspace = true }
@@ -42,3 +49,5 @@ tracing-subscriber = { workspace = true }
 clap               = { workspace = true }
 anyhow             = { workspace = true }
 async-trait        = { workspace = true }
+serde_json         = { workspace = true }
+uuid               = { workspace = true }

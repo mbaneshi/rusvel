@@ -1,275 +1,209 @@
-# Sprint Plan: From Current State to Capability Engine
+# Sprint Plan: Fix, Polish, and Ship
 
-> Aligned to actual codebase as of 2026-03-23 (commit 3ae7020).
-
----
-
-## What's Built & Working
-
-| Feature | Backend | Frontend | Chat Wiring |
-|---------|---------|----------|-------------|
-| 5 Departments (Code/Content/Harvest/GTM/Forge) | 30 routes | DepartmentPanel + DepartmentChat | Streaming SSE |
-| Agents CRUD | `agents.rs` → ObjectStore("agents") | Live UI: create form, delete, list | Not wired (no @mention) |
-| Skills CRUD | `skills.rs` → ObjectStore("skills") | Live UI: create, delete, click-to-fill chat | Works (fills chat input) |
-| Rules CRUD | `rules.rs` → ObjectStore("rules") | Live UI: create, toggle on/off, delete | **DONE** — injected into system prompt |
-| Department Config | per-dept model/effort/tools/budget | Config panel in DepartmentChat | **DONE** — passed as `claude -p` flags |
-| God Agent Chat | `/api/chat` streaming | Chat page with history sidebar | **DONE** |
-| Config API | models list, tools list, get/put | ChatTopBar component | **DONE** |
-| Session Management | CRUD + mission + goals + events | Dashboard + sidebar switcher | **DONE** |
-| Design System | — | 14 components + tokens + icons | — |
+> Actual codebase audit as of 2026-03-23 (commit 3ae7020 + uncommitted).
 
 ---
 
-## What's Left (5 Steps)
+## Codebase Reality
 
-### Step 1: Wire Agent @mention into Chat
+### What's Built (13 API modules, 60 routes, 2,938 lines in rusvel-api alone)
 
-**What:** When user types `@agent-name`, load agent from ObjectStore, override department config for that call.
+| Module | Lines | Status |
+|--------|-------|--------|
+| `department.rs` | 564 | Built: 5 departments, agent @mention, rules injection, MCP config injection, `!build` interceptor |
+| `build_cmd.rs` | 592 | Built: Capability Engine — `!build agent/skill/rule/mcp/hook: description` |
+| `workflows.rs` | 343 | Built: CRUD + `POST /api/workflows/{id}/run` with dependency resolution |
+| `chat.rs` | 275 | Built: God agent streaming chat + conversation history |
+| `lib.rs` | 184 | Built: 60 routes registered |
+| `config.rs` | 162 | Built: model/effort/tools config |
+| `routes.rs` | 150 | Built: sessions, mission, goals, events |
+| `agents.rs` | 134 | Built: CRUD for AgentProfile |
+| `mcp_servers.rs` | 134 | Built: CRUD + `build_mcp_config_for_engine()` |
+| `rules.rs` | 117 | Built: CRUD + `load_rules_for_engine()` |
+| `hooks.rs` | 104 | Built: CRUD + `list_hook_events()` |
+| `skills.rs` | 97 | Built: CRUD |
+| `analytics.rs` | 82 | Built: `GET /api/analytics` aggregate counts |
 
-**Where:** `department.rs` → `department_chat_handler()`, after rules injection (line ~240).
+### What's Wired into Department Chat (`department.rs`)
 
-**Code — follows the exact pattern of `load_rules_for_engine`:**
-```rust
-// After rules injection, before building prompt:
-if let Some(agent_name) = extract_agent_mention(&body.message) {
-    let agents: Vec<crate::agents::AgentProfile> = state.storage.objects()
-        .list("agents", ObjectFilter::default()).await
-        .unwrap_or_default().into_iter()
-        .filter_map(|v| serde_json::from_value(v).ok())
-        .collect();
-    if let Some(agent) = agents.iter().find(|a| a.name == agent_name) {
-        system_prompt = agent.instructions.clone();
-        config.model = agent.default_model.model.clone();
-        if !agent.allowed_tools.is_empty() {
-            config.allowed_tools = agent.allowed_tools.clone();
-        }
-        if let Some(budget) = agent.budget_limit {
-            config.max_budget_usd = Some(budget);
-        }
-    }
-}
+| Feature | Line | Status |
+|---------|------|--------|
+| Agent @mention override | ~231 | DONE — loads agent, overrides config |
+| Rules injection into prompt | ~249 | DONE — appends enabled rules to system prompt |
+| MCP config injection | ~272 | DONE — `build_mcp_config_for_engine()` adds `--mcp-config` flag |
+| `!build` interceptor | ~231 | DONE — routes to `build_cmd.rs` |
 
-fn extract_agent_mention(msg: &str) -> Option<&str> {
-    msg.split_whitespace()
-        .find(|w| w.starts_with('@'))
-        .map(|w| w.trim_start_matches('@'))
-}
-```
+### Frontend DepartmentPanel.svelte — 8 tabs
 
-**Frontend hint:** Show available agents in DepartmentChat input placeholder or as autocomplete.
+| Tab | Status |
+|-----|--------|
+| Actions | DONE — quick actions per department |
+| Agents | DONE — live CRUD from API |
+| Skills | DONE — live CRUD, click-to-fill |
+| Rules | DONE — live CRUD, enable/disable toggle |
+| MCP | DONE — live CRUD |
+| Hooks | DONE — live CRUD |
+| Dirs | DONE — add/remove working directories |
+| Events | DONE — filtered by department |
 
-**Effort:** ~1 hour.
+### What's Also Built
+
+| Feature | Status |
+|---------|--------|
+| MCP `--mcp` flag in main.rs | DONE (line 302) |
+| Workflows CRUD + run endpoint | DONE |
+| Analytics endpoint | DONE |
+| 5 department pages (Code/Content/Harvest/GTM/Forge) | DONE |
+| Design system (14 components) | DONE |
+| God agent chat | DONE |
 
 ---
 
-### Step 2: MCP Servers + Hooks (CRUD + Wire)
+## What's Broken
 
-**What:** Two new entity types, same CRUD pattern as agents/skills/rules. Wire into chat handler.
+### Build Error (must fix first)
 
-**Backend — 2 new files following `agents.rs` pattern exactly:**
+**`department.rs:398`** — type mismatch in `!build` interceptor's SSE stream.
 
-`mcp_servers.rs` (ObjectStore kind: `"mcp_servers"`):
-- Types: `McpServerDef { id, name, description, transport, command, url, args, env, enabled, metadata }`
-- 5 CRUD handlers + `load_mcp_for_engine(state, engine) -> Vec<McpServerDef>`
+The `!build` capability branch returns a different stream type than the normal chat branch. Both need to return `Sse<impl Stream<Item = Result<Event, Infallible>>>` but the `!build` path produces `StreamEvent` instead of `axum::response::sse::Event`.
 
-`hooks.rs` (ObjectStore kind: `"hooks"`):
-- Types: `HookDefinition { id, name, event, hook_type, command, url, enabled, metadata }`
-- 5 CRUD handlers + `load_hooks_for_event(state, event) -> Vec<HookDefinition>`
+**Fix:** The `!build` branch's stream `.map()` must convert `StreamEvent` → `axum::response::sse::Event`, matching the pattern in the normal chat branch (lines 280-310).
 
-**Wire MCP into chat** — in `department_chat_handler()`, after building `cli_args`:
-```rust
-let servers = crate::mcp_servers::load_mcp_for_engine(&state, engine).await;
-if !servers.is_empty() {
-    let mcp_json = serde_json::json!({"mcpServers": servers.iter().map(|s| {
-        (s.name.clone(), serde_json::json!({"command": s.command, "args": s.args, "env": s.env}))
-    }).collect::<serde_json::Map<_,_>>()}).to_string();
-    cli_args.extend(["--mcp-config".into(), mcp_json]);
-}
-```
+---
 
-**Wire hooks into chat** — after `StreamEvent::Done` stores assistant message:
+## What's Actually Left
+
+### 1. Fix Build Error (~30 min)
+
+Fix the type mismatch in `department.rs:398`. The `!build` interceptor needs the same `StreamEvent` → `sse::Event` mapping as the normal chat handler.
+
+### 2. Wire Hooks into Chat Execution (~1 hour)
+
+Hooks CRUD exists but hooks don't **fire** after chat completion. In `department.rs`, after `StreamEvent::Done` stores the assistant message, add:
+
 ```rust
 let hooks = crate::hooks::load_hooks_for_event(&state_clone, "chat.completed").await;
 for hook in hooks {
     if hook.hook_type == "command" { if let Some(cmd) = &hook.command {
         let cmd = cmd.clone();
-        tokio::spawn(async move { let _ = tokio::process::Command::new("sh").arg("-c").arg(&cmd).output().await; });
+        tokio::spawn(async move {
+            let _ = tokio::process::Command::new("sh").arg("-c").arg(&cmd).output().await;
+        });
     }}
 }
 ```
 
-**Frontend — extend `DepartmentPanel.svelte`:**
-- Add `api.ts` types + CRUD functions (same pattern as agents/skills/rules)
-- Add "MCP" and "Hooks" tabs to the tab list
-- MCP tab: server list with enable/disable, "+ Add Server" form (name, transport, command/url, env)
-- Hooks tab: hook list with enable/disable, "+ Add Hook" form (name, event dropdown, type, command/url)
+Need to add `load_hooks_for_event()` to `hooks.rs` (same pattern as `load_rules_for_engine` in `rules.rs`).
 
-**Routes:** 10 new routes (5 per entity) in `lib.rs`.
+### 3. Seed Data on First Boot (~1 hour)
 
-**Effort:** ~4 hours.
+ObjectStore starts empty. First boot should insert defaults so the UI isn't blank.
 
----
-
-### Step 3: Capability Engine
-
-**What:** `POST /api/capability/build` — natural language in, structured entities installed into ObjectStore.
-
-**New file: `capability.rs`** — follows `department_chat_handler()` pattern:
-
+In `main.rs`, after DB init:
 ```rust
-pub async fn build_capability(
-    State(state): State<Arc<AppState>>,
-    Json(body): Json<CapabilityRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
-    // Same streaming pattern as department_chat_handler
-    let streamer = ClaudeCliStreamer::new();
-    let prompt = format!("{}\n\nUser request: {}", CAPABILITY_SYSTEM_PROMPT, body.description);
-    let args = vec![
-        "--model".into(), "opus".into(),
-        "--effort".into(), "max".into(),
-        "--allowedTools".into(), "WebSearch WebFetch Bash".into(),
-        "--no-session-persistence".into(),
-    ];
-    let rx = streamer.stream_with_args(&prompt, &args);
+if storage.objects().list("agents", ObjectFilter::default()).await?.is_empty() {
+    seed_defaults(&storage).await;
+}
+```
 
-    // On Done: parse JSON bundle, insert entities into ObjectStore
-    let stream = ReceiverStream::new(rx).map(move |event| {
-        match &event {
-            StreamEvent::Done { full_text, .. } => {
-                tokio::spawn(install_bundle(full_text, engine, storage));
-                // ...
+Insert: 5 agents, 5 skills, 3 rules, 2 MCP server suggestions, 1 sample workflow.
+
+### 4. Update All Docs (~2 hours)
+
+The audit found massive documentation drift:
+
+| Doc | Issue |
+|-----|-------|
+| **CLAUDE.md** | Claims "7 endpoints" — actually 60 routes. Claims "149 tests". Missing: departments, agents/skills/rules CRUD, MCP servers, hooks, workflows, analytics, build commands |
+| **current-state.md** | Claims "70% complete" — much more is done. harvest-engine claims 12 tests (actually 7). Missing: entire department abstraction |
+| **gap-analysis.md** | Doesn't reflect that rules, agents, MCP, hooks, workflows, analytics are now built |
+| **phase-0-foundation-v2.md** | Checkboxes stale. Many unchecked items are done |
+| **modular-ui-blueprint.md** | Many modules marked "not built" that are built (model picker, tools toggle, agent gallery) |
+
+### 5. Job Queue Worker Loop (~3 hours)
+
+`JobPort` has enqueue/dequeue/approve/complete/fail. No worker loop processes jobs.
+
+Add to `main.rs`:
+```rust
+let job_port = job_port.clone();
+tokio::spawn(async move {
+    loop {
+        if let Ok(Some(job)) = job_port.dequeue(&[]).await {
+            match job.kind {
+                JobKind::ContentPublish => { /* call content-engine */ }
+                JobKind::HarvestScan => { /* call harvest-engine */ }
+                JobKind::OutreachSend => { /* call gtm-engine */ }
+                _ => {}
             }
-            // Delta and Error: same as department handler
         }
-    });
-    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
-}
-
-async fn install_bundle(text: &str, engine: &Option<String>, storage: &Arc<dyn StoragePort>) {
-    // Parse JSON with agents[], skills[], rules[], mcp_servers[], hooks[]
-    // For each: storage.objects().put("agents", uuid, value)
-    // Same ObjectStore operations used everywhere
-}
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+});
 ```
 
-**System prompt** tells Claude the exact JSON schema matching our types (Agent, Skill, Rule, McpServerDef, HookDefinition) and instructs it to search mcp.so, npm, GitHub for real packages.
+### 6. Frontend Polish (~3 hours)
 
-**Integration into department chat** — detect `!build` prefix:
-```rust
-if body.message.trim_start().starts_with("!build") {
-    let desc = body.message.trim_start_matches("!build").trim();
-    return capability::build_capability(state, CapabilityRequest {
-        description: desc.into(), engine: Some(engine.into())
-    }).await;
-}
-```
+- **Dashboard** (`+page.svelte`): Shows goals + events but no department activity summary. Add: recent conversations count per dept, total agents/skills/rules counts (from `/api/analytics`)
+- **Settings** (`settings/+page.svelte`): Still shows static status cards. Wire to real data: health check, analytics endpoint, global agents/skills/rules lists
+- **Workflow UI**: Backend exists (`workflows.rs` with run endpoint) but no frontend page/tab for workflows yet. Add workflows tab to DepartmentPanel or Settings
+- **Chat improvements**: Show `@agent-name` autocomplete suggestions in input. Show which rules are active in the config panel
 
-**Frontend:** No new UI needed — user types `!build I need to scrape LinkedIn for opportunities` in any department chat. The response streams like normal, and installed entities appear in the Agents/Skills/Rules/MCP tabs.
+### 7. Port Safety Patterns (~4 hours)
 
-Optionally: add a "Build Capability" button in the Actions tab that prefills `!build ` in the chat input.
+From `gap-analysis.md` — these exist in `old/forge-project` but not in RUSVEL:
+- **Circuit Breaker** (3-state FSM: closed→open→half-open)
+- **Rate Limiter** (token bucket)
+- **Cost Tracker** (budget enforcement per engine)
+- **Loop Detector** (detect repeating LLM outputs)
+- **Context Pruner** (token-aware truncation)
 
-**Effort:** ~5 hours.
-
----
-
-### Step 4: Agent Teams + Workflows
-
-**What:** Compose agents into teams, execute multi-step workflows.
-
-**2 new files following same CRUD pattern:**
-
-`teams.rs` (ObjectStore: `"agent_teams"`):
-```rust
-struct AgentTeam { id, name, description, agent_ids: Vec<String>, strategy: String, metadata }
-
-// CRUD + POST /api/agent-teams/{id}/run
-async fn run_team(state, id, body) -> Sse<...> {
-    // Load team → load agents by IDs → spawn claude -p per agent
-    // "parallel": join_all(handles)
-    // "sequential": chain outputs
-    // Stream progress to client
-}
-```
-
-`workflows.rs` (ObjectStore: `"workflows"`):
-```rust
-struct WorkflowTemplate { id, name, description, steps: Vec<WorkflowStep>, metadata }
-struct WorkflowStep { name, prompt, agent_id: Option<String>, depends_on: Vec<String>, approval_required: bool }
-
-// CRUD + POST /api/workflows/{id}/run
-// Resolve dependency graph → execute steps → pause at approval gates
-```
-
-**Frontend:** Add "Teams" and "Workflows" tabs to DepartmentPanel or Settings page.
-
-**Effort:** ~6 hours.
-
----
-
-### Step 5: Analytics + MCP Flag + Seed Data
-
-**Analytics** — record usage after every chat completion (in `department_chat_handler` Done branch):
-```rust
-let _ = storage.objects().put("usage", &uuid::Uuid::now_v7().to_string(), serde_json::json!({
-    "engine": engine, "model": config.model, "cost_usd": cost,
-    "response_length": msg.content.len(), "timestamp": Utc::now().to_rfc3339(),
-})).await;
-```
-
-API: `GET /api/analytics/usage` — aggregates from ObjectStore("usage").
-
-**MCP flag** — in `main.rs`:
-```rust
-#[arg(long)] mcp: bool,
-// if cli.mcp { return rusvel_mcp::run_stdio(mcp).await; }
-```
-
-**Seed data** — in `main.rs` after DB init, check if ObjectStore("agents") is empty → insert default agents, skills, rules so UI isn't empty on first boot.
-
-**Effort:** ~3 hours.
+SafetyGuard in forge-engine has basic versions but not the full implementations from old repos.
 
 ---
 
 ## Dependency Graph
 
 ```
-Step 1: Agent @mention (1h) ─────────────────────────┐
-Step 2: MCP servers + Hooks (4h) ───┐                 │
-                                    ├──→ Step 3: Capability Engine (5h)
-                                    │         └──→ Step 4: Teams + Workflows (6h)
-Step 5: Analytics + MCP flag + Seed (3h) ─── independent
+1. Fix build error ←── BLOCKS EVERYTHING
+   └→ 2. Wire hooks into chat
+   └→ 3. Seed data
+   └→ 5. Job queue worker
+   └→ 6. Frontend polish
+4. Update docs (independent)
+7. Port safety patterns (independent)
 ```
-
-Step 1 and 2 can be done in parallel. Step 3 needs 2 (so it can install MCP servers and hooks). Step 4 needs 3 (Capability Engine can generate teams/workflows). Step 5 is independent.
 
 ---
 
 ## Effort Summary
 
-| Step | Description | Effort |
-|------|-------------|--------|
-| 1 | Wire agent @mention into chat | 1h |
-| 2 | MCP servers + Hooks CRUD + wire | 4h |
-| 3 | Capability Engine (`!build` prefix) | 5h |
-| 4 | Agent Teams + Workflows | 6h |
-| 5 | Analytics + MCP flag + Seed data | 3h |
-| **Total** | | **~19 hours** |
+| Step | Description | Effort | Priority |
+|------|-------------|--------|----------|
+| 1 | Fix build error in department.rs | 30m | BLOCKER |
+| 2 | Wire hooks execution into chat | 1h | High |
+| 3 | Seed data on first boot | 1h | High |
+| 4 | Update all docs to match reality | 2h | High |
+| 5 | Job queue worker loop | 3h | Medium |
+| 6 | Frontend polish (dashboard, settings, workflows UI) | 3h | Medium |
+| 7 | Port safety patterns from old repos | 4h | Medium |
+| **Total** | | **~14.5 hours** |
 
-At 3-4 hours/day → **5-6 days**.
+At 3-4 hours/day → **4-5 days**.
 
 ---
 
 ## Definition of Done
 
-- [ ] `@agent-name` in chat overrides department config with agent's config
-- [ ] MCP servers: CRUD + injected as `--mcp-config` into claude calls
-- [ ] Hooks: CRUD + fire on chat.completed events
-- [ ] `!build` in any department chat triggers Capability Engine
-- [ ] Capability Engine searches online, generates entities, installs to ObjectStore
-- [ ] Installed items appear immediately in Agents/Skills/Rules/MCP/Hooks tabs
-- [ ] Agent Teams: create + parallel/sequential execution
-- [ ] Workflows: create + dependency-ordered steps + approval gates
-- [ ] Usage tracked per chat completion, aggregates via API
-- [ ] `--mcp` flag dispatches MCP server
-- [ ] Seed data populates defaults on first boot
-- [ ] All tests pass, `cargo build` + `npm run check` clean
+- [ ] `cargo build` succeeds (build error fixed)
+- [ ] `cargo test` — all tests pass
+- [ ] `npm run check` — clean
+- [ ] Hooks fire after chat completion
+- [ ] First boot populates default agents/skills/rules
+- [ ] CLAUDE.md reflects 60 routes, 154+ tests, department architecture
+- [ ] current-state.md reflects what's actually built
+- [ ] Job queue worker processes at least one job type
+- [ ] Dashboard shows real activity data
+- [ ] Settings page wired to analytics + health
+- [ ] Workflows have frontend UI
+- [ ] Safety patterns ported (circuit breaker, rate limiter)

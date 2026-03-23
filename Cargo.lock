@@ -605,6 +605,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "distro-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,6 +665,19 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
+
+[[package]]
+name = "finance-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "find-msvc-tools"
@@ -842,6 +868,19 @@ dependencies = [
  "r-efi 6.0.0",
  "wasip2",
  "wasip3",
+]
+
+[[package]]
+name = "growth-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1234,6 +1273,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "infra-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "instability"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1304,6 +1356,19 @@ name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
+name = "legal-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "libc"
@@ -1620,6 +1685,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "product-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1969,9 +2047,15 @@ dependencies = [
  "clap",
  "code-engine",
  "content-engine",
+ "distro-engine",
+ "finance-engine",
  "forge-engine",
+ "growth-engine",
  "gtm-engine",
  "harvest-engine",
+ "infra-engine",
+ "legal-engine",
+ "product-engine",
  "rusvel-agent",
  "rusvel-api",
  "rusvel-auth",
@@ -1985,9 +2069,12 @@ dependencies = [
  "rusvel-mcp",
  "rusvel-memory",
  "rusvel-tool",
+ "serde_json",
+ "support-engine",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -2412,6 +2499,19 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "support-engine"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "syn"

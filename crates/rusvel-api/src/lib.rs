@@ -7,6 +7,8 @@
 //! and core port traits.
 
 pub mod agents;
+pub mod analytics;
+pub mod build_cmd;
 pub mod chat;
 pub mod config;
 pub mod department;
@@ -15,6 +17,7 @@ pub mod mcp_servers;
 pub mod routes;
 pub mod rules;
 pub mod skills;
+pub mod workflows;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -109,6 +112,55 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/dept/forge/config", get(department::forge_config_get))
         .route("/api/dept/forge/config", axum::routing::put(department::forge_config_update))
         .route("/api/dept/forge/events", get(department::forge_events))
+        // Finance
+        .route("/api/dept/finance/chat", post(department::finance_chat))
+        .route("/api/dept/finance/chat/conversations", get(department::finance_conversations))
+        .route("/api/dept/finance/chat/conversations/{id}", get(department::finance_history))
+        .route("/api/dept/finance/config", get(department::finance_config_get))
+        .route("/api/dept/finance/config", axum::routing::put(department::finance_config_update))
+        .route("/api/dept/finance/events", get(department::finance_events))
+        // Product
+        .route("/api/dept/product/chat", post(department::product_chat))
+        .route("/api/dept/product/chat/conversations", get(department::product_conversations))
+        .route("/api/dept/product/chat/conversations/{id}", get(department::product_history))
+        .route("/api/dept/product/config", get(department::product_config_get))
+        .route("/api/dept/product/config", axum::routing::put(department::product_config_update))
+        .route("/api/dept/product/events", get(department::product_events))
+        // Growth
+        .route("/api/dept/growth/chat", post(department::growth_chat))
+        .route("/api/dept/growth/chat/conversations", get(department::growth_conversations))
+        .route("/api/dept/growth/chat/conversations/{id}", get(department::growth_history))
+        .route("/api/dept/growth/config", get(department::growth_config_get))
+        .route("/api/dept/growth/config", axum::routing::put(department::growth_config_update))
+        .route("/api/dept/growth/events", get(department::growth_events))
+        // Distribution
+        .route("/api/dept/distro/chat", post(department::distro_chat))
+        .route("/api/dept/distro/chat/conversations", get(department::distro_conversations))
+        .route("/api/dept/distro/chat/conversations/{id}", get(department::distro_history))
+        .route("/api/dept/distro/config", get(department::distro_config_get))
+        .route("/api/dept/distro/config", axum::routing::put(department::distro_config_update))
+        .route("/api/dept/distro/events", get(department::distro_events))
+        // Legal
+        .route("/api/dept/legal/chat", post(department::legal_chat))
+        .route("/api/dept/legal/chat/conversations", get(department::legal_conversations))
+        .route("/api/dept/legal/chat/conversations/{id}", get(department::legal_history))
+        .route("/api/dept/legal/config", get(department::legal_config_get))
+        .route("/api/dept/legal/config", axum::routing::put(department::legal_config_update))
+        .route("/api/dept/legal/events", get(department::legal_events))
+        // Support
+        .route("/api/dept/support/chat", post(department::support_chat))
+        .route("/api/dept/support/chat/conversations", get(department::support_conversations))
+        .route("/api/dept/support/chat/conversations/{id}", get(department::support_history))
+        .route("/api/dept/support/config", get(department::support_config_get))
+        .route("/api/dept/support/config", axum::routing::put(department::support_config_update))
+        .route("/api/dept/support/events", get(department::support_events))
+        // Infra
+        .route("/api/dept/infra/chat", post(department::infra_chat))
+        .route("/api/dept/infra/chat/conversations", get(department::infra_conversations))
+        .route("/api/dept/infra/chat/conversations/{id}", get(department::infra_history))
+        .route("/api/dept/infra/config", get(department::infra_config_get))
+        .route("/api/dept/infra/config", axum::routing::put(department::infra_config_update))
+        .route("/api/dept/infra/events", get(department::infra_events))
         // Agents CRUD
         .route("/api/agents", get(agents::list_agents).post(agents::create_agent))
         .route("/api/agents/{id}", get(agents::get_agent).put(agents::update_agent).delete(agents::delete_agent))
@@ -121,6 +173,12 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         // MCP Servers CRUD
         .route("/api/mcp-servers", get(mcp_servers::list_mcp_servers).post(mcp_servers::create_mcp_server))
         .route("/api/mcp-servers/{id}", axum::routing::put(mcp_servers::update_mcp_server).delete(mcp_servers::delete_mcp_server))
+        // Workflows CRUD + execution
+        .route("/api/workflows", get(workflows::list_workflows).post(workflows::create_workflow))
+        .route("/api/workflows/{id}", get(workflows::get_workflow).put(workflows::update_workflow).delete(workflows::delete_workflow))
+        .route("/api/workflows/{id}/run", post(workflows::run_workflow))
+        // Analytics
+        .route("/api/analytics", get(analytics::get_analytics))
         // Hooks CRUD
         .route("/api/hooks", get(hooks::list_hooks).post(hooks::create_hook))
         .route("/api/hooks/{id}", axum::routing::put(hooks::update_hook).delete(hooks::delete_hook))

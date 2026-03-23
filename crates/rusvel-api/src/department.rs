@@ -13,9 +13,10 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
 use axum::Json;
 use chrono::Utc;
+use std::pin::Pin;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
@@ -126,6 +127,125 @@ impl DepartmentConfig {
                 add_dirs: vec![],
                 max_turns: None,
             },
+            "finance" => Self {
+                engine: "finance".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Finance department of RUSVEL.\n\n\
+                     Focus: revenue tracking, expense management, tax optimization, \
+                     runway forecasting, P&L reports, unit economics.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "product" => Self {
+                engine: "product".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Product department of RUSVEL.\n\n\
+                     Focus: product roadmaps, feature prioritization, pricing strategy, \
+                     user feedback analysis, A/B testing.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "growth" => Self {
+                engine: "growth".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Growth department of RUSVEL.\n\n\
+                     Focus: funnel optimization, conversion tracking, cohort analysis, \
+                     churn prediction, retention strategies, KPI dashboards.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "distro" => Self {
+                engine: "distro".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Distribution department of RUSVEL.\n\n\
+                     Focus: marketplace listings, SEO optimization, affiliate programs, \
+                     partnerships, API distribution channels.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "legal" => Self {
+                engine: "legal".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Legal department of RUSVEL.\n\n\
+                     Focus: contracts, IP protection, terms of service, \
+                     GDPR compliance, licensing, privacy policies.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "support" => Self {
+                engine: "support".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Support department of RUSVEL.\n\n\
+                     Focus: customer support tickets, knowledge base, NPS tracking, \
+                     auto-triage, customer success.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
+            "infra" => Self {
+                engine: "infra".into(),
+                model: "sonnet".into(),
+                effort: "medium".into(),
+                max_budget_usd: None,
+                permission_mode: "plan".into(),
+                allowed_tools: vec![],
+                disallowed_tools: vec![],
+                system_prompt: format!(
+                    "You are the Infrastructure department of RUSVEL.\n\n\
+                     Focus: CI/CD pipelines, deployments, monitoring, \
+                     incident response, performance, cost analysis.\n\
+                     {user_context}"
+                ),
+                add_dirs: vec![],
+                max_turns: None,
+            },
             _ => Self {
                 engine: engine.into(),
                 model: "sonnet".into(),
@@ -206,7 +326,10 @@ pub async fn department_chat_handler(
     engine: &str,
     state: Arc<AppState>,
     body: ChatRequest,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
+) -> Result<
+    Sse<KeepAliveStream<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>>>,
+    (StatusCode, String),
+> {
     let mut config = get_dept_config(engine, &state).await?;
     let namespace = DepartmentConfig::msg_namespace(engine);
 
@@ -227,6 +350,62 @@ pub async fn department_chat_handler(
         created_at: Utc::now().to_rfc3339(),
     };
     let _ = store_namespaced_message(&state.storage, &namespace, &user_msg).await;
+
+    // ── !build interceptor ───────────────────────────────────
+    // If the message starts with "!build", intercept and generate the entity
+    // instead of routing to the normal chat flow.
+    if let Some(build_cmd) = crate::build_cmd::parse_build_command(&body.message) {
+        let storage = state.storage.clone();
+        let engine_owned = engine.to_string();
+        let conv_id = conversation_id.clone();
+        let ns = namespace.clone();
+
+        let (tx, rx) = tokio::sync::mpsc::channel::<Event>(8);
+        tokio::spawn(async move {
+            // Send an initial delta so the UI knows something is happening
+            let _ = tx.send(Event::default()
+                .event("delta")
+                .data(serde_json::json!({
+                    "text": format!("Building {}...\n\n", build_cmd.entity_type.label()),
+                    "conversation_id": conv_id,
+                }).to_string())
+            ).await;
+
+            let result = crate::build_cmd::execute_build(
+                &build_cmd, &engine_owned, &storage,
+            ).await;
+
+            let response_text = match result {
+                Ok(confirmation) => confirmation,
+                Err(e) => format!("**Build failed:** {e}"),
+            };
+
+            // Store the assistant response
+            let assistant_msg = ChatMessage {
+                id: uuid::Uuid::now_v7().to_string(),
+                conversation_id: conv_id.clone(),
+                role: "assistant".into(),
+                content: response_text.clone(),
+                created_at: Utc::now().to_rfc3339(),
+            };
+            let _ = store_namespaced_message(&storage, &ns, &assistant_msg).await;
+
+            // Send done event
+            let _ = tx.send(Event::default()
+                .event("done")
+                .data(serde_json::json!({
+                    "text": response_text,
+                    "cost_usd": 0.0,
+                    "conversation_id": conv_id,
+                }).to_string())
+            ).await;
+        });
+
+        let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
+            Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)
+                .map(|event| Ok::<_, Infallible>(event)));
+        return Ok(Sse::new(stream).keep_alive(KeepAlive::default()));
+    }
 
     // Check for @agent-name mention — override config with agent's settings
     if let Some(agent_name) = extract_agent_mention(&body.message) {
@@ -265,6 +444,13 @@ pub async fn department_chat_handler(
         "content" => EngineKind::Content,
         "harvest" => EngineKind::Harvest,
         "gtm" => EngineKind::GoToMarket,
+        "finance" => EngineKind::Finance,
+        "product" => EngineKind::Product,
+        "growth" => EngineKind::Growth,
+        "distro" => EngineKind::Distribution,
+        "legal" => EngineKind::Legal,
+        "support" => EngineKind::Support,
+        "infra" => EngineKind::Infra,
         _ => EngineKind::Forge,
     };
 
@@ -287,58 +473,59 @@ pub async fn department_chat_handler(
     let conv_id = conversation_id.clone();
     let ns = namespace.clone();
 
-    let stream = ReceiverStream::new(rx).map(move |event| {
-        let sse_event = match &event {
-            StreamEvent::Delta { text } => Event::default()
-                .event("delta")
-                .data(serde_json::json!({"text": text, "conversation_id": conv_id}).to_string()),
-            StreamEvent::Done { full_text, cost_usd } => {
-                let storage = storage.clone();
-                let events_port = events_port.clone();
-                let conv_id_inner = conv_id.clone();
-                let ns_inner = ns.clone();
-                let text = full_text.clone();
-                let eng = engine_kind;
-                let cost = *cost_usd;
-                tokio::spawn(async move {
-                    let msg = ChatMessage {
-                        id: uuid::Uuid::now_v7().to_string(),
-                        conversation_id: conv_id_inner.clone(),
-                        role: "assistant".into(),
-                        content: text,
-                        created_at: Utc::now().to_rfc3339(),
-                    };
-                    let _ = store_namespaced_message(&storage, &ns_inner, &msg).await;
-                    // Emit event so department Events tab shows activity
-                    let _ = events_port.emit(rusvel_core::domain::Event {
-                        id: EventId::new(),
-                        session_id: None,
-                        run_id: None,
-                        source: eng,
-                        kind: format!("{}.chat.completed", eng.to_string()),
-                        payload: serde_json::json!({
-                            "conversation_id": conv_id_inner,
-                            "cost_usd": cost,
-                            "response_length": msg.content.len(),
-                        }),
-                        created_at: Utc::now(),
-                        metadata: serde_json::json!({}),
-                    }).await;
-                });
-                Event::default().event("done").data(
-                    serde_json::json!({
-                        "text": full_text,
-                        "cost_usd": cost_usd,
-                        "conversation_id": conv_id
-                    }).to_string(),
-                )
-            }
-            StreamEvent::Error { message } => Event::default()
-                .event("error")
-                .data(serde_json::json!({"message": message}).to_string()),
-        };
-        Ok(sse_event)
-    });
+    let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
+        Box::pin(ReceiverStream::new(rx).map(move |event| {
+            let sse_event = match &event {
+                StreamEvent::Delta { text } => Event::default()
+                    .event("delta")
+                    .data(serde_json::json!({"text": text, "conversation_id": conv_id}).to_string()),
+                StreamEvent::Done { full_text, cost_usd } => {
+                    let storage = storage.clone();
+                    let events_port = events_port.clone();
+                    let conv_id_inner = conv_id.clone();
+                    let ns_inner = ns.clone();
+                    let text = full_text.clone();
+                    let eng = engine_kind;
+                    let cost = *cost_usd;
+                    tokio::spawn(async move {
+                        let msg = ChatMessage {
+                            id: uuid::Uuid::now_v7().to_string(),
+                            conversation_id: conv_id_inner.clone(),
+                            role: "assistant".into(),
+                            content: text,
+                            created_at: Utc::now().to_rfc3339(),
+                        };
+                        let _ = store_namespaced_message(&storage, &ns_inner, &msg).await;
+                        // Emit event so department Events tab shows activity
+                        let _ = events_port.emit(rusvel_core::domain::Event {
+                            id: EventId::new(),
+                            session_id: None,
+                            run_id: None,
+                            source: eng,
+                            kind: format!("{}.chat.completed", eng.to_string()),
+                            payload: serde_json::json!({
+                                "conversation_id": conv_id_inner,
+                                "cost_usd": cost,
+                                "response_length": msg.content.len(),
+                            }),
+                            created_at: Utc::now(),
+                            metadata: serde_json::json!({}),
+                        }).await;
+                    });
+                    Event::default().event("done").data(
+                        serde_json::json!({
+                            "text": full_text,
+                            "cost_usd": cost_usd,
+                            "conversation_id": conv_id
+                        }).to_string(),
+                    )
+                }
+                StreamEvent::Error { message } => Event::default()
+                    .event("error")
+                    .data(serde_json::json!({"message": message}).to_string()),
+            };
+            Ok(sse_event)
+        }));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
@@ -495,6 +682,13 @@ dept_wrappers!(content, "content", EngineKind::Content);
 dept_wrappers!(harvest, "harvest", EngineKind::Harvest);
 dept_wrappers!(gtm, "gtm", EngineKind::GoToMarket);
 dept_wrappers!(forge, "forge", EngineKind::Forge);
+dept_wrappers!(finance, "finance", EngineKind::Finance);
+dept_wrappers!(product, "product", EngineKind::Product);
+dept_wrappers!(growth, "growth", EngineKind::Growth);
+dept_wrappers!(distro, "distro", EngineKind::Distribution);
+dept_wrappers!(legal, "legal", EngineKind::Legal);
+dept_wrappers!(support, "support", EngineKind::Support);
+dept_wrappers!(infra, "infra", EngineKind::Infra);
 
 /// Extract @agent-name from a message. Returns the name without the @ prefix.
 fn extract_agent_mention(message: &str) -> Option<String> {

@@ -19,6 +19,13 @@ members = [
     "crates/harvest-engine",
     "crates/content-engine",
     "crates/gtm-engine",
+    "crates/finance-engine",
+    "crates/product-engine",
+    "crates/growth-engine",
+    "crates/distro-engine",
+    "crates/legal-engine",
+    "crates/support-engine",
+    "crates/infra-engine",
 
     # ─── Surfaces ───
     "crates/rusvel-api",
@@ -105,6 +112,13 @@ code-engine = { path = "crates/code-engine" }
 harvest-engine = { path = "crates/harvest-engine" }
 content-engine = { path = "crates/content-engine" }
 gtm-engine = { path = "crates/gtm-engine" }
+finance-engine = { path = "crates/finance-engine" }
+product-engine = { path = "crates/product-engine" }
+growth-engine = { path = "crates/growth-engine" }
+distro-engine = { path = "crates/distro-engine" }
+legal-engine = { path = "crates/legal-engine" }
+support-engine = { path = "crates/support-engine" }
+infra-engine = { path = "crates/infra-engine" }
 rusvel-api = { path = "crates/rusvel-api" }
 rusvel-cli = { path = "crates/rusvel-cli" }
 rusvel-mcp = { path = "crates/rusvel-mcp" }

@@ -21,6 +21,13 @@
 		{ href: '/harvest', label: 'Harvest', icon: '$' },
 		{ href: '/content', label: 'Content', icon: '*' },
 		{ href: '/gtm', label: 'GTM', icon: '^' },
+		{ href: '/finance', label: 'Finance', icon: '%' },
+		{ href: '/product', label: 'Product', icon: '@' },
+		{ href: '/growth', label: 'Growth', icon: '&' },
+		{ href: '/distro', label: 'Distro', icon: '!' },
+		{ href: '/legal', label: 'Legal', icon: '§' },
+		{ href: '/support', label: 'Support', icon: '?' },
+		{ href: '/infra', label: 'Infra', icon: '>' },
 		{ href: '/settings', label: 'Settings', icon: '%' }
 	];
 

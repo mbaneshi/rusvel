@@ -25,7 +25,7 @@ use rusvel_db::Database;
 use rusvel_event::EventBus;
 use rusvel_jobs::JobQueue;
 use rusvel_llm::ClaudeCliProvider;
-#[allow(unused_imports)] // TODO: wire --mcp flag dispatch
+use rusvel_core::id::AgentProfileId;
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
 use rusvel_tool::ToolRegistry;
@@ -68,6 +68,167 @@ fn rusvel_dir() -> std::path::PathBuf {
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".into());
     std::path::PathBuf::from(home).join(".rusvel")
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Seed data — populate ObjectStore with defaults on first run
+// ════════════════════════════════════════════════════════════════════
+
+async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
+    let objects = storage.objects();
+    let empty_filter = ObjectFilter::default();
+
+    // ── Seed agents ──────────────────────────────────────────────
+    let existing_agents = objects.list("agents", empty_filter.clone()).await?;
+    if existing_agents.is_empty() {
+        tracing::info!("Seeding default agents...");
+        let agents = vec![
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "rust-engine".into(),
+                role: "Rust backend engineer".into(),
+                instructions: "Build RUSVEL engine crates. Follow hexagonal architecture.".into(),
+                default_model: ModelRef { provider: ModelProvider::Claude, model: "opus".into() },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "svelte-ui".into(),
+                role: "Frontend engineer".into(),
+                instructions: "Build SvelteKit 5 pages using RUSVEL design system.".into(),
+                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "test-writer".into(),
+                role: "QA and test engineer".into(),
+                instructions: "Write tests for RUSVEL crates and frontend.".into(),
+                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                allowed_tools: vec!["read_file".into(), "write_file".into(), "bash".into()],
+                capabilities: vec![Capability::CodeAnalysis, Capability::ToolUse],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "code", "department": "Code"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "content-writer".into(),
+                role: "Content strategist and writer".into(),
+                instructions: "Draft blog posts, articles, and long-form content.".into(),
+                default_model: ModelRef { provider: ModelProvider::Claude, model: "sonnet".into() },
+                allowed_tools: vec!["read_file".into(), "web_search".into()],
+                capabilities: vec![Capability::ContentCreation],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "content", "department": "Content"}),
+            },
+            AgentProfile {
+                id: AgentProfileId::new(),
+                name: "proposal-writer".into(),
+                role: "Proposal and business development specialist".into(),
+                instructions: "Draft compelling proposals tailored to each gig.".into(),
+                default_model: ModelRef { provider: ModelProvider::Claude, model: "opus".into() },
+                allowed_tools: vec!["read_file".into(), "web_search".into()],
+                capabilities: vec![Capability::ContentCreation, Capability::OpportunityDiscovery],
+                budget_limit: None,
+                metadata: serde_json::json!({"engine": "harvest", "department": "Harvest"}),
+            },
+        ];
+        for agent in &agents {
+            let val = serde_json::to_value(agent)?;
+            objects.put("agents", &agent.id.to_string(), val).await?;
+        }
+        tracing::info!("Seeded {} default agents", agents.len());
+    }
+
+    // ── Seed skills ──────────────────────────────────────────────
+    let existing_skills = objects.list("skills", empty_filter.clone()).await?;
+    if existing_skills.is_empty() {
+        tracing::info!("Seeding default skills...");
+        let skills = vec![
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Code Review",
+                "description": "Analyze code for bugs, patterns, and improvements",
+                "prompt_template": "Review the following code. Identify bugs, anti-patterns, and suggest improvements:\n\n{input}",
+                "metadata": {"engine": "code"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Blog Draft",
+                "description": "Draft a blog post from a topic and key points",
+                "prompt_template": "Write a blog post about: {topic}\n\nKey points to cover:\n{points}\n\nTarget audience: {audience}",
+                "metadata": {"engine": "content"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Proposal Draft",
+                "description": "Draft a proposal for a freelance opportunity",
+                "prompt_template": "Draft a compelling proposal for this opportunity:\n\nTitle: {title}\nDescription: {description}\nBudget: {budget}\n\nHighlight relevant experience and propose a clear plan.",
+                "metadata": {"engine": "harvest"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Test Generator",
+                "description": "Generate tests for a given Rust module or SvelteKit component",
+                "prompt_template": "Generate comprehensive tests for:\n\n{input}\n\nInclude unit tests, edge cases, and integration tests where appropriate.",
+                "metadata": {"engine": "code"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Daily Standup",
+                "description": "Summarize progress and plan for the day",
+                "prompt_template": "Based on recent activity, generate a standup summary:\n- What was accomplished yesterday\n- What is planned for today\n- Any blockers",
+                "metadata": {"engine": "forge"}
+            }),
+        ];
+        for skill in &skills {
+            let id = skill["id"].as_str().unwrap();
+            objects.put("skills", id, skill.clone()).await?;
+        }
+        tracing::info!("Seeded {} default skills", skills.len());
+    }
+
+    // ── Seed rules ───────────────────────────────────────────────
+    let existing_rules = objects.list("rules", empty_filter.clone()).await?;
+    if existing_rules.is_empty() {
+        tracing::info!("Seeding default rules...");
+        let rules = vec![
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Hexagonal Architecture",
+                "content": "Engines must never import adapter crates. They depend only on rusvel-core port traits. All domain logic flows through ports.",
+                "enabled": true,
+                "metadata": {"engine": "code"}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Human Approval Gate",
+                "content": "All content publishing and outreach sending requires human approval before execution. Never auto-publish or auto-send without explicit approval.",
+                "enabled": true,
+                "metadata": {}
+            }),
+            serde_json::json!({
+                "id": uuid::Uuid::now_v7().to_string(),
+                "name": "Crate Size Limit",
+                "content": "Each crate must stay under 2000 lines. If a crate exceeds this, refactor it into smaller, focused crates with single responsibility.",
+                "enabled": true,
+                "metadata": {"engine": "code"}
+            }),
+        ];
+        for rule in &rules {
+            let id = rule["id"].as_str().unwrap();
+            objects.put("rules", id, rule.clone()).await?;
+        }
+        tracing::info!("Seeded {} default rules", rules.len());
+    }
+
+    Ok(())
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -114,7 +275,11 @@ async fn main() -> Result<()> {
         config,
     ));
 
-    // 5. Load user profile
+    // 5. Seed default data (agents, skills, rules) on first run
+    let storage_ref: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
+    seed_defaults(&storage_ref).await?;
+
+    // 6. Load user profile
     let profile_path = data_dir.join("profile.toml");
     let profile = match UserProfile::load(&profile_path) {
         Ok(p) => {
@@ -127,13 +292,18 @@ async fn main() -> Result<()> {
         }
     };
 
-    // 6. Parse CLI
+    // 7. Parse CLI
     let cli = Cli::parse();
 
-    // 7. Dispatch
+    // 8. Dispatch
     if cli.command.is_some() {
         // Subcommand present -> CLI handler
         rusvel_cli::run(cli, forge.clone(), sessions.clone()).await?;
+    } else if cli.mcp {
+        // --mcp flag: start MCP server over stdio (JSON-RPC)
+        tracing::info!("Starting MCP server on stdio...");
+        let mcp = Arc::new(RusvelMcp::new(forge.clone(), sessions.clone()));
+        rusvel_mcp::run_stdio(mcp).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     } else {
         // Default: start the API web server with graceful shutdown
         let state = AppState {

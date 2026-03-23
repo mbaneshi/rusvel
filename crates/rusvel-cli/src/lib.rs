@@ -49,6 +49,10 @@ fn save_active_session(id: &SessionId) -> Result<()> {
 #[derive(Parser, Debug)]
 #[command(name = "rusvel", version, about, long_about = None)]
 pub struct Cli {
+    /// Start the MCP server (stdio JSON-RPC) instead of the web server.
+    #[arg(long)]
+    pub mcp: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
