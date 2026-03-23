@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { checkHealth, getPendingApprovals, approveJob, rejectJob, type Job } from '$lib/api';
+	import { toast } from 'svelte-sonner';
 	let health = $state('checking...');
 	let version = $state('0.1.0');
 
@@ -34,8 +35,10 @@
 		try {
 			await approveJob(id);
 			pendingJobs = pendingJobs.filter((j) => j.id !== id);
+			toast.success('Job approved');
 		} catch (e) {
 			approvalsError = e instanceof Error ? e.message : 'Failed to approve job';
+			toast.error(approvalsError);
 		} finally {
 			actionInFlight = null;
 		}
@@ -46,8 +49,10 @@
 		try {
 			await rejectJob(id);
 			pendingJobs = pendingJobs.filter((j) => j.id !== id);
+			toast.success('Job rejected');
 		} catch (e) {
 			approvalsError = e instanceof Error ? e.message : 'Failed to reject job';
+			toast.error(approvalsError);
 		} finally {
 			actionInFlight = null;
 		}

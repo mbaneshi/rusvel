@@ -50,37 +50,6 @@
   --sidebar-border: oklch(0.22 0.01 260);
   --sidebar-ring: oklch(0.55 0.18 270);
 
-  /* ── RUSVEL Brand Palette (preserved) ── */
-  --r-brand-50:  #eef2ff;
-  --r-brand-100: #e0e7ff;
-  --r-brand-200: #c7d2fe;
-  --r-brand-300: #a5b4fc;
-  --r-brand-400: #818cf8;
-  --r-brand-500: #6366f1;
-  --r-brand-600: #4f46e5;
-  --r-brand-700: #4338ca;
-  --r-brand-800: #3730a3;
-  --r-brand-900: #312e81;
-  --r-brand-950: #1e1b4b;
-
-  /* ── RUSVEL Semantic Tokens (preserved for backward compat) ── */
-  --r-bg-base:      #020617;
-  --r-bg-surface:   #0f172a;
-  --r-bg-raised:    #1e293b;
-  --r-bg-overlay:   #1e293b;
-  --r-fg-default:   #f1f5f9;
-  --r-fg-muted:     #94a3b8;
-  --r-fg-subtle:    #64748b;
-  --r-fg-on-brand:  #ffffff;
-  --r-border-default: #1e293b;
-  --r-border-strong:  #334155;
-  --r-border-brand:   #6366f1;
-  --r-brand-default:  #4f46e5;
-  --r-brand-hover:    #6366f1;
-  --r-brand-muted:    #4f46e5;
-  --r-brand-subtle:   color-mix(in srgb, #4f46e5 15%, transparent);
-  --r-ring: #6366f1;
-  --r-ring-offset: #020617;
 }
 
 /* ── Light mode ── */
@@ -114,16 +83,6 @@
   --sidebar-border: oklch(0.90 0.01 260);
   --sidebar-ring: oklch(0.50 0.18 270);
 
-  --r-bg-base:      #f8fafc;
-  --r-bg-surface:   #ffffff;
-  --r-bg-raised:    #f1f5f9;
-  --r-bg-overlay:   #ffffff;
-  --r-fg-default:   #0f172a;
-  --r-fg-muted:     #64748b;
-  --r-fg-subtle:    #94a3b8;
-  --r-border-default: #e2e8f0;
-  --r-border-strong:  #cbd5e1;
-  --r-ring-offset: #ffffff;
 }
 
 @theme inline {
@@ -252,7 +211,7 @@ body {
   outline-offset: 2px;
 }
 .r-focus-ring:focus-visible {
-  outline-color: var(--r-ring);
+  outline-color: var(--ring);
   outline-offset: 2px;
 }
 

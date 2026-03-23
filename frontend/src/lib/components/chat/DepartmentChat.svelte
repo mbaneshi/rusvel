@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { Streamdown } from 'svelte-streamdown';
+	import { copy } from 'svelte-copy';
+	import { toast } from 'svelte-sonner';
 	import { streamDeptChat, streamHelp, getDeptConversations, getDeptChatHistory, getDeptConfig, updateDeptConfig, getModels, getTools } from '$lib/api';
 	import type { Conversation, DepartmentConfig, ModelOption, ToolOption } from '$lib/api';
-	import { onboarding } from '$lib/stores';
+	import { onboarding, pendingCommand } from '$lib/stores';
+	import { cached } from '$lib/cache';
 
 	interface DisplayMessage {
 		role: 'user' | 'assistant' | 'system';
@@ -34,7 +37,7 @@
 	onMount(() => {
 		// Load data
 		Promise.all([
-			getDeptConversations(dept), getDeptConfig(dept), getModels(), getTools()
+			getDeptConversations(dept), cached(`dept-config:${dept}`, () => getDeptConfig(dept)), cached('models', getModels), cached('tools', getTools)
 		]).then(([convs, cfg, mdls, tls]) => {
 			conversations = convs;
 			config = cfg;
@@ -43,17 +46,14 @@
 		}).catch(() => { /* defaults are fine */ });
 
 		textareaEl?.focus();
+	});
 
-		// Listen for quick action dispatches from the parent page
-		const handler = (e: globalThis.Event) => {
-			const detail = (e as CustomEvent).detail;
-			if (detail?.prompt) {
-				inputText = detail.prompt;
-				send();
-			}
-		};
-		document.addEventListener('dept-quick-action', handler);
-		return () => document.removeEventListener('dept-quick-action', handler);
+	pendingCommand.subscribe((cmd) => {
+		if (cmd) {
+			inputText = cmd.prompt;
+			send();
+			pendingCommand.set(null);
+		}
 	});
 
 	async function scroll() { await tick(); if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight; }
@@ -228,7 +228,7 @@
 						{#if !isUser}
 							<div class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md bg-chart-2/30 text-[9px] font-bold text-chart-2">{icon}</div>
 						{/if}
-						<div class="max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed {isUser ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-secondary text-foreground rounded-bl-sm'}">
+						<div class="max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed {isUser ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-secondary text-foreground rounded-bl-sm relative group'}">
 							{#if isUser}
 								<p class="whitespace-pre-wrap">{msg.content}</p>
 							{:else if msg.streaming && !msg.content}
@@ -247,6 +247,16 @@
 									/>
 								</div>
 								{#if msg.streaming}<span class="inline-block h-3 w-0.5 animate-pulse bg-chart-2"></span>{/if}
+							{/if}
+							{#if !isUser && msg.content && !msg.streaming}
+								<button
+									use:copy={msg.content}
+									onclick={() => toast.success('Copied')}
+									class="absolute top-1 right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded bg-secondary text-muted-foreground hover:text-foreground text-[10px]"
+									title="Copy message"
+								>
+									<svg class="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1" /><path d="M3 11V3h8" /></svg>
+								</button>
 							{/if}
 						</div>
 					</div>

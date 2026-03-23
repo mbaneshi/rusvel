@@ -600,6 +600,59 @@ export async function updateProfile(profile: unknown): Promise<unknown> {
 	return res.json();
 }
 
+// ── Knowledge (RAG) ───────────────────────────────────────────
+
+export interface KnowledgeEntry {
+	id: string;
+	content: string;
+	source: string;
+	created_at: string;
+	metadata: Record<string, unknown>;
+}
+
+export interface KnowledgeSearchResult {
+	entry: KnowledgeEntry;
+	score: number;
+}
+
+export interface KnowledgeStats {
+	total_entries: number;
+	model_name: string;
+	dimensions: number;
+}
+
+export async function ingestKnowledge(
+	content: string,
+	source: string
+): Promise<{ chunks_stored: number }> {
+	return request('/api/knowledge/ingest', {
+		method: 'POST',
+		body: JSON.stringify({ content, source })
+	});
+}
+
+export async function getKnowledge(): Promise<KnowledgeEntry[]> {
+	return request('/api/knowledge');
+}
+
+export async function deleteKnowledge(id: string): Promise<void> {
+	await fetch(`${BASE}/api/knowledge/${id}`, { method: 'DELETE' });
+}
+
+export async function searchKnowledge(
+	query: string,
+	limit?: number
+): Promise<KnowledgeSearchResult[]> {
+	return request('/api/knowledge/search', {
+		method: 'POST',
+		body: JSON.stringify({ query, limit: limit ?? 5 })
+	});
+}
+
+export async function getKnowledgeStats(): Promise<KnowledgeStats> {
+	return request('/api/knowledge/stats');
+}
+
 // ── Analytics ─────────────────────────────────────────────────
 export interface AnalyticsData {
 	agents: number;

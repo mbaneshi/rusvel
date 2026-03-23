@@ -9,6 +9,7 @@ export const sidebarWidth = writable(256);
 export const panelWidth = writable(288);
 export const departments = writable<DepartmentDef[]>([]);
 export const commandPaletteOpen = writable(false);
+export const pendingCommand = writable<{ prompt: string } | null>(null);
 
 // ── Onboarding state ─────────────────────────────────────────
 export interface OnboardingState {

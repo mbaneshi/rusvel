@@ -3,6 +3,7 @@
 	import { activeSession, onboarding, departments } from '$lib/stores';
 	import { getGoals, getEvents, getAnalytics } from '$lib/api';
 	import type { Goal, Event, AnalyticsData, DepartmentDef } from '$lib/api';
+	import { toast } from 'svelte-sonner';
 
 	let goals: Goal[] = $state([]);
 	let events: Event[] = $state([]);
@@ -35,6 +36,7 @@
 			if (goals.length > 0) onboarding.complete('goalAdded');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
+			toast.error(error);
 		} finally {
 			loading = false;
 		}

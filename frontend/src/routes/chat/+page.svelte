@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { Streamdown } from 'svelte-streamdown';
+	import { copy } from 'svelte-copy';
 	import { streamChat, getConversations, getChatHistory } from '$lib/api';
 	import type { Conversation } from '$lib/api';
 	import ChatTopBar from '$lib/components/chat/ChatTopBar.svelte';
+	import { toast } from 'svelte-sonner';
 
 	interface DisplayMessage {
 		role: 'user' | 'assistant' | 'system';
@@ -51,6 +53,7 @@
 			await scrollToBottom();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load conversation';
+			toast.error(error);
 		}
 	}
 
@@ -110,6 +113,7 @@
 			);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to send message';
+			toast.error(error);
 			if (messages[messages.length - 1]?.content === '') {
 				messages = messages.slice(0, -1);
 			}
@@ -226,7 +230,7 @@
 									<div class="w-8 flex-shrink-0"></div>
 								{/if}
 							{:else}
-								<div class="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary px-4 py-3 text-sm text-foreground">
+								<div class="max-w-[85%] rounded-2xl rounded-bl-md bg-secondary px-4 py-3 text-sm text-foreground relative group">
 									{#if msg.streaming && !msg.content}
 										<div class="flex items-center gap-1.5">
 											<div class="h-2 w-2 animate-bounce rounded-full bg-primary" style="animation-delay: 0ms"></div>
@@ -243,6 +247,16 @@
 										{#if msg.streaming}
 											<span class="inline-block h-4 w-0.5 animate-pulse bg-primary"></span>
 										{/if}
+									{/if}
+									{#if msg.content && !msg.streaming}
+										<button
+											use:copy={msg.content}
+											onclick={() => toast.success('Copied')}
+											class="absolute top-1 right-1 hidden group-hover:flex h-5 w-5 items-center justify-center rounded bg-secondary text-muted-foreground hover:text-foreground text-[10px]"
+											title="Copy message"
+										>
+											<svg class="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1" /><path d="M3 11V3h8" /></svg>
+										</button>
 									{/if}
 								</div>
 							{/if}

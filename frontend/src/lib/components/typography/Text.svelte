@@ -31,9 +31,9 @@
 	};
 
 	const colorMap: Record<Color, string> = {
-		default: 'text-[var(--r-fg-default)]',
-		muted:   'text-[var(--r-fg-muted)]',
-		subtle:  'text-[var(--r-fg-subtle)]',
+		default: 'text-[var(--foreground)]',
+		muted:   'text-[var(--muted-foreground)]',
+		subtle:  'text-[var(--muted-foreground)]',
 		brand:   'text-brand-400',
 		success: 'text-success-400',
 		danger:  'text-danger-400',

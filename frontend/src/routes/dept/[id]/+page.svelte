@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { activeSession, departments } from '$lib/stores';
 	import DepartmentChat from '$lib/components/chat/DepartmentChat.svelte';
-	import DepartmentPanel from '$lib/components/chat/DepartmentPanel.svelte';
+	import DepartmentPanel from '$lib/components/department/DepartmentPanel.svelte';
 	import type { DepartmentDef } from '$lib/api';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
@@ -17,11 +17,11 @@
 <div class="flex h-full">
 	{#if !dept}
 		<div class="flex flex-1 items-center justify-center">
-			<p class="text-sm text-[var(--r-fg-muted)]">Department not found.</p>
+			<p class="text-sm text-[var(--muted-foreground)]">Department not found.</p>
 		</div>
 	{:else if !currentSession}
 		<div class="flex flex-1 items-center justify-center">
-			<p class="text-sm text-[var(--r-fg-muted)]">Select a session to begin.</p>
+			<p class="text-sm text-[var(--muted-foreground)]">Select a session to begin.</p>
 		</div>
 	{:else}
 		<DepartmentPanel

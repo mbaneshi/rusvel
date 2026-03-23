@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { panelOpen, panelWidth } from '$lib/stores';
+	import { panelOpen, panelWidth, pendingCommand } from '$lib/stores';
 	import { getAgents, createAgent, deleteAgent, getSkills, createSkill, deleteSkill, getRules, createRule, updateRule, deleteRule, getMcpServers, createMcpServer, deleteMcpServer, getHooks, createHook, updateHook, deleteHook, getDeptEvents, getDeptConfig, updateDeptConfig, getWorkflows, createWorkflow, deleteWorkflow, runWorkflow } from '$lib/api';
 	import type { Agent, Skill, Rule, McpServer, Hook, Event, DepartmentConfig, Workflow, WorkflowStepDef, WorkflowRunResult } from '$lib/api';
 	import DeptHelpTooltip from '$lib/components/onboarding/DeptHelpTooltip.svelte';
@@ -97,7 +97,7 @@
 	async function loadConfig() { try { config = await getDeptConfig(dept); } catch {} }
 
 	function sendQuickAction(prompt: string) {
-		document.dispatchEvent(new CustomEvent('dept-quick-action', { detail: { prompt }, bubbles: true }));
+		pendingCommand.set({ prompt });
 	}
 
 	async function handleCreateAgent() {
@@ -473,7 +473,7 @@
 				</button>
 				{#if showCapability}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<textarea bind:value={capabilityInput} placeholder="e.g. I need to scrape job postings and score them" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
+						<textarea bind:value={capabilityInput} placeholder="e.g. I need to scrape job postings and score them" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
 						<button
 							onclick={() => { if (capabilityInput.trim()) { sendQuickAction('!capability ' + capabilityInput.trim()); capabilityInput = ''; showCapability = false; } }}
 							disabled={!capabilityInput.trim()}
@@ -498,14 +498,14 @@
 				</button>
 				{#if showCreateAgent}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<input bind:value={newAgentName} placeholder="Agent name" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<input bind:value={newAgentRole} placeholder="Role description" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<select bind:value={newAgentModel} class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)]">
+						<input bind:value={newAgentName} placeholder="Agent name" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<input bind:value={newAgentRole} placeholder="Role description" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<select bind:value={newAgentModel} class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)]">
 							<option value="sonnet">Sonnet</option>
 							<option value="opus">Opus</option>
 							<option value="haiku">Haiku</option>
 						</select>
-						<textarea bind:value={newAgentInstructions} placeholder="System prompt / instructions" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
+						<textarea bind:value={newAgentInstructions} placeholder="System prompt / instructions" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
 						<button onclick={handleCreateAgent} class="w-full rounded-md {cc.button} py-1 text-xs font-medium text-white {cc.buttonHover}">Create</button>
 					</div>
 				{/if}
@@ -612,9 +612,9 @@
 				</button>
 				{#if showCreateSkill}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<input bind:value={newSkillName} placeholder="Skill name (e.g. /wire-engine)" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<input bind:value={newSkillDesc} placeholder="Description" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<textarea bind:value={newSkillPrompt} placeholder="Prompt template" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
+						<input bind:value={newSkillName} placeholder="Skill name (e.g. /wire-engine)" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<input bind:value={newSkillDesc} placeholder="Description" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<textarea bind:value={newSkillPrompt} placeholder="Prompt template" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
 						<button onclick={handleCreateSkill} class="w-full rounded-md {cc.button} py-1 text-xs font-medium text-white {cc.buttonHover}">Create</button>
 					</div>
 				{/if}
@@ -640,8 +640,8 @@
 				</button>
 				{#if showCreateRule}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<input bind:value={newRuleName} placeholder="Rule name" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<textarea bind:value={newRuleContent} placeholder="Rule content (injected into system prompt)" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
+						<input bind:value={newRuleName} placeholder="Rule name" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<textarea bind:value={newRuleContent} placeholder="Rule content (injected into system prompt)" rows="3" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none resize-none"></textarea>
 						<button onclick={handleCreateRule} class="w-full rounded-md {cc.button} py-1 text-xs font-medium text-white {cc.buttonHover}">Create</button>
 					</div>
 				{/if}
@@ -672,14 +672,14 @@
 				</button>
 				{#if showCreateMcp}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<input bind:value={newMcpName} placeholder="Server name" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<select bind:value={newMcpType} class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)]">
+						<input bind:value={newMcpName} placeholder="Server name" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<select bind:value={newMcpType} class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)]">
 							<option value="stdio">stdio</option>
 							<option value="http">HTTP</option>
 							<option value="sse">SSE</option>
 							<option value="ws">WebSocket</option>
 						</select>
-						<input bind:value={newMcpCommand} placeholder="Command (e.g. npx @server/mcp)" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<input bind:value={newMcpCommand} placeholder="Command (e.g. npx @server/mcp)" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
 						<button onclick={handleCreateMcp} class="w-full rounded-md bg-[var(--primary)] py-1 text-xs font-medium text-white">Create</button>
 					</div>
 				{/if}
@@ -708,8 +708,8 @@
 				</button>
 				{#if showCreateHook}
 					<div class="rounded-lg bg-[var(--secondary)] p-3 space-y-2">
-						<input bind:value={newHookName} placeholder="Hook name" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
-						<select bind:value={newHookEvent} class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)]">
+						<input bind:value={newHookName} placeholder="Hook name" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<select bind:value={newHookEvent} class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)]">
 							<option value="PreToolUse">PreToolUse</option>
 							<option value="PostToolUse">PostToolUse</option>
 							<option value="SessionStart">SessionStart</option>
@@ -717,7 +717,7 @@
 							<option value="TaskCompleted">TaskCompleted</option>
 							<option value="UserPromptSubmit">UserPromptSubmit</option>
 						</select>
-						<input bind:value={newHookAction} placeholder="Shell command to run" class="w-full rounded-md border border-[var(--border)] bg-[var(--r-bg-base)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
+						<input bind:value={newHookAction} placeholder="Shell command to run" class="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none" />
 						<button onclick={handleCreateHook} class="w-full rounded-md bg-[var(--primary)] py-1 text-xs font-medium text-white">Create</button>
 					</div>
 				{/if}
