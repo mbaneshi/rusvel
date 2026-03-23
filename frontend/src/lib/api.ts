@@ -157,6 +157,82 @@ export async function getTools(): Promise<ToolOption[]> {
 	return request('/api/config/tools');
 }
 
+// ── Department API (shared pattern for Code/Content/Harvest/GTM) ──
+
+export interface DepartmentConfig {
+	engine: string;
+	model: string;
+	effort: string;
+	max_budget_usd: number | null;
+	permission_mode: string;
+	allowed_tools: string[];
+	disallowed_tools: string[];
+	system_prompt: string;
+	add_dirs: string[];
+	max_turns: number | null;
+}
+
+export async function getDeptConfig(dept: string): Promise<DepartmentConfig> {
+	return request(`/api/dept/${dept}/config`);
+}
+
+export async function updateDeptConfig(dept: string, config: DepartmentConfig): Promise<DepartmentConfig> {
+	return request(`/api/dept/${dept}/config`, { method: 'PUT', body: JSON.stringify(config) });
+}
+
+export async function getDeptConversations(dept: string): Promise<Conversation[]> {
+	return request(`/api/dept/${dept}/chat/conversations`);
+}
+
+export async function getDeptChatHistory(dept: string, id: string): Promise<ChatMessage[]> {
+	return request(`/api/dept/${dept}/chat/conversations/${id}`);
+}
+
+export async function getDeptEvents(dept: string): Promise<Event[]> {
+	return request(`/api/dept/${dept}/events`);
+}
+
+export async function streamDeptChat(
+	dept: string,
+	message: string,
+	conversationId: string | undefined,
+	onDelta: (text: string, conversationId: string) => void,
+	onDone: (fullText: string, conversationId: string) => void,
+	onError: (message: string) => void
+): Promise<void> {
+	const res = await fetch(`${BASE}/api/dept/${dept}/chat`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ message, conversation_id: conversationId })
+	});
+	if (!res.ok) { onError(`API error ${res.status}`); return; }
+	const reader = res.body?.getReader();
+	if (!reader) { onError('No response body'); return; }
+	const decoder = new TextDecoder();
+	let buffer = '';
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split('\n');
+		buffer = lines.pop() ?? '';
+		for (const line of lines) {
+			if (line.startsWith('data: ')) {
+				try {
+					const parsed = JSON.parse(line.slice(6));
+					if (parsed.text !== undefined && parsed.cost_usd === undefined) {
+						onDelta(parsed.text, parsed.conversation_id);
+					} else if (parsed.cost_usd !== undefined) {
+						onDone(parsed.text, parsed.conversation_id);
+					} else if (parsed.message) {
+						onError(parsed.message);
+					}
+				} catch { /* skip */ }
+			}
+		}
+	}
+}
+
 // ── Chat (God Agent) ─────────────────────────────────────────
 
 export interface ChatMessage {

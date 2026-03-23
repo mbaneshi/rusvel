@@ -8,6 +8,7 @@
 
 pub mod chat;
 pub mod config;
+pub mod department;
 pub mod routes;
 
 use std::net::SocketAddr;
@@ -72,6 +73,13 @@ pub fn build_router_with_frontend(state: AppState, frontend_dir: Option<std::pat
         .route("/api/config", axum::routing::put(config::update_config))
         .route("/api/config/models", get(config::list_models))
         .route("/api/config/tools", get(config::list_tools))
+        // Code Department
+        .route("/api/dept/code/chat", post(department::code_chat))
+        .route("/api/dept/code/chat/conversations", get(department::code_conversations))
+        .route("/api/dept/code/chat/conversations/{id}", get(department::code_history))
+        .route("/api/dept/code/config", get(department::code_config_get))
+        .route("/api/dept/code/config", axum::routing::put(department::code_config_update))
+        .route("/api/dept/code/events", get(department::code_events))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.
