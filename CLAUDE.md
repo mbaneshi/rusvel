@@ -7,7 +7,7 @@
 
 ```bash
 cargo build                    # Build all crates (27 crates)
-cargo test                     # Run all tests (192 tests)
+cargo test                     # Run all tests (197 tests)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- --mcp             # Start MCP server (stdio JSON-RPC)
