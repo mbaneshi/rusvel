@@ -811,6 +811,8 @@ async fn main() -> Result<()> {
         data_dir.join("memory.db").to_str().unwrap_or("memory.db"),
     )?);
     let tools: Arc<dyn rusvel_core::ports::ToolPort> = Arc::new(ToolRegistry::new());
+    // Single SQLite-backed queue: worker, ContentCalendar, ForgeEngine, and
+    // GET/POST /api/approvals all use this same `Database` as `JobPort` (ADR-003, ADR-008).
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let jobs_for_worker = jobs.clone();
     let _auth = Arc::new(InMemoryAuthAdapter::from_env());
@@ -901,17 +903,14 @@ async fn main() -> Result<()> {
                             }
                         }
                         JobKind::ContentPublish => {
-                            let session_id_str = job.payload.get("session_id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default();
+                            let sid = job.session_id;
                             let content_id_str = job.payload.get("content_id")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
                             let platform_str = job.payload.get("platform")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
-                            if let (Ok(sid), Ok(cid), Ok(platform)) = (
-                                session_id_str.parse::<uuid::Uuid>().map(SessionId::from_uuid),
+                            if let (Ok(cid), Ok(platform)) = (
                                 content_id_str.parse::<uuid::Uuid>().map(rusvel_core::id::ContentId::from_uuid),
                                 serde_json::from_value::<Platform>(serde_json::json!(platform_str)),
                             ) {
@@ -927,31 +926,28 @@ async fn main() -> Result<()> {
                                 }
                             } else {
                                 Ok(JobResult {
-                                    output: serde_json::json!({"error": "invalid job payload: missing session_id, content_id, or platform"}),
+                                    output: serde_json::json!({"error": "invalid job payload: missing content_id or platform"}),
                                     metadata: serde_json::json!({"engine": "content"}),
                                 })
                             }
                         }
                         JobKind::HarvestScan => {
-                            let session_id_str = job.payload.get("session_id")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default();
-                            if let Ok(sid) = session_id_str.parse::<uuid::Uuid>().map(SessionId::from_uuid) {
-                                match harvest_engine_worker.pipeline(&sid).await {
-                                    Ok(stats) => Ok(JobResult {
-                                        output: serde_json::to_value(&stats).unwrap_or_default(),
-                                        metadata: serde_json::json!({"engine": "harvest"}),
+                            let sid = job.session_id;
+                            match harvest_engine_worker
+                                .scan(&sid, &harvest_engine::source::MockSource)
+                                .await
+                            {
+                                Ok(opportunities) => Ok(JobResult {
+                                    output: serde_json::json!({
+                                        "count": opportunities.len(),
+                                        "ids": opportunities.iter().map(|o| o.id.to_string()).collect::<Vec<_>>(),
                                     }),
-                                    Err(e) => {
-                                        tracing::error!(job_id = %job_id, error = %e, "Harvest scan failed");
-                                        Err(e)
-                                    }
-                                }
-                            } else {
-                                Ok(JobResult {
-                                    output: serde_json::json!({"error": "invalid job payload: missing session_id"}),
                                     metadata: serde_json::json!({"engine": "harvest"}),
-                                })
+                                }),
+                                Err(e) => {
+                                    tracing::error!(job_id = %job_id, error = %e, "Harvest scan failed");
+                                    Err(e)
+                                }
                             }
                         }
                         JobKind::OutreachSend => {
