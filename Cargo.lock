@@ -6295,6 +6295,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusvel-mcp-client"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "rusvel-core",
+ "rusvel-tool",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "rusvel-memory"
 version = "0.1.0"
 dependencies = [

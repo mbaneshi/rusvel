@@ -1,0 +1,22 @@
+[package]
+name = "rusvel-mcp-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "MCP client: connect to external MCP servers and proxy their tools into ToolRegistry"
+
+[dependencies]
+rusvel-core = { workspace = true }
+rusvel-tool = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
