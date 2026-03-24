@@ -11,6 +11,7 @@ RUSVEL is a Rust + SvelteKit application. You need the following installed:
 |-----------|---------|----------|---------|
 | **Rust** | Edition 2024 (nightly or stable 1.85+) | Yes | Backend, all engines |
 | **Node.js** | 20+ | Yes | Frontend build |
+| **pnpm** | 9+ | Yes | Frontend package manager |
 | **SQLite** | 3.35+ | Bundled | Database (WAL mode) |
 | **Ollama** | Latest | Optional | Local LLM inference |
 
@@ -20,14 +21,19 @@ RUSVEL is a Rust + SvelteKit application. You need the following installed:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### Install Node.js
+### Install Node.js + pnpm
 
 Use your preferred method (nvm, fnm, or direct install):
 
 ```bash
 # With nvm
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
+
+# Install pnpm
+corepack enable
+corepack prepare pnpm@9.15.4 --activate
+# Or: npm install -g pnpm
 ```
 
 ### Install Ollama (optional)
@@ -61,11 +67,11 @@ The workspace has 20+ crates. First build takes a few minutes; subsequent builds
 
 ```bash
 cd frontend
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
-The built frontend is served by the Rust binary at runtime. During development you can run `npm run dev` for hot-reload on port 5173.
+The built frontend is served by the Rust binary at runtime. During development you can run `pnpm dev` for hot-reload on port 5173.
 
 ## Verify the Installation
 
@@ -75,10 +81,10 @@ Run the full test suite to confirm everything works:
 cargo test
 ```
 
-You should see all 149 tests passing across multiple crates:
+You should see all 197 tests passing across multiple crates:
 
 ```
-test result: ok. 149 passed; 0 failed
+test result: ok. 197 passed; 0 failed
 ```
 
 ### Test individual crates
