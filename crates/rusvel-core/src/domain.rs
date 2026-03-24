@@ -43,6 +43,18 @@ pub enum Part {
     Audio(Vec<u8>),
     Video(Vec<u8>),
     File { name: String, data: Vec<u8> },
+    /// A tool invocation requested by the LLM.
+    ToolCall {
+        id: String,
+        name: String,
+        args: serde_json::Value,
+    },
+    /// The result of a tool invocation, sent back to the LLM.
+    ToolResult {
+        tool_call_id: String,
+        content: String,
+        is_error: bool,
+    },
 }
 
 // ════════════════════════════════════════════════════════════════════

@@ -167,18 +167,72 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
                 role: "user".into(),
                 content: serde_json::Value::String(extract_text(&m.content)),
             }),
-            LlmRole::Assistant => messages.push(ClaudeMessage {
-                role: "assistant".into(),
-                content: serde_json::Value::String(extract_text(&m.content)),
-            }),
-            LlmRole::Tool => messages.push(ClaudeMessage {
-                role: "user".into(),
-                content: serde_json::json!([{
-                    "type": "tool_result",
-                    "tool_use_id": "unknown",
-                    "content": extract_text(&m.content),
-                }]),
-            }),
+            LlmRole::Assistant => {
+                // Assistant messages may contain both text and tool_use blocks.
+                let blocks: Vec<serde_json::Value> = m
+                    .content
+                    .parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        Part::Text(t) => {
+                            Some(serde_json::json!({"type": "text", "text": t}))
+                        }
+                        Part::ToolCall { id, name, args } => {
+                            Some(serde_json::json!({
+                                "type": "tool_use",
+                                "id": id,
+                                "name": name,
+                                "input": args,
+                            }))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                messages.push(ClaudeMessage {
+                    role: "assistant".into(),
+                    content: serde_json::Value::Array(blocks),
+                });
+            }
+            LlmRole::Tool => {
+                // Tool result messages. Extract tool_call_id from ToolResult parts,
+                // or fall back to extracting text.
+                let blocks: Vec<serde_json::Value> = m
+                    .content
+                    .parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        Part::ToolResult {
+                            tool_call_id,
+                            content,
+                            is_error,
+                        } => Some(serde_json::json!({
+                            "type": "tool_result",
+                            "tool_use_id": tool_call_id,
+                            "content": content,
+                            "is_error": is_error,
+                        })),
+                        _ => None,
+                    })
+                    .collect();
+
+                if blocks.is_empty() {
+                    // Legacy fallback: plain text tool result.
+                    messages.push(ClaudeMessage {
+                        role: "user".into(),
+                        content: serde_json::json!([{
+                            "type": "tool_result",
+                            "tool_use_id": "unknown",
+                            "content": extract_text(&m.content),
+                        }]),
+                    });
+                } else {
+                    messages.push(ClaudeMessage {
+                        role: "user".into(),
+                        content: serde_json::Value::Array(blocks),
+                    });
+                }
+            }
         }
     }
 
@@ -201,13 +255,11 @@ fn from_claude_response(resp: ClaudeResponse) -> LlmResponse {
                 parts.push(Part::Text(text.clone()));
             }
             ClaudeContentBlock::ToolUse { id, name, input } => {
-                let call = serde_json::json!({
-                    "type": "tool_use",
-                    "id": id,
-                    "name": name,
-                    "input": input,
+                parts.push(Part::ToolCall {
+                    id: id.clone(),
+                    name: name.clone(),
+                    args: input.clone(),
                 });
-                parts.push(Part::Text(call.to_string()));
             }
         }
     }
@@ -361,6 +413,15 @@ mod tests {
         };
         let llm_resp = from_claude_response(resp);
         assert_eq!(llm_resp.finish_reason, FinishReason::ToolUse);
+        // Verify Part::ToolCall is emitted (not Part::Text).
+        match &llm_resp.content.parts[0] {
+            Part::ToolCall { id, name, args } => {
+                assert_eq!(id, "call_1");
+                assert_eq!(name, "get_weather");
+                assert_eq!(args, &serde_json::json!({"city": "London"}));
+            }
+            other => panic!("expected ToolCall, got: {other:?}"),
+        }
     }
 
     #[test]
