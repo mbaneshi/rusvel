@@ -849,7 +849,9 @@ async fn main() -> Result<()> {
     let memory: Arc<dyn rusvel_core::ports::MemoryPort> = Arc::new(MemoryStore::open(
         data_dir.join("memory.db").to_str().unwrap_or("memory.db"),
     )?);
-    let tools: Arc<dyn rusvel_core::ports::ToolPort> = Arc::new(ToolRegistry::new());
+    let tool_registry = Arc::new(ToolRegistry::new());
+    rusvel_builtin_tools::register_all(&tool_registry).await;
+    let tools: Arc<dyn rusvel_core::ports::ToolPort> = tool_registry.clone();
     // Single SQLite-backed queue: worker, ContentCalendar, ForgeEngine, and
     // GET/POST /api/approvals all use this same `Database` as `JobPort` (ADR-003, ADR-008).
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
@@ -857,11 +859,12 @@ async fn main() -> Result<()> {
     let _auth = Arc::new(InMemoryAuthAdapter::from_env());
     let sessions: Arc<dyn SessionPort> =
         Arc::new(SessionAdapter(db.clone() as Arc<dyn StoragePort>));
-    let agent: Arc<dyn rusvel_core::ports::AgentPort> = Arc::new(AgentRuntime::new(
+    let agent_runtime = Arc::new(AgentRuntime::new(
         llm.clone(),
         tools.clone(),
         memory.clone(),
     ));
+    let agent: Arc<dyn rusvel_core::ports::AgentPort> = agent_runtime.clone();
 
     // 4. Build engines
     let agent_for_content = agent.clone();
@@ -911,6 +914,12 @@ async fn main() -> Result<()> {
         agent_for_flow,
     ));
     tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow");
+
+    // 4c. Register engine tools into the tool registry
+    rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
+    rusvel_engine_tools::register_content_tools(&tool_registry, content_engine.clone()).await;
+    rusvel_engine_tools::register_code_tools(&tool_registry, code_engine.clone()).await;
+    tracing::info!("Engine tools registered: harvest(5), content(5), code(2)");
 
     // 5. Seed default data (agents, skills, rules) on first run
     let storage_ref: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
@@ -1278,6 +1287,8 @@ async fn main() -> Result<()> {
             embedding,
             vector_store,
             deploy: Some(deploy),
+            agent_runtime: agent_runtime.clone(),
+            tools: tools.clone(),
         };
 
         // Look for frontend build in known locations (filesystem first)

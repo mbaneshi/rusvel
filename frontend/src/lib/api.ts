@@ -237,7 +237,9 @@ export async function streamDeptChat(
 	conversationId: string | undefined,
 	onDelta: (text: string, conversationId: string) => void,
 	onDone: (fullText: string, conversationId: string) => void,
-	onError: (message: string) => void
+	onError: (message: string) => void,
+	onToolCall?: (id: string, name: string, args: Record<string, unknown>, conversationId: string) => void,
+	onToolResult?: (id: string, name: string, result: string, isError: boolean, conversationId: string) => void
 ): Promise<void> {
 	const res = await fetch(`${BASE}/api/dept/${dept}/chat`, {
 		method: 'POST',
@@ -247,7 +249,11 @@ export async function streamDeptChat(
 	await parseSSE(
 		res,
 		(p) => {
-			if (p.text !== undefined && p.cost_usd === undefined)
+			if (p.name !== undefined && p.args !== undefined && onToolCall)
+				onToolCall(p.id as string, p.name as string, p.args as Record<string, unknown>, p.conversation_id as string);
+			else if (p.result !== undefined && p.id !== undefined && p.name !== undefined && onToolResult)
+				onToolResult(p.id as string, p.name as string, p.result as string, (p.is_error as boolean) ?? false, p.conversation_id as string);
+			else if (p.text !== undefined && p.cost_usd === undefined)
 				onDelta(p.text as string, p.conversation_id as string);
 			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
 			else if (p.message) onError(p.message as string);
@@ -571,7 +577,9 @@ export async function streamChat(
 	conversationId: string | undefined,
 	onDelta: (text: string, conversationId: string) => void,
 	onDone: (fullText: string, conversationId: string) => void,
-	onError: (message: string) => void
+	onError: (message: string) => void,
+	onToolCall?: (id: string, name: string, args: Record<string, unknown>, conversationId: string) => void,
+	onToolResult?: (id: string, name: string, result: string, isError: boolean, conversationId: string) => void
 ): Promise<void> {
 	const res = await fetch(`${BASE}/api/chat`, {
 		method: 'POST',
@@ -581,7 +589,11 @@ export async function streamChat(
 	await parseSSE(
 		res,
 		(p) => {
-			if (p.text !== undefined && p.cost_usd === undefined)
+			if (p.name !== undefined && p.args !== undefined && onToolCall)
+				onToolCall(p.id as string, p.name as string, p.args as Record<string, unknown>, p.conversation_id as string);
+			else if (p.result !== undefined && p.id !== undefined && p.name !== undefined && onToolResult)
+				onToolResult(p.id as string, p.name as string, p.result as string, (p.is_error as boolean) ?? false, p.conversation_id as string);
+			else if (p.text !== undefined && p.cost_usd === undefined)
 				onDelta(p.text as string, p.conversation_id as string);
 			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
 			else if (p.message) onError(p.message as string);

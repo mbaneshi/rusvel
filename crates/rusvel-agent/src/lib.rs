@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use tracing::{debug, info, warn};
 
 use rusvel_core::domain::*;
@@ -32,6 +32,17 @@ use rusvel_core::ports::{AgentPort, LlmPort, MemoryPort, ToolPort};
 
 /// Maximum iterations in the agent loop to prevent runaways.
 const MAX_ITERATIONS: u32 = 10;
+
+/// Streaming events emitted by [`AgentRuntime::run_streaming`].
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
+pub enum AgentEvent {
+    TextDelta { text: String },
+    ToolCallStart { id: String, name: String, args: serde_json::Value },
+    ToolCallEnd { id: String, name: String, result: String, is_error: bool },
+    Done { output: AgentOutput },
+    Error { message: String },
+}
 
 /// Internal state for a single agent run.
 struct RunState {
@@ -112,6 +123,201 @@ impl AgentRuntime {
             }
         }
         None
+    }
+
+    /// Extract text from LLM response content parts.
+    fn extract_text(content: &Content) -> String {
+        content
+            .parts
+            .iter()
+            .filter_map(|p| match p {
+                Part::Text(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    /// Run the agent loop, streaming [`AgentEvent`]s to the provided channel.
+    ///
+    /// This mirrors [`AgentPort::run`] but emits incremental events so the
+    /// caller can forward them as SSE to a frontend.
+    pub async fn run_streaming(
+        &self,
+        run_id: &RunId,
+        input: Content,
+        tx: mpsc::Sender<AgentEvent>,
+    ) -> Result<AgentOutput> {
+        // Transition to Running.
+        {
+            let mut runs = self.runs.write().await;
+            let state = runs.get_mut(run_id).ok_or_else(|| RusvelError::NotFound {
+                kind: "AgentRun".into(),
+                id: run_id.to_string(),
+            })?;
+            if state.status == AgentStatus::Stopped {
+                return Err(RusvelError::Agent("run has been stopped".into()));
+            }
+            state.status = AgentStatus::Running;
+        }
+
+        // Snapshot config.
+        let config = {
+            let runs = self.runs.read().await;
+            runs.get(run_id)
+                .ok_or_else(|| RusvelError::NotFound {
+                    kind: "AgentRun".into(),
+                    id: run_id.to_string(),
+                })?
+                .config
+                .clone()
+        };
+
+        // Seed conversation.
+        let mut messages: Vec<LlmMessage> = Vec::new();
+        if let Some(ref instructions) = config.instructions {
+            messages.push(LlmMessage {
+                role: LlmRole::System,
+                content: Content::text(instructions),
+            });
+        }
+        messages.push(LlmMessage {
+            role: LlmRole::User,
+            content: input,
+        });
+
+        let mut total_usage = LlmUsage::default();
+        let mut tool_calls: u32 = 0;
+        let tool_defs = self.tools.list();
+
+        for iteration in 0..MAX_ITERATIONS {
+            debug!(%run_id, iteration, "agent streaming loop iteration");
+
+            // Check if stopped.
+            {
+                let runs = self.runs.read().await;
+                if let Some(state) = runs.get(run_id)
+                    && state.status == AgentStatus::Stopped
+                {
+                    let _ = tx.send(AgentEvent::Error { message: "run was stopped".into() }).await;
+                    return Err(RusvelError::Agent("run was stopped".into()));
+                }
+            }
+
+            let request = Self::build_request(&config, &messages, &tool_defs);
+            let response = match self.llm.generate(request).await {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx.send(AgentEvent::Error { message: e.to_string() }).await;
+                    return Err(e);
+                }
+            };
+
+            total_usage.input_tokens += response.usage.input_tokens;
+            total_usage.output_tokens += response.usage.output_tokens;
+
+            match response.finish_reason {
+                FinishReason::Stop | FinishReason::Length | FinishReason::ContentFilter => {
+                    let text = Self::extract_text(&response.content);
+                    if !text.is_empty() {
+                        let _ = tx.send(AgentEvent::TextDelta { text }).await;
+                    }
+
+                    let output = AgentOutput {
+                        run_id: *run_id,
+                        content: response.content,
+                        tool_calls,
+                        usage: total_usage,
+                        cost_estimate: 0.0,
+                        metadata: serde_json::json!({}),
+                    };
+
+                    self.runs.write().await.entry(*run_id).and_modify(|s| {
+                        s.status = AgentStatus::Completed;
+                    });
+
+                    let _ = tx.send(AgentEvent::Done { output: output.clone() }).await;
+                    info!(%run_id, tool_calls, "agent streaming run completed");
+                    return Ok(output);
+                }
+                FinishReason::ToolUse => {
+                    // Emit any text before the tool call.
+                    let text = Self::extract_text(&response.content);
+                    if !text.is_empty() {
+                        let _ = tx.send(AgentEvent::TextDelta { text }).await;
+                    }
+
+                    self.runs.write().await.entry(*run_id).and_modify(|s| {
+                        s.status = AgentStatus::AwaitingTool;
+                    });
+
+                    let (tool_call_id, tool_name, tool_args) =
+                        Self::extract_tool_call(&response).ok_or_else(|| {
+                            RusvelError::Agent(
+                                "ToolUse finish_reason but no Part::ToolCall found".into(),
+                            )
+                        })?;
+
+                    let _ = tx.send(AgentEvent::ToolCallStart {
+                        id: tool_call_id.clone(),
+                        name: tool_name.clone(),
+                        args: tool_args.clone(),
+                    }).await;
+
+                    messages.push(LlmMessage {
+                        role: LlmRole::Assistant,
+                        content: response.content,
+                    });
+
+                    let tool_result = self.tools.call(&tool_name, tool_args).await;
+                    tool_calls += 1;
+
+                    let (result_text, is_error) = match &tool_result {
+                        Ok(r) => {
+                            let t = Self::extract_text(&r.output);
+                            (t, !r.success)
+                        }
+                        Err(e) => (format!("Tool error: {e}"), true),
+                    };
+
+                    let _ = tx.send(AgentEvent::ToolCallEnd {
+                        id: tool_call_id.clone(),
+                        name: tool_name.clone(),
+                        result: result_text.clone(),
+                        is_error,
+                    }).await;
+
+                    messages.push(LlmMessage {
+                        role: LlmRole::Tool,
+                        content: Content {
+                            parts: vec![Part::ToolResult {
+                                tool_call_id,
+                                content: result_text,
+                                is_error,
+                            }],
+                        },
+                    });
+
+                    self.runs.write().await.entry(*run_id).and_modify(|s| {
+                        s.status = AgentStatus::Running;
+                    });
+                }
+                FinishReason::Other(ref reason) => {
+                    let msg = format!("unexpected finish reason: {reason}");
+                    let _ = tx.send(AgentEvent::Error { message: msg.clone() }).await;
+                    warn!(%run_id, %reason, "unexpected finish reason");
+                    return Err(RusvelError::Agent(msg));
+                }
+            }
+        }
+
+        // Exhausted iterations.
+        self.runs.write().await.entry(*run_id).and_modify(|s| {
+            s.status = AgentStatus::Failed;
+        });
+        let msg = format!("agent loop exceeded {MAX_ITERATIONS} iterations");
+        let _ = tx.send(AgentEvent::Error { message: msg.clone() }).await;
+        Err(RusvelError::Agent(msg))
     }
 }
 

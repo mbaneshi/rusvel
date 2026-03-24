@@ -178,6 +178,69 @@ impl ToolPort for ToolRegistry {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  ScopedToolRegistry
+// ════════════════════════════════════════════════════════════════════
+
+/// A filtered view of a [`ToolPort`] that only exposes tools matching
+/// allowed name prefixes or exact names.
+///
+/// Prefix patterns end with `*` (e.g. `"harvest_*"` matches all harvest tools).
+/// Exact names must match fully.
+pub struct ScopedToolRegistry {
+    inner: Arc<dyn ToolPort>,
+    allowed: Vec<String>,
+}
+
+impl ScopedToolRegistry {
+    pub fn new(inner: Arc<dyn ToolPort>, allowed: Vec<String>) -> Self {
+        Self { inner, allowed }
+    }
+
+    fn is_allowed(&self, name: &str) -> bool {
+        self.allowed.iter().any(|a| {
+            if a.ends_with('*') {
+                name.starts_with(&a[..a.len() - 1])
+            } else {
+                name == a
+            }
+        })
+    }
+}
+
+#[async_trait]
+impl ToolPort for ScopedToolRegistry {
+    async fn register(&self, tool: ToolDefinition) -> Result<()> {
+        self.inner.register(tool).await
+    }
+
+    async fn call(&self, name: &str, args: serde_json::Value) -> Result<ToolResult> {
+        if !self.is_allowed(name) {
+            return Err(RusvelError::NotFound {
+                kind: "tool".into(),
+                id: name.into(),
+            });
+        }
+        self.inner.call(name, args).await
+    }
+
+    fn list(&self) -> Vec<ToolDefinition> {
+        self.inner
+            .list()
+            .into_iter()
+            .filter(|t| self.is_allowed(&t.name))
+            .collect()
+    }
+
+    fn schema(&self, name: &str) -> Option<serde_json::Value> {
+        if self.is_allowed(name) {
+            self.inner.schema(name)
+        } else {
+            None
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Tests
 // ════════════════════════════════════════════════════════════════════
 
@@ -298,5 +361,56 @@ mod tests {
         );
 
         assert!(registry.schema("nonexistent").is_none());
+    }
+
+    #[tokio::test]
+    async fn scoped_registry_filters_by_prefix() {
+        let registry = Arc::new(ToolRegistry::new());
+        registry
+            .register_with_handler(echo_definition(), echo_handler())
+            .await
+            .unwrap();
+
+        let mut greet = echo_definition();
+        greet.name = "greet_hello".into();
+        registry
+            .register_with_handler(greet, echo_handler())
+            .await
+            .unwrap();
+
+        let mut other = echo_definition();
+        other.name = "other_tool".into();
+        registry
+            .register_with_handler(other, echo_handler())
+            .await
+            .unwrap();
+
+        let scoped = ScopedToolRegistry::new(
+            registry.clone() as Arc<dyn ToolPort>,
+            vec!["echo".into(), "greet_*".into()],
+        );
+
+        let tools = scoped.list();
+        assert_eq!(tools.len(), 2);
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains(&"echo"));
+        assert!(names.contains(&"greet_hello"));
+        assert!(!names.contains(&"other_tool"));
+
+        // call allowed tool
+        let result = scoped
+            .call("echo", json!({"message": "hi"}))
+            .await
+            .unwrap();
+        assert!(result.success);
+
+        // call blocked tool
+        let err = scoped.call("other_tool", json!({"message": "hi"})).await;
+        assert!(err.is_err());
+
+        // schema allowed
+        assert!(scoped.schema("echo").is_some());
+        // schema blocked
+        assert!(scoped.schema("other_tool").is_none());
     }
 }

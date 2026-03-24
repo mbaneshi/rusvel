@@ -42,6 +42,10 @@ flow-engine    = { workspace = true }
 rusvel-embed  = { workspace = true }
 rusvel-vector = { workspace = true }
 
+# ─── Tools ───
+rusvel-builtin-tools = { workspace = true }
+rusvel-engine-tools = { workspace = true }
+
 # ─── Surfaces ───
 rusvel-cli = { workspace = true }
 rusvel-api = { workspace = true }

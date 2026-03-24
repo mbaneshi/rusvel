@@ -5913,6 +5913,7 @@ dependencies = [
  "harvest-engine",
  "reqwest",
  "rusqlite",
+ "rusvel-agent",
  "rusvel-config",
  "rusvel-core",
  "rusvel-db",
@@ -5956,12 +5957,14 @@ dependencies = [
  "rusvel-agent",
  "rusvel-api",
  "rusvel-auth",
+ "rusvel-builtin-tools",
  "rusvel-cli",
  "rusvel-config",
  "rusvel-core",
  "rusvel-db",
  "rusvel-deploy",
  "rusvel-embed",
+ "rusvel-engine-tools",
  "rusvel-event",
  "rusvel-llm",
  "rusvel-mcp",
@@ -6086,6 +6089,22 @@ dependencies = [
  "rusvel-core",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "rusvel-engine-tools"
+version = "0.1.0"
+dependencies = [
+ "code-engine",
+ "content-engine",
+ "harvest-engine",
+ "rusvel-core",
+ "rusvel-tool",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

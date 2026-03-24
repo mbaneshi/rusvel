@@ -12,12 +12,17 @@ use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_api::{AppState, build_router};
 use rusvel_config::TomlConfig;
+use rusvel_agent::AgentRuntime;
 use rusvel_core::domain::{
-    AgentOutput, AgentStatus, Content, Session, SessionConfig, SessionKind,
+    AgentOutput, AgentStatus, Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef,
+    Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
 };
 use rusvel_core::error::Result;
 use rusvel_core::id::{RunId, SessionId};
-use rusvel_core::ports::{AgentPort, ConfigPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort};
+use rusvel_core::ports::{
+    AgentPort, ConfigPort, EventPort, JobPort, LlmPort, MemoryPort, SessionPort, StoragePort,
+    ToolPort,
+};
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_db::Database;
 use rusvel_event::EventBus;
@@ -72,6 +77,48 @@ impl AgentPort for StaticForgeAgent {
     }
     async fn status(&self, _: &RunId) -> Result<AgentStatus> {
         Ok(AgentStatus::Idle)
+    }
+}
+
+struct StubLlm;
+
+#[async_trait]
+impl LlmPort for StubLlm {
+    async fn generate(&self, _: LlmRequest) -> Result<LlmResponse> {
+        Ok(LlmResponse {
+            content: Content::text("stub"),
+            finish_reason: FinishReason::Stop,
+            usage: LlmUsage::default(),
+            metadata: json!({}),
+        })
+    }
+    async fn embed(&self, _: &ModelRef, _: &str) -> Result<Vec<f32>> {
+        Ok(vec![])
+    }
+    async fn list_models(&self) -> Result<Vec<ModelRef>> {
+        Ok(vec![])
+    }
+}
+
+struct StubTool;
+
+#[async_trait]
+impl ToolPort for StubTool {
+    async fn register(&self, _: ToolDefinition) -> Result<()> {
+        Ok(())
+    }
+    async fn call(&self, _: &str, _: Value) -> Result<ToolResult> {
+        Ok(ToolResult {
+            success: true,
+            output: Content::text("ok"),
+            metadata: json!({}),
+        })
+    }
+    fn list(&self) -> Vec<ToolDefinition> {
+        vec![]
+    }
+    fn schema(&self, _: &str) -> Option<Value> {
+        None
     }
 }
 
@@ -149,6 +196,13 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
 
+    let tools: Arc<dyn ToolPort> = Arc::new(StubTool);
+    let agent_runtime = Arc::new(AgentRuntime::new(
+        Arc::new(StubLlm),
+        tools.clone(),
+        memory.clone(),
+    ));
+
     let forge = Arc::new(ForgeEngine::new(
         Arc::new(StaticForgeAgent),
         events.clone(),
@@ -203,6 +257,8 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         embedding: None,
         vector_store: None,
         deploy: None,
+        agent_runtime,
+        tools,
     };
 
     (

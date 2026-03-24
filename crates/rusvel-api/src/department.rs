@@ -18,12 +18,12 @@ use std::pin::Pin;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
+use rusvel_agent::AgentEvent;
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
-use rusvel_core::domain::{EventFilter, UserProfile};
-use rusvel_core::id::EventId;
-use rusvel_core::ports::{EmbeddingPort, StoragePort, VectorStorePort};
+use rusvel_core::domain::{AgentConfig, Content, EventFilter, ModelProvider, ModelRef, UserProfile};
+use rusvel_core::id::{EventId, SessionId};
+use rusvel_core::ports::{AgentPort, StoragePort};
 use rusvel_core::registry::DepartmentDef;
-use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
 
 use crate::AppState;
 use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
@@ -378,20 +378,47 @@ pub async fn dept_chat(
         }
     }
 
-    // Build prompt
-    let prompt = build_dept_prompt(&resolved.system_prompt, &history, &effective_message);
+    // Build the user input (system prompt is passed via AgentConfig.instructions)
+    let _prompt = build_dept_prompt(&resolved.system_prompt, &history, &effective_message);
 
-    // Load MCP server config
-    let mcp_config = crate::mcp_servers::build_mcp_config_for_engine(&state, &dept).await;
-    let mut cli_args = resolved.to_claude_args();
-    if let Some(ref mcp_json) = mcp_config {
-        cli_args.push("--mcp-config".into());
-        cli_args.push(mcp_json.clone());
+    // Build AgentConfig for the runtime
+    let model_ref = parse_model_ref(&resolved.model);
+    let agent_config = AgentConfig {
+        profile_id: None,
+        session_id: SessionId::new(),
+        model: Some(model_ref),
+        tools: resolved.allowed_tools.clone(),
+        instructions: Some(resolved.system_prompt.clone()),
+        budget_limit: resolved.max_budget_usd,
+        metadata: serde_json::json!({}),
+    };
+
+    // Build the user message with conversation history context
+    let mut user_input = String::new();
+    for msg in &history {
+        match msg.role.as_str() {
+            "user" => user_input.push_str(&format!("User: {}\n\n", msg.content)),
+            "assistant" => user_input.push_str(&format!("Assistant: {}\n\n", msg.content)),
+            _ => {}
+        }
     }
+    user_input.push_str(&effective_message);
 
-    // Stream
-    let streamer = ClaudeCliStreamer::new();
-    let rx = streamer.stream_with_args(&prompt, &cli_args);
+    // Create agent run
+    let run_id = state
+        .agent_runtime
+        .create(agent_config)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Stream via AgentRuntime
+    let (tx, rx) = tokio::sync::mpsc::channel::<AgentEvent>(32);
+    let runtime = state.agent_runtime.clone();
+    let run_id_owned = run_id;
+    let input = Content::text(&user_input);
+    tokio::spawn(async move {
+        let _ = runtime.run_streaming(&run_id_owned, input, tx).await;
+    });
 
     let storage = state.storage.clone();
     let events_port = state.events.clone();
@@ -400,21 +427,55 @@ pub async fn dept_chat(
 
     let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
         Box::pin(ReceiverStream::new(rx).map(move |event| {
-            let sse_event = match &event {
-                StreamEvent::Delta { text } => Event::default().event("delta").data(
+            let sse_event = match event {
+                AgentEvent::TextDelta { text } => Event::default().event("delta").data(
                     serde_json::json!({"text": text, "conversation_id": conv_id}).to_string(),
                 ),
-                StreamEvent::Done {
-                    full_text,
-                    cost_usd,
-                } => {
+                AgentEvent::ToolCallStart { id, name, args } => {
+                    Event::default().event("tool_call").data(
+                        serde_json::json!({
+                            "id": id,
+                            "name": name,
+                            "args": args,
+                            "conversation_id": conv_id,
+                        })
+                        .to_string(),
+                    )
+                }
+                AgentEvent::ToolCallEnd {
+                    id,
+                    name,
+                    result,
+                    is_error,
+                } => Event::default().event("tool_result").data(
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "result": result,
+                        "is_error": is_error,
+                        "conversation_id": conv_id,
+                    })
+                    .to_string(),
+                ),
+                AgentEvent::Done { output } => {
+                    let full_text: String = output
+                        .content
+                        .parts
+                        .iter()
+                        .filter_map(|p| match p {
+                            rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("");
+                    let cost = output.cost_estimate;
+
                     let storage = storage.clone();
                     let events_port = events_port.clone();
                     let conv_id_inner = conv_id.clone();
                     let ns_inner = ns.clone();
                     let text = full_text.clone();
                     let eng = engine_kind;
-                    let cost = *cost_usd;
                     tokio::spawn(async move {
                         let msg = ChatMessage {
                             id: uuid::Uuid::now_v7().to_string(),
@@ -454,13 +515,13 @@ pub async fn dept_chat(
                     Event::default().event("done").data(
                         serde_json::json!({
                             "text": full_text,
-                            "cost_usd": cost_usd,
+                            "cost_usd": cost,
                             "conversation_id": conv_id
                         })
                         .to_string(),
                     )
                 }
-                StreamEvent::Error { message } => Event::default()
+                AgentEvent::Error { message } => Event::default()
                     .event("error")
                     .data(serde_json::json!({"message": message}).to_string()),
             };
@@ -600,6 +661,26 @@ async fn store_namespaced_message(
         .objects()
         .put(namespace, &msg.id, serde_json::to_value(msg)?)
         .await
+}
+
+/// Parse a model string (e.g. "sonnet", "opus", "ollama/llama3") into a ModelRef.
+fn parse_model_ref(model: &str) -> ModelRef {
+    if let Some((provider, name)) = model.split_once('/') {
+        let provider = match provider {
+            "ollama" => ModelProvider::Ollama,
+            "openai" => ModelProvider::OpenAI,
+            "claude" => ModelProvider::Claude,
+            "gemini" => ModelProvider::Gemini,
+            other => ModelProvider::Other(other.into()),
+        };
+        ModelRef { provider, model: name.into() }
+    } else {
+        // Bare model names default to Claude
+        ModelRef {
+            provider: ModelProvider::Claude,
+            model: model.into(),
+        }
+    }
 }
 
 /// Extract @agent-name from a message.

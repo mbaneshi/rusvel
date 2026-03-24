@@ -46,9 +46,11 @@ use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
-    DeployPort, EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, VectorStorePort,
+    DeployPort, EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, ToolPort,
+    VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
+use rusvel_agent::AgentRuntime;
 use rusvel_db::Database;
 
 /// Shared application state injected into all handlers.
@@ -70,6 +72,8 @@ pub struct AppState {
     pub embedding: Option<Arc<dyn EmbeddingPort>>,
     pub vector_store: Option<Arc<dyn VectorStorePort>>,
     pub deploy: Option<Arc<dyn DeployPort>>,
+    pub agent_runtime: Arc<AgentRuntime>,
+    pub tools: Arc<dyn ToolPort>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.

@@ -1,0 +1,23 @@
+[package]
+name = "rusvel-engine-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Engine-specific tools for RUSVEL agent execution"
+
+[dependencies]
+rusvel-core = { workspace = true }
+rusvel-tool = { workspace = true }
+harvest-engine = { workspace = true }
+content-engine = { workspace = true }
+code-engine = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

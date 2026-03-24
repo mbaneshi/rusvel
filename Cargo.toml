@@ -11,6 +11,7 @@ members = [
     "crates/rusvel-memory",
     "crates/rusvel-tool",
     "crates/rusvel-builtin-tools",
+    "crates/rusvel-engine-tools",
     "crates/rusvel-mcp-client",
     "crates/rusvel-jobs",
     "crates/rusvel-auth",
@@ -126,6 +127,7 @@ rusvel-event = { path = "crates/rusvel-event" }
 rusvel-memory = { path = "crates/rusvel-memory" }
 rusvel-tool = { path = "crates/rusvel-tool" }
 rusvel-builtin-tools = { path = "crates/rusvel-builtin-tools" }
+rusvel-engine-tools = { path = "crates/rusvel-engine-tools" }
 rusvel-mcp-client = { path = "crates/rusvel-mcp-client" }
 rusvel-jobs = { path = "crates/rusvel-jobs" }
 rusvel-auth = { path = "crates/rusvel-auth" }

@@ -11,6 +11,7 @@ rusvel-core = { workspace = true }
 rusvel-db = { workspace = true }
 rusvel-schema = { workspace = true }
 rusvel-llm = { workspace = true }
+rusvel-agent = { workspace = true }
 forge-engine = { workspace = true }
 code-engine = { workspace = true }
 content-engine = { workspace = true }
@@ -33,6 +34,7 @@ reqwest = { workspace = true }
 [dev-dependencies]
 async-trait = { workspace = true }
 forge-engine = { workspace = true }
+rusvel-agent = { workspace = true }
 rusvel-config = { workspace = true }
 rusvel-core = { workspace = true }
 rusvel-db = { workspace = true }

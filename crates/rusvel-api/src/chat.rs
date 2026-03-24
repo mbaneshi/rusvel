@@ -4,21 +4,23 @@
 //! Conversation history is persisted in `ObjectStore`.
 
 use std::convert::Infallible;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
 use chrono::Utc;
 use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
-use rusvel_core::domain::UserProfile;
-use rusvel_core::ports::StoragePort;
-use rusvel_llm::stream::{ClaudeCliStreamer, StreamEvent};
+use rusvel_agent::AgentEvent;
+use rusvel_core::domain::{AgentConfig, Content, ModelProvider, ModelRef};
+use rusvel_core::id::SessionId;
+use rusvel_core::ports::{AgentPort, StoragePort};
 
 use crate::AppState;
 use crate::config::ChatConfig;
@@ -55,7 +57,10 @@ pub struct ConversationSummary {
 pub async fn chat_handler(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ChatRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, String)> {
+) -> Result<
+    Sse<KeepAliveStream<Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>>>>,
+    (StatusCode, String),
+> {
     let profile = state.profile.as_ref().ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
         "no profile loaded".into(),
@@ -91,59 +96,150 @@ pub async fn chat_handler(
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
 
-    // Build the full prompt: system + history + user message
-    let prompt = build_prompt(profile, &history, &body.message);
+    // Build AgentConfig from chat config + profile
+    let system_prompt = profile.to_system_prompt();
+    let model_ref = parse_model_ref(&chat_config.model);
+    let agent_config = AgentConfig {
+        profile_id: None,
+        session_id: SessionId::new(),
+        model: Some(model_ref),
+        tools: chat_config.allowed_tools.clone(),
+        instructions: Some(system_prompt),
+        budget_limit: chat_config.max_budget_usd,
+        metadata: serde_json::json!({}),
+    };
 
-    // Spawn Claude CLI streamer with config flags
-    let streamer = ClaudeCliStreamer::new();
-    let cli_args = chat_config.to_claude_args();
-    let rx = streamer.stream_with_args(&prompt, &cli_args);
+    // Build user input with conversation history context
+    let mut user_input = String::new();
+    for msg in &history {
+        match msg.role.as_str() {
+            "user" => user_input.push_str(&format!("User: {}\n\n", msg.content)),
+            "assistant" => user_input.push_str(&format!("Assistant: {}\n\n", msg.content)),
+            _ => {}
+        }
+    }
+    user_input.push_str(&body.message);
 
-    // Convert to SSE stream, collecting full text for persistence
+    // Create agent run
+    let run_id = state
+        .agent_runtime
+        .create(agent_config)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Stream via AgentRuntime
+    let (tx, rx) = tokio::sync::mpsc::channel::<AgentEvent>(32);
+    let runtime = state.agent_runtime.clone();
+    let run_id_owned = run_id;
+    let input = Content::text(&user_input);
+    tokio::spawn(async move {
+        let _ = runtime.run_streaming(&run_id_owned, input, tx).await;
+    });
+
     let storage = state.storage.clone();
     let conv_id = conversation_id.clone();
 
-    let stream = ReceiverStream::new(rx).map(move |event| {
-        let sse_event = match &event {
-            StreamEvent::Delta { text } => Event::default()
-                .event("delta")
-                .data(serde_json::json!({"text": text, "conversation_id": conv_id}).to_string()),
-            StreamEvent::Done {
-                full_text,
-                cost_usd,
-            } => {
-                // Store assistant message (fire and forget)
-                let storage = storage.clone();
-                let conv_id_inner = conv_id.clone();
-                let text = full_text.clone();
-                tokio::spawn(async move {
-                    let msg = ChatMessage {
-                        id: uuid::Uuid::now_v7().to_string(),
-                        conversation_id: conv_id_inner,
-                        role: "assistant".into(),
-                        content: text,
-                        created_at: Utc::now().to_rfc3339(),
-                    };
-                    let _ = store_message(&storage, &msg).await;
-                });
-
-                Event::default().event("done").data(
+    let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
+        Box::pin(ReceiverStream::new(rx).map(move |event| {
+            let sse_event = match event {
+                AgentEvent::TextDelta { text } => Event::default()
+                    .event("delta")
+                    .data(
+                        serde_json::json!({"text": text, "conversation_id": conv_id}).to_string(),
+                    ),
+                AgentEvent::ToolCallStart { id, name, args } => {
+                    Event::default().event("tool_call").data(
+                        serde_json::json!({
+                            "id": id,
+                            "name": name,
+                            "args": args,
+                            "conversation_id": conv_id,
+                        })
+                        .to_string(),
+                    )
+                }
+                AgentEvent::ToolCallEnd {
+                    id,
+                    name,
+                    result,
+                    is_error,
+                } => Event::default().event("tool_result").data(
                     serde_json::json!({
-                        "text": full_text,
-                        "cost_usd": cost_usd,
-                        "conversation_id": conv_id
+                        "id": id,
+                        "name": name,
+                        "result": result,
+                        "is_error": is_error,
+                        "conversation_id": conv_id,
                     })
                     .to_string(),
-                )
-            }
-            StreamEvent::Error { message } => Event::default()
-                .event("error")
-                .data(serde_json::json!({"message": message}).to_string()),
-        };
-        Ok(sse_event)
-    });
+                ),
+                AgentEvent::Done { output } => {
+                    let full_text: String = output
+                        .content
+                        .parts
+                        .iter()
+                        .filter_map(|p| match p {
+                            rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("");
+                    let cost = output.cost_estimate;
+
+                    // Store assistant message (fire and forget)
+                    let storage = storage.clone();
+                    let conv_id_inner = conv_id.clone();
+                    let text = full_text.clone();
+                    tokio::spawn(async move {
+                        let msg = ChatMessage {
+                            id: uuid::Uuid::now_v7().to_string(),
+                            conversation_id: conv_id_inner,
+                            role: "assistant".into(),
+                            content: text,
+                            created_at: Utc::now().to_rfc3339(),
+                        };
+                        let _ = store_message(&storage, &msg).await;
+                    });
+
+                    Event::default().event("done").data(
+                        serde_json::json!({
+                            "text": full_text,
+                            "cost_usd": cost,
+                            "conversation_id": conv_id
+                        })
+                        .to_string(),
+                    )
+                }
+                AgentEvent::Error { message } => Event::default()
+                    .event("error")
+                    .data(serde_json::json!({"message": message}).to_string()),
+            };
+            Ok(sse_event)
+        }));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
+
+/// Parse a model string into a ModelRef.
+fn parse_model_ref(model: &str) -> ModelRef {
+    if let Some((provider, name)) = model.split_once('/') {
+        let provider = match provider {
+            "ollama" => ModelProvider::Ollama,
+            "openai" => ModelProvider::OpenAI,
+            "claude" => ModelProvider::Claude,
+            "gemini" => ModelProvider::Gemini,
+            other => ModelProvider::Other(other.into()),
+        };
+        ModelRef {
+            provider,
+            model: name.into(),
+        }
+    } else {
+        ModelRef {
+            provider: ModelProvider::Claude,
+            model: model.into(),
+        }
+    }
 }
 
 /// `GET /api/chat/conversations` — list all conversations.
@@ -213,30 +309,6 @@ pub async fn get_history(
 }
 
 // ── Internal helpers ─────────────────────────────────────────
-
-fn build_prompt(profile: &UserProfile, history: &[ChatMessage], user_message: &str) -> String {
-    let mut parts = Vec::new();
-
-    // System prompt from profile
-    parts.push(format!(
-        "<system>\n{}\n</system>",
-        profile.to_system_prompt()
-    ));
-
-    // Conversation history (last N messages)
-    for msg in history {
-        match msg.role.as_str() {
-            "user" => parts.push(msg.content.clone()),
-            "assistant" => parts.push(format!("<assistant>\n{}\n</assistant>", msg.content)),
-            _ => {}
-        }
-    }
-
-    // Current user message
-    parts.push(user_message.to_string());
-
-    parts.join("\n\n")
-}
 
 async fn load_history(
     storage: &Arc<dyn StoragePort>,

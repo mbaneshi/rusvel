@@ -2,15 +2,26 @@
 	import { onMount, tick } from 'svelte';
 	import { Streamdown } from 'svelte-streamdown';
 	import { copy } from 'svelte-copy';
-	import { streamChat, getConversations, getChatHistory } from '$lib/api';
+	import { streamChat, getConversations, getChatHistory, approveJob, rejectJob } from '$lib/api';
 	import type { Conversation } from '$lib/api';
 	import ChatTopBar from '$lib/components/chat/ChatTopBar.svelte';
+	import ToolCallCard from '$lib/components/chat/ToolCallCard.svelte';
+	import ApprovalCard from '$lib/components/chat/ApprovalCard.svelte';
 	import { toast } from 'svelte-sonner';
 
+	interface ToolCallState {
+		id: string;
+		name: string;
+		args: Record<string, unknown>;
+		result: string | null;
+		isError: boolean;
+	}
+
 	interface DisplayMessage {
-		role: 'user' | 'assistant' | 'system';
+		role: 'user' | 'assistant' | 'system' | 'tool';
 		content: string;
 		streaming?: boolean;
+		toolCallId?: string;
 	}
 
 	let messages: DisplayMessage[] = $state([]);
@@ -21,6 +32,7 @@
 	let error = $state('');
 	let messagesContainer: HTMLDivElement | undefined = $state(undefined);
 	let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
+	let toolCalls: Map<string, ToolCallState> = $state(new Map());
 
 	onMount(async () => {
 		try {
@@ -62,6 +74,7 @@
 		conversationId = undefined;
 		inputText = '';
 		error = '';
+		toolCalls = new Map();
 	}
 
 	async function sendMessage() {
@@ -108,6 +121,22 @@
 						messages = messages.slice(0, -1);
 					}
 					sending = false;
+				},
+				(id, name, args, convId) => {
+					conversationId = convId;
+					toolCalls = new Map(toolCalls.set(id, { id, name, args, result: null, isError: false }));
+					messages = [...messages, { role: 'tool', content: '', toolCallId: id }];
+					scrollToBottom();
+				},
+				(id, name, result, isError, convId) => {
+					conversationId = convId;
+					const existing = toolCalls.get(id);
+					if (existing) {
+						toolCalls = new Map(toolCalls.set(id, { ...existing, result, isError }));
+					} else {
+						toolCalls = new Map(toolCalls.set(id, { id, name, args: {}, result, isError }));
+					}
+					scrollToBottom();
 				}
 			);
 		} catch (e) {
@@ -118,6 +147,16 @@
 			}
 			sending = false;
 		}
+	}
+
+	function handleApprove(jobId: string) {
+		approveJob(jobId).catch(() => {});
+	}
+	function handleReject(jobId: string) {
+		rejectJob(jobId).catch(() => {});
+	}
+	function isApprovalResult(tc: ToolCallState): boolean {
+		return tc.result !== null && !tc.isError && tc.result.includes('awaiting_approval');
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -214,6 +253,32 @@
 			{:else}
 				<div class="mx-auto max-w-3xl space-y-1 p-6">
 					{#each messages as msg, i}
+						{#if msg.role === 'tool' && msg.toolCallId}
+							{@const tc = toolCalls.get(msg.toolCallId)}
+							{#if tc}
+								<div class="flex gap-3 justify-start mt-1">
+									<div class="w-8 flex-shrink-0"></div>
+									<div class="max-w-[85%]">
+										<ToolCallCard
+											name={tc.name}
+											args={tc.args}
+											result={tc.result}
+											isError={tc.isError}
+										/>
+										{#if isApprovalResult(tc)}
+											{@const approvalData = (() => { try { return JSON.parse(tc.result ?? '{}'); } catch { return {}; } })()}
+											<ApprovalCard
+												jobId={approvalData.job_id ?? tc.id}
+												jobKind={tc.name}
+												payload={tc.args}
+												onApprove={handleApprove}
+												onReject={handleReject}
+											/>
+										{/if}
+									</div>
+								</div>
+							{/if}
+						{:else}
 						{@const isUser = msg.role === 'user'}
 						{@const showAvatar = i === 0 || messages[i - 1]?.role !== msg.role}
 						<div
@@ -301,6 +366,7 @@
 								</div>
 							{/if}
 						</div>
+						{/if}
 					{/each}
 				</div>
 			{/if}

@@ -11,16 +11,29 @@
 		getDeptConfig,
 		updateDeptConfig,
 		getModels,
-		getTools
+		getTools,
+		approveJob,
+		rejectJob
 	} from '$lib/api';
 	import type { Conversation, DepartmentConfig, ModelOption, ToolOption } from '$lib/api';
 	import { onboarding, pendingCommand } from '$lib/stores';
 	import { cached } from '$lib/cache';
+	import ToolCallCard from './ToolCallCard.svelte';
+	import ApprovalCard from './ApprovalCard.svelte';
+
+	interface ToolCallState {
+		id: string;
+		name: string;
+		args: Record<string, unknown>;
+		result: string | null;
+		isError: boolean;
+	}
 
 	interface DisplayMessage {
-		role: 'user' | 'assistant' | 'system';
+		role: 'user' | 'assistant' | 'system' | 'tool';
 		content: string;
 		streaming?: boolean;
+		toolCallId?: string;
 	}
 
 	let {
@@ -40,6 +53,7 @@
 	let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 	let showHistory = $state(false);
 	let showConfig = $state(false);
+	let toolCalls: Map<string, ToolCallState> = $state(new Map());
 
 	// Config state
 	let config: DepartmentConfig | null = $state(null);
@@ -102,6 +116,7 @@
 		inputText = '';
 		error = '';
 		showHistory = false;
+		toolCalls = new Map();
 	}
 
 	async function send() {
@@ -179,6 +194,22 @@
 					error = msg;
 					if (messages[messages.length - 1]?.content === '') messages = messages.slice(0, -1);
 					sending = false;
+				},
+				(id, name, args, convId) => {
+					conversationId = convId;
+					toolCalls = new Map(toolCalls.set(id, { id, name, args, result: null, isError: false }));
+					messages = [...messages, { role: 'tool', content: '', toolCallId: id }];
+					scroll();
+				},
+				(id, name, result, isError, convId) => {
+					conversationId = convId;
+					const existing = toolCalls.get(id);
+					if (existing) {
+						toolCalls = new Map(toolCalls.set(id, { ...existing, result, isError }));
+					} else {
+						toolCalls = new Map(toolCalls.set(id, { id, name, args: {}, result, isError }));
+					}
+					scroll();
 				}
 			);
 		} catch (e) {
@@ -202,6 +233,17 @@
 		} catch {
 			/* silent */
 		}
+	}
+
+	function handleApprove(jobId: string) {
+		approveJob(jobId).catch(() => {});
+	}
+	function handleReject(jobId: string) {
+		rejectJob(jobId).catch(() => {});
+	}
+
+	function isApprovalResult(tc: ToolCallState): boolean {
+		return tc.result !== null && !tc.isError && tc.result.includes('awaiting_approval');
 	}
 
 	function setModel(e: globalThis.Event) {
@@ -384,6 +426,32 @@
 		{:else}
 			<div class="space-y-2 p-3">
 				{#each messages as msg}
+					{#if msg.role === 'tool' && msg.toolCallId}
+						{@const tc = toolCalls.get(msg.toolCallId)}
+						{#if tc}
+							<div class="flex gap-2 justify-start">
+								<div class="w-5 flex-shrink-0"></div>
+								<div class="max-w-[85%]">
+									<ToolCallCard
+										name={tc.name}
+										args={tc.args}
+										result={tc.result}
+										isError={tc.isError}
+									/>
+									{#if isApprovalResult(tc)}
+										{@const approvalData = (() => { try { return JSON.parse(tc.result ?? '{}'); } catch { return {}; } })()}
+										<ApprovalCard
+											jobId={approvalData.job_id ?? tc.id}
+											jobKind={tc.name}
+											payload={tc.args}
+											onApprove={handleApprove}
+											onReject={handleReject}
+										/>
+									{/if}
+								</div>
+							</div>
+						{/if}
+					{:else}
 					{@const isUser = msg.role === 'user'}
 					<div class="flex gap-2 {isUser ? 'justify-end' : 'justify-start'}">
 						{#if !isUser}
@@ -448,6 +516,7 @@
 							{/if}
 						</div>
 					</div>
+					{/if}
 				{/each}
 			</div>
 		{/if}
