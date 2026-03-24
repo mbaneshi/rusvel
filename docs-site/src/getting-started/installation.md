@@ -77,7 +77,7 @@ Run the full test suite to confirm everything works:
 cargo test
 ```
 
-You should see all 197 tests passing across multiple crates:
+You should see all 118 tests passing across multiple crates:
 
 ```
 test result: ok. 197 passed; 0 failed

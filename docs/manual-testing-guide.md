@@ -454,9 +454,9 @@ curl -X POST http://localhost:3000/api/help \
 ## 8. Automated Tests
 
 ```bash
-cargo test                     # All 192 tests
+cargo test                     # All 118 tests
 cargo test -p rusvel-core      # Core types and ports
-cargo test -p rusvel-db        # Database (largest suite, 44 tests)
+cargo test -p rusvel-db        # Database store
 cargo test -p rusvel-api       # API routes (19 tests)
 cargo test -p forge-engine     # Agent orchestration (15 tests)
 cargo test -p content-engine   # Content engine (7 tests)

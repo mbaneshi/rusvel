@@ -1,7 +1,7 @@
 # Documentation Site Proposal for RUSVEL
 
 > Evaluated: 2026-03-24
-> Context: RUSVEL is a Rust + SvelteKit monorepo, 27 crates, 12 departments, targeting solo devs/founders.
+> Context: RUSVEL is a Rust + SvelteKit monorepo, 34 crates, 12 departments, targeting solo devs/founders.
 
 ---
 

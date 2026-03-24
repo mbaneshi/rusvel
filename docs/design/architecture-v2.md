@@ -33,11 +33,12 @@
 │         DEPARTMENT REGISTRY (12 depts)           │
 │  DepartmentDef → EngineKind routing              │
 │  6 parameterized /api/dept/{dept}/* routes        │
-│  replace 72 hardcoded routes                      │
+│  + 15 engine-specific routes                      │
+│  + 7 flow routes + 5 knowledge routes            │
 └──────────────────────┬─────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│          DOMAIN ENGINES (12: 5 core + 7 ext)     │
+│          DOMAIN ENGINES (13: 5 core + 8 ext)     │
 │                                                  │
 │  Core:     Forge  │ Code  │ Harvest │ Content    │
 │            GoToMarket                            │
@@ -50,18 +51,24 @@
 │              FOUNDATION                          │
 │                                                 │
 │  ┌──────────── rusvel-core ──────────────┐      │
-│  │  Port Traits + Shared Domain Types    │      │
+│  │  19 Port Traits + 82 Domain Types     │      │
 │  │  DepartmentRegistry + DepartmentDef   │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
-│  ┌──────────── Adapters ─────────────────┐      │
+│  ┌──────────── Adapters (16 crates) ────┐      │
 │  │  rusvel-llm     (model providers)     │      │
 │  │  rusvel-agent   (agent runtime)       │      │
 │  │  rusvel-db      (SQLite + 5 stores)   │      │
+│  │  rusvel-schema  (DB introspection)    │      │
 │  │  rusvel-event   (event bus + persist)  │      │
 │  │  rusvel-memory  (context + search)    │      │
 │  │  rusvel-tool    (tool registry)       │      │
+│  │  rusvel-builtin-tools (9 agent tools) │      │
+│  │  rusvel-mcp-client (external MCP)     │      │
 │  │  rusvel-jobs    (central job queue)   │      │
+│  │  rusvel-embed   (text embeddings)     │      │
+│  │  rusvel-vector  (LanceDB vectors)     │      │
+│  │  rusvel-deploy  (deployment ops)      │      │
 │  │  rusvel-auth    (credentials)         │      │
 │  │  rusvel-config  (settings)            │      │
 │  └───────────────────────────────────────┘      │
@@ -154,24 +161,33 @@ Also available in department chat via `!build <description>` prefix.
 
 ---
 
-## The 10 Core Ports (was 13)
+## The 19 Core Ports (was 13 in v1, 10 in early v2)
 
-Consolidated from 13 to 10 by removing redundancy:
+Evolved from 10 to 19 as the system grew — added sub-store traits, embedding/vector ports, and deploy:
 
 | Port | Responsibility | Notes |
 |------|---------------|-------|
-| `LlmPort` | Raw model access: generate, stream, embed | Never called directly by engines |
+| `LlmPort` | Raw model access: generate, stream | Never called directly by engines |
 | `AgentPort` | Agent orchestration: create, run, stop, status | Wraps LlmPort + ToolPort + MemoryPort |
 | `ToolPort` | Tool registry + execution | JSON Schema declarations |
 | `EventPort` | System-wide typed event bus | Immutable, append-only |
-| `StoragePort` | 5 canonical stores (see below) | Not "persist anything" |
+| `StoragePort` | 5 canonical sub-stores | Not "persist anything" |
+| `EventStore` | Append-only event log | Sub-store of StoragePort |
+| `ObjectStore` | CRUD for domain objects | Sub-store of StoragePort |
+| `SessionStore` | Session/Run/Thread hierarchy | Sub-store of StoragePort |
+| `JobStore` | Job queue persistence | Sub-store of StoragePort |
+| `MetricStore` | Time-series metrics | Sub-store of StoragePort |
 | `MemoryPort` | Context, knowledge, semantic search | Session-namespaced |
-| `JobPort` | Central job queue (replaces AutomationPort + SchedulePort) | All async work |
-| `SessionPort` | Session → Run → Thread hierarchy | Everything keyed by session |
+| `JobPort` | Central job queue | All async work |
+| `SessionPort` | Session management | Everything keyed by session |
 | `AuthPort` | Credentials (opaque handles) | Engines never see raw tokens |
 | `ConfigPort` | Settings, preferences | Per-session overrides |
+| `EmbeddingPort` | Text → dense vectors | Used by knowledge/RAG |
+| `VectorStorePort` | Similarity search | LanceDB adapter |
+| `DeployPort` | Deployment operations | CI/CD, hosting |
+| `Engine` | Engine trait: name, capabilities, health | All 13 engines implement |
 
-**Removed:** `HarvestPort` and `PublishPort` are now **engine-internal traits**, not core ports. They're domain-specific, not cross-cutting.
+**Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (ADR-003, ADR-006).
 
 ---
 
@@ -449,19 +465,20 @@ pub struct Event {
 
 ---
 
-## Dependency Graph (updated)
+## Dependency Graph (updated 2026-03-24)
 
 ```
 rusvel-app (binary, composition root)
 ├── rusvel-cli
-├── rusvel-api (Axum) ── serves SPA via fallback when frontend/ build exists
+├── rusvel-api (Axum, 79 routes) ── serves SPA via fallback
 ├── rusvel-tui (Ratatui)
-├── rusvel-mcp (rmcp)
+├── rusvel-mcp (rmcp, 6 tools)
 │
 ├── forge-engine ─────┐
 ├── code-engine ──────┤
 ├── harvest-engine ───┤
-├── content-engine ───┤── depend on rusvel-core ONLY
+├── content-engine ───┤
+├── flow-engine ──────┤── depend on rusvel-core ONLY
 ├── gtm-engine ───────┤
 ├── finance-engine ───┤
 ├── product-engine ───┤
@@ -474,47 +491,60 @@ rusvel-app (binary, composition root)
 ├── rusvel-llm ───────┐
 ├── rusvel-agent ─────┤
 ├── rusvel-db ────────┤
-├── rusvel-event ─────┤── implement rusvel-core traits
-├── rusvel-memory ────┤
+├── rusvel-schema ────┤
+├── rusvel-event ─────┤
+├── rusvel-memory ────┤── implement rusvel-core traits
 ├── rusvel-tool ──────┤
+├── rusvel-builtin-tools ┤
+├── rusvel-mcp-client ┤
 ├── rusvel-jobs ──────┤
+├── rusvel-embed ─────┤
+├── rusvel-vector ────┤
+├── rusvel-deploy ────┤
 ├── rusvel-auth ──────┤
 └── rusvel-config ────┘
 ```
 
-## Workspace (updated)
+## Workspace (updated 2026-03-24)
 
 ```
 rusvel/
 ├── crates/
-│   ├── rusvel-core/        ← 10 port traits + shared domain types + DepartmentRegistry
+│   ├── rusvel-core/        ← 19 port traits + 82 domain types + DepartmentRegistry
+│   ├── rusvel-schema/      ← DB schema introspection (RusvelBase)
 │   ├── rusvel-db/          ← SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/         ← LlmPort adapters (Ollama, OpenAI, Claude API, Claude CLI)
 │   ├── rusvel-agent/       ← AgentPort runtime (wraps LLM+Tool+Memory)
 │   ├── rusvel-event/       ← EventPort bus + persistence
 │   ├── rusvel-memory/      ← MemoryPort + session-namespaced search
 │   ├── rusvel-tool/        ← ToolPort registry + JSON Schema
-│   ├── rusvel-jobs/        ← Central job queue (was AutomationPort + SchedulePort)
+│   ├── rusvel-builtin-tools/ ← 9 built-in tools for agent execution
+│   ├── rusvel-mcp-client/  ← MCP client for external MCP server connections
+│   ├── rusvel-jobs/        ← Central job queue
+│   ├── rusvel-embed/       ← EmbeddingPort adapter
+│   ├── rusvel-vector/      ← VectorStorePort (LanceDB + Arrow)
+│   ├── rusvel-deploy/      ← DeployPort adapter
 │   ├── rusvel-auth/        ← AuthPort (opaque credential handles)
 │   ├── rusvel-config/      ← ConfigPort (TOML + per-session overrides)
 │   │
-│   ├── forge-engine/       ← Agent orchestration + Mission (goals/planning)
-│   ├── code-engine/        ← Code intelligence (Rust-only v0)
-│   ├── harvest-engine/     ← Opportunity discovery
-│   ├── content-engine/     ← Content creation + publishing
-│   ├── gtm-engine/         ← GoToMarket (CRM + outreach + ops)
-│   ├── finance-engine/     ← Revenue, expenses, tax, runway, P&L
-│   ├── product-engine/     ← Roadmaps, pricing, feature prioritization
-│   ├── growth-engine/      ← Funnels, cohorts, KPIs, retention
-│   ├── distro-engine/      ← Marketplace, SEO, affiliates, partnerships
-│   ├── legal-engine/       ← Contracts, IP, compliance, licensing
-│   ├── support-engine/     ← Tickets, knowledge base, NPS, auto-triage
-│   ├── infra-engine/       ← CI/CD, deployments, monitoring, incidents
+│   ├── forge-engine/       ← Agent orchestration + Mission (goals/planning) [WIRED]
+│   ├── code-engine/        ← Code intelligence: parser, graph, BM25 [WIRED]
+│   ├── harvest-engine/     ← Opportunity discovery + scoring [WIRED]
+│   ├── content-engine/     ← Content creation + publishing [WIRED]
+│   ├── flow-engine/        ← DAG workflow engine (petgraph) [WIRED]
+│   ├── gtm-engine/         ← GoToMarket (CRM + outreach + ops) [STUB]
+│   ├── finance-engine/     ← Revenue, expenses, tax, runway, P&L [STUB]
+│   ├── product-engine/     ← Roadmaps, pricing, feature prioritization [STUB]
+│   ├── growth-engine/      ← Funnels, cohorts, KPIs, retention [STUB]
+│   ├── distro-engine/      ← Marketplace, SEO, affiliates, partnerships [STUB]
+│   ├── legal-engine/       ← Contracts, IP, compliance, licensing [STUB]
+│   ├── support-engine/     ← Tickets, knowledge base, NPS, auto-triage [STUB]
+│   ├── infra-engine/       ← CI/CD, deployments, monitoring, incidents [STUB]
 │   │
-│   ├── rusvel-api/         ← Axum HTTP + SSE + dept routing + hook dispatch + capability
+│   ├── rusvel-api/         ← Axum HTTP: 79 routes, 22 modules
 │   ├── rusvel-cli/         ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
 │   ├── rusvel-tui/         ← TUI dashboard (Ratatui) — wired via --tui flag
-│   ├── rusvel-mcp/         ← MCP server (stdio + SSE)
+│   ├── rusvel-mcp/         ← MCP server (stdio JSON-RPC, 6 tools)
 │   └── rusvel-app/         ← Binary entry point (composition root)
 │
 ├── frontend/               ← SvelteKit 5 + Tailwind 4 + shadcn/ui (oklch tokens)
@@ -522,7 +552,7 @@ rusvel/
 └── CLAUDE.md
 ```
 
-27 crates (was 20). 12 department engines + 9 adapters + 4 surfaces + rusvel-core + rusvel-app.
+34 crates. 13 engines (5 wired + 8 stubs) + 16 adapters + 5 surfaces.
 
 ### Three-Tier Terminal Interface
 

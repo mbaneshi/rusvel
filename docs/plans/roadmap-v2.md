@@ -9,11 +9,11 @@
 
 **Deliverable:** `rusvel forge mission today` via CLI, Web, MCP, REPL, TUI.
 
-- rusvel-core (10 ports + shared types + approval model)
-- Adapters: config, db (5 stores), event, llm (Ollama), memory (FTS5), tool, jobs, auth
-- forge-engine (agent orchestration + mission goals/planning)
-- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API, Web (SvelteKit), MCP
-- 4 stub engines (code, harvest, content, gtm)
+- rusvel-core (19 ports + 82 domain types + approval model)
+- Adapters: config, db (5 stores), schema, event, llm (4 providers), memory (FTS5), tool, builtin-tools, mcp-client, jobs, embed, vector, deploy, auth
+- forge-engine + code-engine + content-engine + harvest-engine + flow-engine (all wired)
+- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API (79 routes), Web (SvelteKit, 12 pages), MCP (6 tools)
+- 8 stub engines (gtm, finance, product, growth, distro, legal, support, infra)
 
 **Proves:** Ports + adapters + session hierarchy + job queue + events + streaming LLM.
 
@@ -95,11 +95,11 @@
 
 | Phase | New Crates | Total |
 |-------|-----------|-------|
-| 0 | 20 (10 foundation + 5 engines + 5 surfaces) | 20 |
-| 1 | 0 (expand existing) | 20 |
-| 2 | 0 (expand existing) | 20 |
-| 3 | 0 (expand existing) | 20 |
-| 4 | 0 (expand existing) | 20 |
-| 5 | +N (plugins, new adapters) | 20+N |
+| 0 | 34 (16 foundation + 13 engines + 5 surfaces) | 34 |
+| 1 | 0 (expand existing) | 34 |
+| 2 | 0 (expand existing) | 34 |
+| 3 | 0 (expand existing) | 34 |
+| 4 | 0 (expand existing) | 34 |
+| 5 | +N (plugins, new adapters) | 34+N |
 
-**Key insight from Perplexity:** All the scope goes into expanding existing crates, not adding new ones. The 20-crate structure holds from Phase 0 through Phase 4.
+**Note:** Crate count grew from original plan of 20 to 34 as new adapters (schema, embed, vector, deploy, builtin-tools, mcp-client) and flow-engine were added. The architecture holds — all growth was in foundation adapters and one new engine.

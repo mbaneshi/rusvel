@@ -10,8 +10,34 @@
 	import CommandPalette from '$lib/components/onboarding/CommandPalette.svelte';
 	import { Toaster } from 'svelte-sonner';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import {
+		MessageSquare, LayoutDashboard, Database, GitBranch, Settings,
+		Hammer, Code, Search, PenTool, Rocket, DollarSign, Package,
+		TrendingUp, Share2, Scale, HeadphonesIcon, Server
+	} from 'lucide-svelte';
 
 	let { children }: { children: Snippet } = $props();
+
+	// Map icon keys to Lucide components
+	const iconMap: Record<string, typeof MessageSquare> = {
+		chat: MessageSquare,
+		dashboard: LayoutDashboard,
+		database: Database,
+		flows: GitBranch,
+		settings: Settings,
+		forge: Hammer,
+		code: Code,
+		harvest: Search,
+		content: PenTool,
+		gtm: Rocket,
+		finance: DollarSign,
+		product: Package,
+		growth: TrendingUp,
+		distro: Share2,
+		legal: Scale,
+		support: HeadphonesIcon,
+		infra: Server,
+	};
 
 	let showNewSession = $state(false);
 	let newName = $state('');
@@ -23,12 +49,13 @@
 
 	// Static nav items (non-department pages)
 	const staticNavBefore = [
-		{ href: '/chat', label: 'Chat', icon: '>', tour: 'nav-chat' },
-		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' },
-		{ href: '/database/schema', label: 'Database', icon: 'B', tour: '' }
+		{ href: '/chat', label: 'Chat', icon: 'chat', tour: 'nav-chat' },
+		{ href: '/', label: 'Dashboard', icon: 'dashboard', tour: 'nav-dashboard' },
+		{ href: '/database/schema', label: 'Database', icon: 'database', tour: '' },
+		{ href: '/flows', label: 'Flows', icon: 'flows', tour: '' }
 	];
 	const staticNavAfter = [
-		{ href: '/settings', label: 'Settings', icon: '%', tour: 'nav-settings' }
+		{ href: '/settings', label: 'Settings', icon: 'settings', tour: 'nav-settings' }
 	];
 
 	// Department nav items generated from registry
@@ -40,7 +67,7 @@
 		...deptList.map((d) => ({
 			href: `/dept/${d.id}`,
 			label: d.name,
-			icon: d.icon,
+			icon: d.id,
 			tour: d.id === 'forge' ? 'nav-forge' : ''
 		})),
 		...staticNavAfter
@@ -234,10 +261,16 @@
 							title={item.label}
 						>
 							<span
-								class="w-5 flex-shrink-0 text-center font-mono text-xs {isActive
+								class="w-5 flex-shrink-0 flex items-center justify-center {isActive
 									? 'text-sidebar-primary'
-									: 'text-muted-foreground/50'}">{item.icon}</span
+									: 'text-muted-foreground/50'}"
 							>
+								{#if iconMap[item.icon]}
+									<svelte:component this={iconMap[item.icon]} size={16} strokeWidth={1.75} />
+								{:else}
+									<span class="font-mono text-xs">{item.icon}</span>
+								{/if}
+							</span>
 							{#if width > 100}
 								{item.label}
 							{/if}
@@ -298,7 +331,11 @@
 						: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
 					title={item.label}
 				>
-					<span class="font-mono">{item.icon}</span>
+					{#if iconMap[item.icon]}
+						<svelte:component this={iconMap[item.icon]} size={16} strokeWidth={1.75} />
+					{:else}
+						<span class="font-mono text-xs">{item.icon}</span>
+					{/if}
 				</a>
 			{/each}
 		</aside>

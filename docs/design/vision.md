@@ -38,113 +38,103 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 └──────────────────────────┬────────────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│              DOMAIN ENGINES                     │
+│              DOMAIN ENGINES (13)                │
 │                                                 │
-│  Forge    │ Code    │ Harvest  │ Content        │
-│  Ops      │ Mission │ Connect                   │
+│  Core: Forge │ Code │ Harvest │ Content │ GTM   │
+│  Extended: Finance│Product│Growth│Distro│Legal  │
+│            Support│ Infra │ Flow                │
 └──────────────────────┬─────────────────────────┘
                        │ (depends on)
 ┌──────────────────────┴─────────────────────────┐
 │              FOUNDATION (Ports + Adapters)       │
 │                                                 │
-│  rusvel-core   (traits only, zero deps)         │
-│  rusvel-llm    (Claude/OpenAI/Gemini/Ollama)    │
+│  rusvel-core   (19 traits, zero deps)           │
+│  rusvel-llm    (Claude/OpenAI/Ollama)           │
 │  rusvel-agent  (agent runtime + workflows)      │
 │  rusvel-db     (SQLite WAL + migrations)        │
 │  rusvel-event  (event bus + persistence)        │
 │  rusvel-memory (context + semantic search)      │
 │  rusvel-tool   (tool registry + execution)      │
-│  rusvel-schedule (cron + triggers)              │
-│  rusvel-auth   (API keys + OAuth)               │
+│  rusvel-builtin-tools (9 built-in agent tools)  │
+│  rusvel-jobs   (central job queue)              │
+│  rusvel-vector (LanceDB vector store)           │
+│  rusvel-embed  (text embeddings)                │
+│  rusvel-schema (DB schema introspection)        │
+│  rusvel-mcp-client (external MCP connections)   │
+│  rusvel-deploy (deployment adapter)             │
+│  rusvel-auth   (API keys from env)              │
 │  rusvel-config (settings + workspace config)    │
 └─────────────────────────────────────────────────┘
 ```
 
-## The 13 Core Ports (in rusvel-core)
+## The 19 Core Ports (in rusvel-core)
 
-| Port | Responsibility | Key Methods |
-|------|---------------|-------------|
-| `LlmPort` | Talk to any AI model | `generate`, `generate_stream`, `embed` |
-| `AgentPort` | Define and run AI agents | `create`, `run`, `stop`, `status` |
-| `AutomationPort` | Multi-step workflows | `define_workflow`, `execute`, `pause`, `resume` |
-| `MemoryPort` | Context and knowledge | `store`, `recall`, `search`, `forget` |
-| `ToolPort` | Extensible tool system | `register`, `call`, `list`, `schema` |
-| `EventPort` | System-wide event bus | `emit`, `subscribe`, `replay` |
-| `StoragePort` | Persist anything | `put`, `get`, `delete`, `query`, `migrate` |
-| `SchedulePort` | Cron and triggers | `schedule`, `cancel`, `list`, `trigger` |
-| `HarvestPort` | Scrape and discover | `scan`, `extract`, `score`, `ingest` |
-| `PublishPort` | Push to platforms | `publish`, `schedule_post`, `metrics` |
-| `AuthPort` | Identity and keys | `authenticate`, `store_key`, `get_key`, `refresh` |
-| `ConfigPort` | Settings and prefs | `get`, `set`, `watch`, `export` |
-| `SessionPort` | Workspace/project context | `create_session`, `load`, `save`, `switch` |
+| Port | Responsibility |
+|------|---------------|
+| `LlmPort` | Raw model access: generate, stream |
+| `AgentPort` | Agent orchestration: create, run, stop, status |
+| `ToolPort` | Tool registry + execution |
+| `EventPort` | System-wide typed event bus |
+| `StoragePort` | 5 canonical sub-stores (see architecture-v2) |
+| `EventStore` | Append-only event log |
+| `ObjectStore` | CRUD for domain objects |
+| `SessionStore` | Session/Run/Thread hierarchy |
+| `JobStore` | Job queue persistence |
+| `MetricStore` | Time-series metrics |
+| `MemoryPort` | Context, knowledge, semantic search |
+| `JobPort` | Central job queue (replaces AutomationPort + SchedulePort) |
+| `SessionPort` | Session management |
+| `AuthPort` | Credentials (opaque handles) |
+| `ConfigPort` | Settings, per-session overrides |
+| `EmbeddingPort` | Text → dense vectors |
+| `VectorStorePort` | Similarity search |
+| `DeployPort` | Deployment operations |
+| `Engine` | Engine trait: name, capabilities, health |
 
-## The 7 Domain Engines
+> **Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (see ADR-003, ADR-006).
 
-### Forge Engine — Agent Orchestration
-The meta-engine. Forge doesn't do domain work itself — it orchestrates agents that use other engines. "Find me 5 Rust gigs and draft pitches" → Forge spawns Harvest agent + Content agent, coordinates, returns results.
+## The 13 Domain Engines
 
-- 100+ agent personas organized by division
-- Workflow patterns: Sequential, Parallel, Loop, Graph
-- Safety: circuit breaker, rate limiter, budget enforcement
-- Git worktree isolation for code-modifying agents
-- Real-time streaming of agent work
+### Core Engines (5 — fully wired)
 
-### Code Engine — Code Intelligence
-Understand, analyze, transform, and learn from any codebase.
+**Forge Engine** — Agent Orchestration (meta-engine)
+- 10 agent personas, mission planning, goal orchestration
+- `rusvel forge mission today` → AI daily brief
+- Safety: budget enforcement, approval gates
 
-- Parse 12+ languages via tree-sitter
-- Build dependency graphs, detect module communities
-- Compute complexity, churn, coupling metrics
-- Detect anti-patterns, suggest refactors
-- C-to-Rust transpilation pipeline
-- Generate learning paths and interactive tutorials
-- Full-text BM25 symbol search
+**Code Engine** — Code Intelligence
+- Rust parsing, dependency graph, BM25 symbol search
+- Complexity and coupling metrics
+- Wired: `rusvel code analyze`, `rusvel code search`, CodeAnalyze jobs
 
-### Harvest Engine — Opportunity Discovery
-Find gigs, jobs, and opportunities from everywhere.
-
-- Passive scraping via Chrome DevTools Protocol
-- Source adapters: Upwork, Freelancer, LinkedIn, GitHub, custom
-- AI-powered scoring (relevance, budget, competition, skill match)
-- Automated proposal/bid generation
+**Harvest Engine** — Opportunity Discovery
+- Source scanning, AI-powered scoring, proposal generation
 - Pipeline: discover → score → qualify → propose → track
+- Wired: `rusvel harvest pipeline`, HarvestScan jobs
 
-### Content Engine — Creation & Publishing
-Write once, publish everywhere with AI adaptation.
+**Content Engine** — Creation & Publishing
+- Markdown-first authoring, AI adaptation
+- Platform adapters: Twitter/X, LinkedIn
+- Code-to-content pipeline (from code analysis to blog drafts)
+- Wired: `rusvel content draft`, ContentPublish jobs, human approval gate
 
-- Markdown-first authoring
-- AI pipeline: generate → adapt → split → review
-- Platform adapters: Twitter/X, LinkedIn, DEV.to, Medium, YouTube, Substack
-- Scheduling with cron
-- Engagement tracking and analytics
-- Personal branding templates and voice consistency
+**Flow Engine** — DAG Workflow Execution
+- Petgraph-based directed acyclic graph executor
+- 3 node types: code, condition, agent
+- 7 API routes at `/api/flows`
 
-### Ops Engine — Business Operations
-Run your solo business.
+### Extended Engines (8 — domain stubs, chat works via generic agent)
 
-- CRM: contacts, leads, deals, pipeline stages
-- Invoice generation and payment tracking
-- SOPs and knowledge base
-- Organization modeling (even for a solo founder — track clients, contractors, partners)
-- AI spend tracking and budget management
+- **GoToMarket** (`gtm-engine`) — CRM, outreach sequences, deal pipeline, invoicing
+- **Finance** (`finance-engine`) — Ledger, runway, tax, P&L
+- **Product** (`product-engine`) — Roadmaps, pricing, feedback
+- **Growth** (`growth-engine`) — Funnels, cohorts, KPIs
+- **Distribution** (`distro-engine`) — Marketplace, SEO, affiliates
+- **Legal** (`legal-engine`) — Contracts, IP, compliance
+- **Support** (`support-engine`) — Tickets, knowledge base, NPS
+- **Infra** (`infra-engine`) — CI/CD, deployments, monitoring
 
-### Mission Engine — Goals & Planning
-Know what to do and track progress.
-
-- Set quarterly/monthly/weekly goals
-- `rusvel mission today` → AI daily brief from goals + pipeline + opportunities
-- Decision logging with context
-- Progress analytics and velocity tracking
-- Review cycles (weekly retro, monthly review)
-
-### Connect Engine — Networking & Outreach
-Build and maintain professional relationships.
-
-- Contact management with relationship scoring
-- Email sequence automation
-- LinkedIn networking workflows
-- Follow-up scheduling and reminders
-- Outreach templates with personalization
+> **v1 → v2 changes:** Ops + Connect merged → GoToMarket. Mission folded into Forge. 7 extended engines added for full business coverage. See ADR-001, ADR-002.
 
 ## Shared Domain Types (in rusvel-core)
 
@@ -220,24 +210,20 @@ $ rusvel --tui                   # Full-screen terminal dashboard
 - Loads live data from storage
 - Press `q` or `Esc` to exit
 
-## First Vertical Slice
+## Current State (as of 2026-03-24)
 
-The thinnest end-to-end proof that the architecture works:
+The vertical slice is proven and significantly expanded:
 
-1. **rusvel-core** — Define all 13 port traits + shared domain types
-2. **rusvel-config** — Load TOML config file
-3. **rusvel-db** — SQLite WAL with migration system
-4. **rusvel-event** — In-memory event bus with persistence
-5. **rusvel-llm** — Ollama adapter (local, no API key needed)
-6. **rusvel-memory** — Store/recall with basic text search
-7. **rusvel-tool** — Tool registry with JSON Schema declarations
-8. **rusvel-agent** — Simple LLM agent that can use tools
-9. **mission-engine** — `today` command: read goals from memory, generate daily plan via LLM
-10. **rusvel-cli** — `rusvel mission today` command
-11. **rusvel-api** — Single endpoint: GET /api/mission/today
-12. **frontend** — One SvelteKit page showing today's plan
-
-One command. End to end. Foundation proven.
+- **34 crates** (16 foundation + 13 engines + 5 surfaces)
+- **19 port traits** in rusvel-core with 82 domain types
+- **79 API routes** across 22 modules
+- **118 tests** across 26 crates
+- **~34,286 lines** of Rust
+- **12 frontend routes** (home, chat, database browser, dept/[id], flows, knowledge, settings)
+- **5 wired engines** (Forge, Code, Content, Harvest, Flow) with real domain logic
+- **8 stub engines** with department chat via generic agent
+- **6 MCP tools** for Claude Code integration
+- **3-tier CLI** (one-shot + REPL + TUI) fully wired
 
 ## What RUSVEL Is NOT
 

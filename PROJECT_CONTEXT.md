@@ -274,7 +274,7 @@ See **`docs/plans/roadmap-v2.md`**: phases for deeper agent graphs, revenue engi
 - **Approval workflow:** types exist; end-to-end **API/UI** not fully productized (per project docs).
 - **GTM / OutreachSend:** some job paths still placeholders relative to full vision.
 - **Older docs** (e.g. `docs/design/vision.md` port list) may still describe pre-v2 ports; **source of truth** for ports is `crates/rusvel-core/src/ports.rs`.
-- **Roadmap crate-count table** still says “20 crates”; workspace is now **30** members.
+- **Roadmap crate-count table** updated to 34 crates (2026-03-24).
 
 ---
 

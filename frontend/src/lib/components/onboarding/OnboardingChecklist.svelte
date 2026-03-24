@@ -31,10 +31,10 @@
 				/* sidebar handles this */
 			}
 		},
-		{ key: 'goalAdded' as const, label: 'Add a goal', action: () => goto('/forge') },
-		{ key: 'planGenerated' as const, label: 'Generate a daily plan', action: () => goto('/forge') },
-		{ key: 'deptChatUsed' as const, label: 'Chat with a department', action: () => goto('/code') },
-		{ key: 'agentCreated' as const, label: 'Create an agent', action: () => goto('/forge') }
+		{ key: 'goalAdded' as const, label: 'Add a goal', action: () => goto('/dept/forge') },
+		{ key: 'planGenerated' as const, label: 'Generate a daily plan', action: () => goto('/dept/forge') },
+		{ key: 'deptChatUsed' as const, label: 'Chat with a department', action: () => goto('/dept/code') },
+		{ key: 'agentCreated' as const, label: 'Create an agent', action: () => goto('/dept/forge') }
 	];
 
 	let completedCount = $derived(steps.filter((s) => ob[s.key]).length);

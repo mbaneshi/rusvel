@@ -10,7 +10,7 @@ A single Rust binary that replaces an entire agency. AI agents handle code, cont
 ## Quick Start
 
 ```bash
-cargo build                    # Build all 27 crates
+cargo build                    # Build all 34 crates
 cargo run                      # Start web server on http://localhost:3000
 ```
 
@@ -55,7 +55,7 @@ rusvel --mcp            # MCP server (stdio JSON-RPC) for Claude Code
 
 ## Architecture
 
-Hexagonal (ports & adapters). 27 crates, 12 department engines, single binary.
+Hexagonal (ports & adapters). 34 crates, 13 engines (12 departments + Flow), single binary.
 
 ```
 SURFACES: CLI (Clap) | REPL (reedline) | TUI (Ratatui) | Web (Svelte) | MCP
@@ -63,7 +63,7 @@ SURFACES: CLI (Clap) | REPL (reedline) | TUI (Ratatui) | Web (Svelte) | MCP
 ENGINES:  Forge | Code | Harvest | Content | GTM | Finance | Product
           Growth | Distro | Legal | Support | Infra
     |
-FOUNDATION: rusvel-core (traits) + 9 adapter crates (DB, LLM, Agent, Events, ...)
+FOUNDATION: rusvel-core (19 traits) + 16 adapter crates (DB, LLM, Agent, Events, Vector, ...)
 ```
 
 See [docs/design/architecture-v2.md](docs/design/architecture-v2.md) for full details.
@@ -88,7 +88,8 @@ cargo test -p rusvel-api
 
 - [Vision](docs/design/vision.md) — What RUSVEL is
 - [Architecture](docs/design/architecture-v2.md) — Hexagonal architecture, 12 departments
-- [Decisions](docs/design/decisions.md) — 10 ADRs with rationale
+- [Decisions](docs/design/decisions.md) — 13 ADRs with rationale
+- [Current State](docs/status/current-state.md) — Live codebase metrics
 - [Roadmap](docs/plans/roadmap-v2.md) — 5-phase plan
 
 ## License

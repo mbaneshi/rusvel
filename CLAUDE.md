@@ -6,8 +6,8 @@
 ## Quick Commands
 
 ```bash
-cargo build                    # Build all crates (30 crates)
-cargo test                     # Run all tests (197 tests)
+cargo build                    # Build all crates (34 crates)
+cargo test                     # Run all tests (118 tests)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- --mcp             # Start MCP server (stdio JSON-RPC)
@@ -23,9 +23,9 @@ cargo run -- growth list       # List department items
 
 Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
-- **rusvel-core** — 15 port traits + 74 domain types. Zero framework deps.
+- **rusvel-core** — 19 port traits + 82 domain types. Zero framework deps.
 - **Adapters** — Implement port traits (rusvel-db, rusvel-llm, rusvel-agent, etc.)
-- **Engines** — Domain logic, depend ONLY on rusvel-core traits (12 engines, 5 fully wired + 7 domain stubs)
+- **Engines** — Domain logic, depend ONLY on rusvel-core traits (13 engines, 5 fully wired + 8 domain stubs)
 - **Surfaces** — CLI (3-tier: one-shot + REPL + TUI), API, MCP — wire adapters into engines
 - **rusvel-app** — Composition root, the single binary
 
@@ -45,16 +45,22 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
 ```
 crates/
-├── rusvel-core/        Ports (15 traits) + 74 domain types + DepartmentRegistry (12 depts)
-├── rusvel-db/          SQLite WAL + migrations (44 tests, largest suite)
+├── rusvel-core/        Ports (19 traits) + 82 domain types + DepartmentRegistry (12 depts)
+├── rusvel-schema/      Database schema introspection (RusvelBase)
+├── rusvel-db/          SQLite WAL + migrations
 ├── rusvel-llm/         4 providers: Ollama, OpenAI, Claude API, Claude CLI + multi-router
 ├── rusvel-agent/       Agent runtime (wraps LLM+Tool+Memory) + persona + workflow
 ├── rusvel-event/       Event bus + persistence
 ├── rusvel-memory/      FTS5 session-namespaced search
 ├── rusvel-tool/        Tool registry + JSON Schema
+├── rusvel-builtin-tools/  9 built-in tools for agent execution
+├── rusvel-mcp-client/  MCP client for connecting to external MCP servers
 ├── rusvel-jobs/        Central job queue + approval
 ├── rusvel-auth/        In-memory credential storage (from env)
 ├── rusvel-config/      TOML config + per-session overrides
+├── rusvel-deploy/      Deployment port adapter
+├── rusvel-embed/       Text embedding adapter
+├── rusvel-vector/      Vector store (LanceDB) for semantic search
 ├── forge-engine/       Agent orchestration + Mission (goals, plans, reviews, 10 personas)
 ├── code-engine/        Code intelligence: parser, dependency graph, BM25 search, metrics
 ├── harvest-engine/     Opportunity discovery: source scanning, scorer, proposal gen, pipeline
@@ -69,11 +75,11 @@ crates/
 ├── infra-engine/       Deployment, monitoring, incident response
 ├── flow-engine/        DAG workflow engine: petgraph executor, code/condition/agent nodes
 ├── rusvel-cli/         3-tier CLI: one-shot commands + REPL shell (reedline) + 11 dept subcommands
-├── rusvel-api/         Axum HTTP: 44 routes, 16 modules (dept, chat, CRUD, analytics, capability)
+├── rusvel-api/         Axum HTTP: 79 routes, 22 modules
 ├── rusvel-mcp/         MCP server (stdio JSON-RPC) — wired via --mcp flag
 ├── rusvel-tui/         TUI dashboard (ratatui) — wired via --tui flag
 └── rusvel-app/         Binary entry point + composition root + rust-embed frontend
-frontend/               SvelteKit 5 + Tailwind 4 (dept/[id], chat, settings, onboarding, workflow builder)
+frontend/               SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, flows, knowledge, settings)
 ```
 
 ## Wired Features
@@ -90,11 +96,16 @@ frontend/               SvelteKit 5 + Tailwind 4 (dept/[id], chat, settings, onb
 - **Frontend embedding** — rust-embed compiles `frontend/build/` into binary, ServeDir SPA fallback
 - **Onboarding** — CommandPalette, OnboardingChecklist, ProductTour, DeptHelpTooltip components
 - **Workflow Builder** — AgentNode + WorkflowBuilder visual components in frontend
-- **Domain engines wired** — CodeEngine, ContentEngine, HarvestEngine instantiated in main.rs
-- **Engine API routes** — 9 engine-specific endpoints (`/api/dept/code/analyze`, `/api/dept/content/draft`, etc.)
-- **Engine CLI commands** — `rusvel code analyze`, `rusvel code search`, `rusvel content draft`, `rusvel harvest pipeline`
-- **Job queue worker** — Background worker processes CodeAnalyze, ContentPublish, HarvestScan jobs via real engines
+- **Domain engines wired** — CodeEngine, ContentEngine, HarvestEngine, FlowEngine instantiated in main.rs
+- **Engine API routes** — 15 engine-specific endpoints (`/api/dept/code/analyze`, `/api/dept/content/draft`, `/api/dept/content/from-code`, etc.)
+- **Engine CLI commands** — `rusvel code analyze`, `rusvel code search`, `rusvel content draft`, `rusvel content from-code`, `rusvel harvest pipeline`
+- **Job queue worker** — Background worker processes CodeAnalyze, ContentPublish, HarvestScan jobs via real engines (session_id scoped)
 - **Flow Engine** — DAG workflow engine (petgraph), 3 node types (code, condition, agent), 7 API routes at `/api/flows`
+- **RusvelBase** — Database browser UI with schema introspection, table viewer, SQL runner at `/api/db/*`
+- **Knowledge/RAG** — Vector-backed knowledge base with 5 API routes at `/api/knowledge`
+- **Code-to-Content** — Pipeline from code analysis to content drafts via `/api/dept/content/from-code`
+- **MCP Client** — Connect to external MCP servers for tool discovery
+- **Built-in Tools** — 9 tools for agent execution pipeline
 
 ## Three-Tier CLI Interface
 
@@ -112,16 +123,18 @@ rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 
 ## Not Yet Wired
 
-- **Approval workflow** — ApprovalStatus enum exists, no API/UI yet
+- **Approval workflow UI** — API endpoints exist (`GET /api/approvals`, approve/reject), but no frontend UI
 - **8 domain engines** — GTM, Finance, Product, Growth, Distro, Legal, Support, Infra are stubs (chat works via generic agent)
 - **OutreachSend jobs** — GTM engine not yet wired, job handler is placeholder
+- **Authentication/authorization** — rusvel-auth is in-memory from env vars; no middleware on API routes
 
 ## Design Docs
 
 - `docs/design/vision.md` — What RUSVEL is
 - `docs/design/architecture-v2.md` — Current architecture (v2, post-review)
-- `docs/design/decisions.md` — 10 ADRs with rationale
+- `docs/design/decisions.md` — 13 ADRs with rationale
 - `docs/design/audit-2026-03-23.md` — Comprehensive codebase audit
+- `docs/status/current-state.md` — Live codebase metrics snapshot
 - `docs/plans/phase-0-foundation-v2.md` — Current phase milestones
 - `docs/plans/roadmap-v2.md` — 5-phase roadmap
 
@@ -144,14 +157,15 @@ pnpm test:analyze              # AI-powered visual diff analysis (Claude Vision)
 ## Testing
 
 ```bash
-cargo test                     # All 197 tests (Rust)
+cargo test                     # All 118 tests (Rust)
 cargo test -p rusvel-core      # Single crate
 cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
 cargo test -p content-engine   # Content engine (7 tests)
 cargo test -p harvest-engine   # Harvest engine (12 tests)
-cargo test -p rusvel-db        # DB store (largest suite)
-cargo test -p rusvel-api       # API tests (19 tests)
-pnpm test:visual               # Visual regression tests (Playwright, 16 routes)
+cargo test -p rusvel-db        # DB store
+cargo test -p rusvel-api       # API tests
+cargo test -p rusvel-llm       # LLM provider tests
+pnpm test:visual               # Visual regression tests (Playwright)
 ```
 
 ## Visual E2E Testing
@@ -167,11 +181,11 @@ curl -X POST http://localhost:3000/api/system/visual-report/self-correct  # Auto
 
 MCP tool: `visual_inspect` — run visual tests from Claude sessions.
 
-## API Modules (rusvel-api, 56 routes)
+## API Modules (rusvel-api, 79 routes, 22 modules)
 
-agents, analytics, approvals, build_cmd, capability, chat, config, department,
-engine_routes, help, hook_dispatch, hooks, mcp_servers, routes, rules, skills,
-system, visual_report, workflows
+agents, analytics, approvals, build_cmd, capability, chat, config, db_routes,
+department, engine_routes, flow_routes, help, hook_dispatch, hooks, knowledge,
+mcp_servers, routes, rules, skills, system, visual_report, workflows
 
 ## Python Scripts (uv)
 
@@ -186,9 +200,10 @@ uv run --with anthropic ...    # One-off with extra deps
 
 ## Stack
 
-- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~22k lines Rust)
+- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~34k lines Rust)
 - SvelteKit 5, Tailwind CSS 4, **pnpm** package manager
 - Python scripts: **uv** (pyproject.toml at workspace root)
 - LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented
+- Vector DB: LanceDB + Arrow for semantic search
 - Frontend embedded in binary via rust-embed
 - E2E: Playwright visual regression + Claude Vision analysis

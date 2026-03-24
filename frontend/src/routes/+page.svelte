@@ -225,7 +225,7 @@
 				</p>
 				<p class="mt-1 text-2xl font-bold text-primary">{deptList.length}</p>
 				<p class="text-xs text-muted-foreground">
-					<a href="/forge" class="text-primary hover:text-primary/80">Generate plan &rarr;</a>
+					<a href="/dept/forge" class="text-primary hover:text-primary/80">Generate plan &rarr;</a>
 				</p>
 			</div>
 		</div>
@@ -252,7 +252,7 @@
 							Goals help you stay focused and track progress
 						</p>
 						<a
-							href="/forge"
+							href="/dept/forge"
 							class="mt-3 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
 						>
 							Add your first goal

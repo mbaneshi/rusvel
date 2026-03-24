@@ -24,16 +24,20 @@
 			<p class="text-sm text-[var(--muted-foreground)]">Select a session to begin.</p>
 		</div>
 	{:else}
-		<DepartmentPanel
-			dept={dept.id}
-			title={dept.title}
-			icon={dept.icon}
-			color={dept.color}
-			quickActions={dept.quick_actions}
-			tabs={dept.tabs}
-		/>
+		{#key dept.id}
+			<DepartmentPanel
+				dept={dept.id}
+				title={dept.title}
+				icon={dept.icon}
+				color={dept.color}
+				quickActions={dept.quick_actions}
+				tabs={dept.tabs}
+			/>
+		{/key}
 		<div class="flex-1">
-			<DepartmentChat dept={dept.id} title={dept.title} icon={dept.icon} />
+			{#key dept.id}
+				<DepartmentChat dept={dept.id} title={dept.title} icon={dept.icon} />
+			{/key}
 		</div>
 	{/if}
 </div>

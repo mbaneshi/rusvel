@@ -46,8 +46,8 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 
 The heart of the system. Contains:
 
-- **10 port traits** -- interfaces that engines depend on
-- **~40 shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, etc.
+- **19 port traits** -- interfaces that engines depend on
+- **82 shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, etc.
 - Zero framework dependencies
 
 ### Layer 2: Adapters
@@ -99,7 +99,7 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 ```
 rusvel/
 ├── crates/
-│   ├── rusvel-core/        10 port traits + shared domain types
+│   ├── rusvel-core/        19 port traits + 82 domain types
 │   ├── rusvel-db/          SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/         4 LLM providers
 │   ├── rusvel-agent/       Agent runtime (LLM+Tool+Memory)

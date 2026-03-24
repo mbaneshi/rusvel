@@ -47,84 +47,84 @@
 			label: 'Forge Department',
 			group: 'Navigation',
 			icon: '=',
-			action: () => navigate('/forge')
+			action: () => navigate('/dept/forge')
 		},
 		{
 			id: 'nav-code',
 			label: 'Code Department',
 			group: 'Navigation',
 			icon: '#',
-			action: () => navigate('/code')
+			action: () => navigate('/dept/code')
 		},
 		{
 			id: 'nav-harvest',
 			label: 'Harvest Department',
 			group: 'Navigation',
 			icon: '$',
-			action: () => navigate('/harvest')
+			action: () => navigate('/dept/harvest')
 		},
 		{
 			id: 'nav-content',
 			label: 'Content Department',
 			group: 'Navigation',
 			icon: '*',
-			action: () => navigate('/content')
+			action: () => navigate('/dept/content')
 		},
 		{
 			id: 'nav-gtm',
 			label: 'GTM Department',
 			group: 'Navigation',
 			icon: '^',
-			action: () => navigate('/gtm')
+			action: () => navigate('/dept/gtm')
 		},
 		{
 			id: 'nav-finance',
 			label: 'Finance Department',
 			group: 'Navigation',
 			icon: '%',
-			action: () => navigate('/finance')
+			action: () => navigate('/dept/finance')
 		},
 		{
 			id: 'nav-product',
 			label: 'Product Department',
 			group: 'Navigation',
 			icon: '@',
-			action: () => navigate('/product')
+			action: () => navigate('/dept/product')
 		},
 		{
 			id: 'nav-growth',
 			label: 'Growth Department',
 			group: 'Navigation',
 			icon: '&',
-			action: () => navigate('/growth')
+			action: () => navigate('/dept/growth')
 		},
 		{
 			id: 'nav-distro',
 			label: 'Distribution Department',
 			group: 'Navigation',
 			icon: '!',
-			action: () => navigate('/distro')
+			action: () => navigate('/dept/distro')
 		},
 		{
 			id: 'nav-legal',
 			label: 'Legal Department',
 			group: 'Navigation',
 			icon: '\u00A7',
-			action: () => navigate('/legal')
+			action: () => navigate('/dept/legal')
 		},
 		{
 			id: 'nav-support',
 			label: 'Support Department',
 			group: 'Navigation',
 			icon: '?',
-			action: () => navigate('/support')
+			action: () => navigate('/dept/support')
 		},
 		{
 			id: 'nav-infra',
 			label: 'Infra Department',
 			group: 'Navigation',
 			icon: '>',
-			action: () => navigate('/infra')
+			action: () => navigate('/dept/infra')
 		},
 		{
 			id: 'nav-settings',
@@ -146,7 +146,7 @@
 			label: 'Generate Daily Plan',
 			group: 'Actions',
 			icon: '=',
-			action: () => navigate('/forge')
+			action: () => navigate('/dept/forge')
 		},
 		{
 			id: 'act-new-chat',
