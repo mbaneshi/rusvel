@@ -350,7 +350,7 @@ API:       GET  /api/system/status          (engine health, test count, crate in
            GET  /api/system/gaps            (parsed from gap-analysis.md)
            POST /api/system/self-improve    (run claude -p on own codebase)
            POST /api/system/test            (cargo test)
-           POST /api/system/build           (cargo build + npm run build)
+           POST /api/system/build           (cargo build + pnpm build)
 DB:        objects("self_improvement_log")
 Status:    🔲 Not built
 ```

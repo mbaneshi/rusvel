@@ -255,7 +255,7 @@ impl RusvelMcp {
             }
             "visual_inspect" => {
                 let update = args["update_baselines"].as_bool().unwrap_or(false);
-                let mut cmd_args = vec!["playwright", "test", "--project=visual", "--reporter=json"];
+                let mut cmd_args = vec!["exec", "playwright", "test", "--project=visual", "--reporter=json"];
                 if update {
                     cmd_args.push("--update-snapshots");
                 }
@@ -269,7 +269,7 @@ impl RusvelMcp {
                     return Err(McpError::InvalidParams("Cannot find frontend directory".into()));
                 };
 
-                match tokio::process::Command::new("npx")
+                match tokio::process::Command::new("pnpm")
                     .args(&cmd_args)
                     .current_dir(&project_dir)
                     .output()

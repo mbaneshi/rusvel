@@ -34,9 +34,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-      - run: npm ci
-      - run: npm run check
-      - run: npm run build
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build
 ```
 
 ### Claude in CI — Automated PR Reviews
@@ -221,7 +221,7 @@ Teammate C: Frontend — builds SvelteKit pages
 
 **Quality gates:**
 - All teammates must pass `cargo test` before merging
-- Frontend teammate must pass `npm run check`
+- Frontend teammate must pass `pnpm check`
 - Architecture violations block all teammates
 
 ### When to Use Agent Teams

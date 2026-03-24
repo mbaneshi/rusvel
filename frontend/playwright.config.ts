@@ -48,7 +48,7 @@ export default defineConfig({
 			reuseExistingServer: true
 		},
 		{
-			command: 'npm run dev',
+			command: 'pnpm dev',
 			port: DEV_PORT,
 			timeout: 30_000,
 			reuseExistingServer: true

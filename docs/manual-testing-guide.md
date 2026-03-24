@@ -4,7 +4,7 @@
 
 - Rust toolchain installed (`cargo build` succeeds)
 - Ollama running with at least one model (e.g. `qwen3:14b`, `llama3.1:8b`)
-- Frontend built (`cd frontend && npm run build`) — already embedded in binary
+- Frontend built (`cd frontend && pnpm build`) — already embedded in binary
 
 ---
 

@@ -81,7 +81,7 @@ You build RUSVEL's SvelteKit 5 frontend. Rules:
 - Svelte 5 patterns: $props(), snippets, $bindable(), $derived
 - No raw Tailwind colors — always design tokens
 
-Always run `npm run check` after changes.
+Always run `pnpm check` after changes.
 ```
 
 **`.claude/agents/test-writer.md`:**
@@ -103,7 +103,7 @@ You write tests for RUSVEL. Patterns:
 - API tests: integration tests with test AppState
 - Frontend: svelte-check type validation
 
-Run tests after writing: `cargo test -p <crate>` or `npm run check`.
+Run tests after writing: `cargo test -p <crate>` or `pnpm check`.
 ```
 
 **`.claude/agents/security-auditor.md`:**
@@ -212,7 +212,7 @@ Hooks enforce RUSVEL's architecture rules **automatically**, without relying on 
       },
       {
         "matcher": "Write|Edit",
-        "command": "if [[ \"$TOOL_INPUT\" == *.svelte || \"$TOOL_INPUT\" == *.ts ]]; then npx prettier --write \"$FILE_PATH\"; fi"
+        "command": "if [[ \"$TOOL_INPUT\" == *.svelte || \"$TOOL_INPUT\" == *.ts ]]; then pnpm exec prettier --write \"$FILE_PATH\"; fi"
       }
     ]
   }

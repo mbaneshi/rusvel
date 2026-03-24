@@ -27,7 +27,7 @@ pub struct SystemStatus {
     pub frontend_check: CommandResult,
 }
 
-/// `POST /api/system/test` — run cargo test + npm run check
+/// `POST /api/system/test` — run cargo test + pnpm check
 pub async fn run_tests(
     State(_state): State<Arc<AppState>>,
 ) -> Result<Json<SystemStatus>, (StatusCode, String)> {
@@ -38,7 +38,7 @@ pub async fn run_tests(
 
     let frontend_dir = format!("{}/frontend", project_dir);
     let frontend_check = if std::path::Path::new(&frontend_dir).exists() {
-        run_command("npx", &["svelte-check"], &frontend_dir).await
+        run_command("pnpm", &["exec", "svelte-check"], &frontend_dir).await
     } else {
         CommandResult {
             success: true,
@@ -65,7 +65,7 @@ pub async fn run_build(
 
     let frontend_dir = format!("{}/frontend", project_dir);
     let frontend = if std::path::Path::new(&frontend_dir).exists() {
-        run_command("npm", &["run", "build"], &frontend_dir).await
+        run_command("pnpm", &["build"], &frontend_dir).await
     } else {
         CommandResult {
             success: true,

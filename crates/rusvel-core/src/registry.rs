@@ -95,7 +95,7 @@ impl DepartmentRegistry {
                     engine_kind: EngineKind::Code,
                     icon: "#".into(),
                     color: "emerald".into(),
-                    system_prompt: "You are the Code department of RUSVEL.\n\nYou have full access to Claude Code tools:\n- Read, Write, Edit files across all project directories\n- Run shell commands (build, test, git, npm, cargo, etc.)\n- Search codebases with grep and glob\n- Fetch web content and search the web\n- Spawn sub-agents for parallel work\n- Manage background tasks\n\nFocus: code intelligence, implementation, debugging, testing, refactoring.\nWhen writing code, follow existing patterns. Be thorough.".into(),
+                    system_prompt: "You are the Code department of RUSVEL.\n\nYou have full access to Claude Code tools:\n- Read, Write, Edit files across all project directories\n- Run shell commands (build, test, git, pnpm, cargo, etc.)\n- Search codebases with grep and glob\n- Fetch web content and search the web\n- Spawn sub-agents for parallel work\n- Manage background tasks\n\nFocus: code intelligence, implementation, debugging, testing, refactoring.\nWhen writing code, follow existing patterns. Be thorough.".into(),
                     capabilities: vec!["code_analysis".into(), "tool_use".into()],
                     tabs: vec!["actions".into(), "agents".into(), "workflows".into(), "skills".into(), "rules".into(), "mcp".into(), "hooks".into(), "dirs".into(), "events".into()],
                     quick_actions: vec![

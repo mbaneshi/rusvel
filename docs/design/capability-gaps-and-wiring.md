@@ -132,7 +132,7 @@ There are 3000+ MCP servers available. The user shouldn't need to know package n
 
 MCP discovery is NOT a standalone feature. It's the core use case of the Capability Engine. The engine uses Claude with WebSearch/WebFetch to:
 1. Search mcp.so / npm for relevant servers
-2. Verify packages exist (`npm view @package/name`)
+2. Verify packages exist (`pnpm view @package/name`)
 3. Generate McpServerConfig JSON
 4. Install into ObjectStore
 

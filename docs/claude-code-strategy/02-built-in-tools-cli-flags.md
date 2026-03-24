@@ -68,8 +68,8 @@ cargo test -p forge-engine           # Test single engine
 cargo run                            # Start API on :3000
 cargo run -- session create "demo"   # Test CLI
 cargo run -- forge mission today     # Test full vertical slice
-cd frontend && npm run check         # Type-check Svelte
-cd frontend && npm run dev           # Start frontend dev server
+cd frontend && pnpm check            # Type-check Svelte
+cd frontend && pnpm dev              # Start frontend dev server
 ```
 
 **Background execution:** Run `cargo test` in background while editing — get notified when done.
@@ -115,7 +115,7 @@ Task 3: "Build GTM pipeline UI" → not started
 
 **Background tasks:** Long-running operations:
 - `cargo test` across all crates (background)
-- `npm run build` for frontend (background)
+- `pnpm build` for frontend (background)
 - Code search across 13,700 lines (background via agent)
 
 ---

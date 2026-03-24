@@ -2,7 +2,7 @@
  * Visual regression tests for all RUSVEL frontend routes.
  *
  * Takes full-page screenshots and compares against baselines.
- * Run `npm run test:e2e:update` to regenerate baselines.
+ * Run `pnpm test:e2e:update` to regenerate baselines.
  */
 
 import { expect } from '@playwright/test';

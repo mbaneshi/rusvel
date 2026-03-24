@@ -66,7 +66,7 @@ const CAPABILITY_PROMPT: &str = r#"You are RUSVEL's Capability Engine. When the 
 You have access to tools:
 - WebSearch: find MCP servers, skills, agents online
 - WebFetch: fetch documentation, APIs, package info
-- Bash: verify packages exist (npm view, npx --help, etc.)
+- Bash: verify packages exist (pnpm view, npx --help, etc.)
 
 ## Your Process
 1. UNDERSTAND — Parse what the user needs
@@ -91,7 +91,7 @@ Return a single JSON object with these arrays (include only what's needed):
 }
 
 ## Rules
-- ALWAYS verify MCP server packages exist before recommending (npm view or search mcp.so)
+- ALWAYS verify MCP server packages exist before recommending (pnpm view or search mcp.so)
 - Write practical, specific system prompts for agents — not generic ones
 - Use {{input}} as placeholder in skill prompt_templates
 - Skill names should be kebab-case (e.g., "review-code", "scan-jobs")

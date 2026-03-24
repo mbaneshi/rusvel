@@ -231,8 +231,8 @@ pub async fn run_visual_tests(
     let project_dir = crate::system::find_project_dir();
     let frontend_dir = format!("{project_dir}/frontend");
 
-    let result = tokio::process::Command::new("npx")
-        .args(["playwright", "test", "--project=visual", "--reporter=json"])
+    let result = tokio::process::Command::new("pnpm")
+        .args(["exec", "playwright", "test", "--project=visual", "--reporter=json"])
         .current_dir(&frontend_dir)
         .output()
         .await

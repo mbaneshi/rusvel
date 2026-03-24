@@ -59,7 +59,7 @@ Wave 3: CONVERGENCE (Days 11-20)  → MCP self-loop, CI/CD, approval flow, front
   "permissions": {
     "allow": [
       "Bash(cargo build*)", "Bash(cargo test*)", "Bash(cargo run*)",
-      "Bash(cargo clippy*)", "Bash(npm run*)", "Bash(cd frontend*)",
+      "Bash(cargo clippy*)", "Bash(pnpm *)", "Bash(cd frontend*)",
       "Bash(git log*)", "Bash(git status*)", "Bash(git diff*)",
       "Read", "Glob", "Grep", "WebSearch"
     ],
@@ -270,7 +270,7 @@ match task.complexity {
 - cargo clippy -- -D warnings
 - cargo test
 - cargo build --release
-- cd frontend && npm ci && npm run check && npm run build
+- cd frontend && pnpm install --frozen-lockfile && pnpm check && pnpm build
 ```
 - Why: Without CI, regressions go unnoticed until manual testing. With CI, every push is verified. One-time setup, permanent value.
 - Effort: 1 hour
@@ -283,11 +283,11 @@ match task.complexity {
 
 **Action 9.3 — Embed frontend via rust-embed**
 - File: `rusvel-app/Cargo.toml` (add rust-embed), `rusvel-api/src/lib.rs` (serve embedded files)
-- Why: Single binary distribution. `./rusvel-app` serves both API and frontend. No separate `npm run dev`. True single-binary experience.
+- Why: Single binary distribution. `./rusvel-app` serves both API and frontend. No separate `pnpm dev`. True single-binary experience.
 - Effort: 2 hours
 
 **Action 9.4 — Create pre-commit git hook**
-- Content: `cargo clippy && cargo test --quiet && cd frontend && npm run check`
+- Content: `cargo clippy && cargo test --quiet && cd frontend && pnpm check`
 - Why: Local quality gate before commits even reach CI. Fast feedback loop.
 - Effort: 15 minutes
 

@@ -25,7 +25,7 @@
 **Terminal integration:**
 - Run `cargo test` from VS Code terminal
 - Claude sees terminal output and can react to failures
-- Run `npm run dev` to preview frontend changes
+- Run `pnpm dev` to preview frontend changes
 
 **Built-in IDE MCP server:**
 - VS Code provides file navigation, diagnostics, and symbol search to Claude
@@ -131,7 +131,7 @@ docs(design): update architecture-v2 with MCP surface
 #!/bin/bash
 cargo clippy -- -D warnings
 cargo test --quiet
-cd frontend && npm run check
+cd frontend && pnpm check
 ```
 
 **`commit-msg`:**

@@ -1,10 +1,11 @@
 # ── Stage 1: Build frontend ──
 FROM node:22-alpine AS frontend
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm build
 
 # ── Stage 2: Build Rust binary ──
 FROM rust:1.87-bookworm AS builder

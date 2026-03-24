@@ -38,6 +38,8 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 5. **Single job queue** for all async work — no per-engine scheduling (ADR-003).
 6. **Human approval gates** on content publishing and outreach (ADR-008).
 7. **Each crate < 2000 lines.** Single responsibility.
+8. **NEVER use npm.** Use `pnpm` for all frontend/Node.js work. (`pnpm install`, `pnpm build`, `pnpm exec`).
+9. **NEVER use pip/pip3/python -m pip.** Use `uv` for all Python work. (`uv run`, `uv add`, `uv sync`).
 
 ## Workspace Layout
 
@@ -116,26 +118,70 @@ rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 - `docs/plans/phase-0-foundation-v2.md` — Current phase milestones
 - `docs/plans/roadmap-v2.md` — 5-phase roadmap
 
+## Frontend (pnpm)
+
+**Package manager: pnpm** (not npm). All frontend commands use `pnpm`.
+
+```bash
+cd frontend
+pnpm install                   # Install dependencies
+pnpm dev                       # Start dev server on :5173
+pnpm build                     # Build for production (output: build/)
+pnpm check                     # TypeScript + Svelte type checking
+pnpm test:e2e                  # Run all E2E tests (Playwright)
+pnpm test:visual               # Run visual regression tests only
+pnpm test:e2e:update           # Update visual baselines
+pnpm test:analyze              # AI-powered visual diff analysis (Claude Vision)
+```
+
 ## Testing
 
 ```bash
-cargo test                     # All 192 tests
+cargo test                     # All 197 tests (Rust)
 cargo test -p rusvel-core      # Single crate
 cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
 cargo test -p content-engine   # Content engine (7 tests)
 cargo test -p harvest-engine   # Harvest engine (12 tests)
 cargo test -p rusvel-db        # DB store (largest suite)
 cargo test -p rusvel-api       # API tests (19 tests)
+pnpm test:visual               # Visual regression tests (Playwright, 16 routes)
 ```
 
-## API Modules (rusvel-api, 44 routes)
+## Visual E2E Testing
+
+Self-correction loop: screenshot -> compare -> Claude Vision analysis -> auto-generate fix skills/rules.
+
+```bash
+pnpm test:visual                                    # Run visual tests
+pnpm test:analyze                                   # Analyze diffs with Claude Vision
+curl -X POST http://localhost:3000/api/system/visual-test   # Run via API
+curl -X POST http://localhost:3000/api/system/visual-report/self-correct  # Auto-fix
+```
+
+MCP tool: `visual_inspect` — run visual tests from Claude sessions.
+
+## API Modules (rusvel-api, 47 routes)
 
 agents, analytics, approvals, build_cmd, capability, chat, config, department,
-help, hook_dispatch, hooks, mcp_servers, routes, rules, skills, workflows
+help, hook_dispatch, hooks, mcp_servers, routes, rules, skills, system,
+visual_report, workflows
+
+## Python Scripts (uv)
+
+**Package manager: uv** (not pip). Python is used for auxiliary scripts only — the app itself is Rust.
+
+```bash
+uv run <script.py>             # Run a script with managed deps
+uv sync                        # Install all deps to .venv
+uv add <package>               # Add a dependency
+uv run --with anthropic ...    # One-off with extra deps
+```
 
 ## Stack
 
 - Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~22k lines Rust)
-- SvelteKit 5, Tailwind CSS 4
+- SvelteKit 5, Tailwind CSS 4, **pnpm** package manager
+- Python scripts: **uv** (pyproject.toml at workspace root)
 - LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented
 - Frontend embedded in binary via rust-embed
+- E2E: Playwright visual regression + Claude Vision analysis

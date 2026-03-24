@@ -108,7 +108,7 @@ user_invocable: true
 Run pre-deployment checks:
 1. `cargo build --release` — clean release build
 2. `cargo test` — all tests pass
-3. `cd frontend && npm run build` — frontend builds
+3. `cd frontend && pnpm build` — frontend builds
 4. `cargo clippy -- -D warnings` — no lint warnings
 5. Check for TODO/FIXME/HACK in changed files
 6. Verify no .env or credentials in tracked files
@@ -232,7 +232,7 @@ Connect these to enhance RUSVEL's capabilities:
       "Bash(cargo test*)",
       "Bash(cargo run*)",
       "Bash(cargo clippy*)",
-      "Bash(npm run*)",
+      "Bash(pnpm *)",
       "Bash(cd frontend*)",
       "Bash(git log*)",
       "Bash(git status*)",

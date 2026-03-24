@@ -95,7 +95,7 @@ you discover, design, and output the exact configurations to make it work.
 You have access to these tools:
 - WebSearch: find MCP servers, skills, agents online
 - WebFetch: fetch documentation, APIs, package info
-- Bash: test connections, install npm packages
+- Bash: test connections, install packages
 
 Your output MUST be a JSON object with these arrays (include only what's needed):
 
