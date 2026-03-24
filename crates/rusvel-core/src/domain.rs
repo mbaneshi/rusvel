@@ -877,6 +877,121 @@ pub struct VectorSearchResult {
 //  Tests
 // ════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════
+//  Flow Engine — DAG workflow definitions and execution
+// ════════════════════════════════════════════════════════════════════
+
+/// A flow definition: a DAG of nodes connected by edges.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowDef {
+    pub id: crate::id::FlowId,
+    pub name: String,
+    pub description: String,
+    pub nodes: Vec<FlowNodeDef>,
+    pub connections: Vec<FlowConnectionDef>,
+    #[serde(default)]
+    pub variables: std::collections::HashMap<String, String>,
+    pub metadata: serde_json::Value,
+}
+
+/// A single node in a flow DAG.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowNodeDef {
+    pub id: crate::id::FlowNodeId,
+    /// Node type: "agent", "code", "condition", "http", etc. (ADR-005: String, not enum)
+    pub node_type: String,
+    pub name: String,
+    /// Node-specific configuration (JSON).
+    #[serde(default)]
+    pub parameters: serde_json::Value,
+    /// Canvas position for visual builder.
+    #[serde(default)]
+    pub position: (f64, f64),
+    /// Error handling behavior for this node.
+    #[serde(default)]
+    pub on_error: FlowErrorBehavior,
+    #[serde(default = "default_metadata")]
+    pub metadata: serde_json::Value,
+}
+
+fn default_metadata() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+/// An edge connecting two nodes in a flow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowConnectionDef {
+    pub source_node: crate::id::FlowNodeId,
+    /// Output port name: "main", "true", "false", "error".
+    #[serde(default = "default_output")]
+    pub source_output: String,
+    pub target_node: crate::id::FlowNodeId,
+    /// Input port name: "main".
+    #[serde(default = "default_output")]
+    pub target_input: String,
+}
+
+fn default_output() -> String {
+    "main".into()
+}
+
+/// How a node handles errors.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FlowErrorBehavior {
+    /// Stop the entire flow on failure (default).
+    #[default]
+    StopFlow,
+    /// Continue executing downstream nodes despite failure.
+    ContinueOnFail,
+    /// Route to the "error" output instead of "main".
+    UseErrorOutput,
+}
+
+/// The status of a flow execution.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FlowExecutionStatus {
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+/// The status of a single node within an execution.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FlowNodeStatus {
+    #[default]
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+    Skipped,
+}
+
+/// A complete flow execution record.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowExecution {
+    pub id: crate::id::FlowExecutionId,
+    pub flow_id: crate::id::FlowId,
+    pub status: FlowExecutionStatus,
+    pub trigger_data: serde_json::Value,
+    pub node_results: std::collections::HashMap<String, FlowNodeResult>,
+    pub started_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+    pub error: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+/// Result of executing a single node.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowNodeResult {
+    pub status: FlowNodeStatus,
+    pub output: Option<serde_json::Value>,
+    pub error: Option<String>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub finished_at: Option<DateTime<Utc>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

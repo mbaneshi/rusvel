@@ -28,6 +28,7 @@ members = [
     "crates/legal-engine",
     "crates/support-engine",
     "crates/infra-engine",
+    "crates/flow-engine",
 
     # ─── Surfaces ───
     "crates/rusvel-api",
@@ -105,6 +106,10 @@ arrow = { version = "53", default-features = false, features = ["json"] }
 arrow-array = "53"
 arrow-schema = "53"
 
+# DAG workflows
+petgraph = "0.7"
+rhai = "1"
+
 # Embed frontend
 rust-embed = { version = "8", features = ["compression"] }
 
@@ -133,6 +138,7 @@ distro-engine = { path = "crates/distro-engine" }
 legal-engine = { path = "crates/legal-engine" }
 support-engine = { path = "crates/support-engine" }
 infra-engine = { path = "crates/infra-engine" }
+flow-engine = { path = "crates/flow-engine" }
 rusvel-api = { path = "crates/rusvel-api" }
 rusvel-cli = { path = "crates/rusvel-cli" }
 rusvel-mcp = { path = "crates/rusvel-mcp" }

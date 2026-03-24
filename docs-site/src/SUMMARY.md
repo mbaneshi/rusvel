@@ -1,0 +1,45 @@
+# Summary
+
+[RUSVEL](./README.md)
+
+---
+
+# Getting Started
+
+- [Installation](./getting-started/installation.md)
+- [First Run](./getting-started/first-run.md)
+- [First Mission](./getting-started/first-mission.md)
+
+# Concepts
+
+- [Sessions](./concepts/sessions.md)
+- [Departments](./concepts/departments.md)
+- [Agents](./concepts/agents.md)
+- [Skills & Rules](./concepts/skills-rules.md)
+- [Workflows](./concepts/workflows.md)
+
+# Departments
+
+- [Forge (Mission)](./departments/forge.md)
+- [Code](./departments/code.md)
+- [Content](./departments/content.md)
+- [Harvest](./departments/harvest.md)
+- [GTM](./departments/gtm.md)
+- [Finance](./departments/finance.md)
+- [Product](./departments/product.md)
+- [Growth](./departments/growth.md)
+- [Distribution](./departments/distro.md)
+- [Legal](./departments/legal.md)
+- [Support](./departments/support.md)
+- [Infra](./departments/infra.md)
+
+# Reference
+
+- [CLI](./reference/cli.md)
+- [API](./reference/api.md)
+- [Configuration](./reference/configuration.md)
+
+# Architecture
+
+- [Overview](./architecture/overview.md)
+- [Decisions (ADRs)](./architecture/decisions.md)

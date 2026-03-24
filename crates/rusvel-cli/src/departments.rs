@@ -10,6 +10,10 @@ use rusvel_core::domain::ObjectFilter;
 use rusvel_core::error::Result;
 use rusvel_core::ports::StoragePort;
 
+use code_engine::CodeEngine;
+use content_engine::ContentEngine;
+use harvest_engine::HarvestEngine;
+
 // ── Department command enum ──────────────────────────────────────
 
 #[derive(Subcommand, Debug)]
@@ -90,6 +94,34 @@ pub enum DeptAction {
         #[arg(short = 'n', long, default_value = "10")]
         limit: usize,
     },
+    /// [Code] Analyze a codebase: parse symbols, build graph, compute metrics.
+    Analyze {
+        /// Path to the repository to analyze.
+        #[arg(default_value = ".")]
+        path: String,
+    },
+    /// [Code] Search indexed symbols by query.
+    Search {
+        /// Search query.
+        query: String,
+        /// Maximum results.
+        #[arg(short = 'n', long, default_value = "20")]
+        limit: usize,
+    },
+    /// [Harvest] Show the opportunity pipeline stats.
+    Pipeline,
+    /// [Content] Draft new content on a topic.
+    Draft {
+        /// Topic for the content.
+        topic: String,
+    },
+}
+
+/// Optional engine references for CLI dispatch.
+pub struct EngineRefs {
+    pub code: Option<Arc<CodeEngine>>,
+    pub content: Option<Arc<ContentEngine>>,
+    pub harvest: Option<Arc<HarvestEngine>>,
 }
 
 // ── Department metadata ──────────────────────────────────────────
@@ -167,7 +199,11 @@ fn dept_meta(dept: &str) -> DeptMeta {
 
 // ── Dispatch ─────────────────────────────────────────────────────
 
-pub async fn handle_dept(cmd: DeptCmd, storage: Arc<dyn StoragePort>) -> Result<()> {
+pub async fn handle_dept(
+    cmd: DeptCmd,
+    storage: Arc<dyn StoragePort>,
+    engines: &EngineRefs,
+) -> Result<()> {
     let (key, action) = match cmd {
         DeptCmd::Finance { action } => ("finance", action),
         DeptCmd::Growth { action } => ("growth", action),
@@ -188,6 +224,71 @@ pub async fn handle_dept(cmd: DeptCmd, storage: Arc<dyn StoragePort>) -> Result<
         DeptAction::List { kind, limit } => dept_list(meta, storage, kind, limit).await,
         DeptAction::Status => dept_status(meta, storage).await,
         DeptAction::Events { limit } => dept_events(meta, storage, limit).await,
+        DeptAction::Analyze { path } => {
+            let engine = engines.code.as_ref().ok_or_else(|| {
+                rusvel_core::error::RusvelError::Config("Code engine not available".into())
+            })?;
+            println!("Analyzing {}...\n", path);
+            let analysis = engine.analyze(std::path::Path::new(&path)).await?;
+            println!("Code Analysis Results");
+            println!("{}", "=".repeat(50));
+            println!("  Symbols:     {}", analysis.symbols.len());
+            println!("  Files:       {}", analysis.metrics.total_files);
+            println!("  Lines:       {}", analysis.metrics.total_lines);
+            println!("  Avg fn len:  {:.1}", analysis.metrics.avg_function_length);
+            if let Some(ref f) = analysis.metrics.largest_function {
+                println!("  Largest fn:  {f}");
+            }
+            Ok(())
+        }
+        DeptAction::Search { query, limit } => {
+            let engine = engines.code.as_ref().ok_or_else(|| {
+                rusvel_core::error::RusvelError::Config("Code engine not available".into())
+            })?;
+            let results = engine.search(&query, limit)?;
+            if results.is_empty() {
+                println!("No results for \"{query}\". Run `rusvel code analyze .` first.");
+                return Ok(());
+            }
+            println!("Search results for \"{query}\":");
+            for r in &results {
+                println!("  {:.2}  {}:{} — {}", r.score, r.file_path, r.line, r.symbol_name);
+            }
+            Ok(())
+        }
+        DeptAction::Pipeline => {
+            let engine = engines.harvest.as_ref().ok_or_else(|| {
+                rusvel_core::error::RusvelError::Config("Harvest engine not available".into())
+            })?;
+            let session_id = crate::load_active_session()?;
+            let stats = engine.pipeline(&session_id).await?;
+            println!("Harvest Pipeline");
+            println!("{}", "=".repeat(40));
+            println!("  Total opportunities: {}", stats.total);
+            for (stage, count) in &stats.by_stage {
+                println!("  {stage:<20} {count:>5}");
+            }
+            Ok(())
+        }
+        DeptAction::Draft { topic } => {
+            let engine = engines.content.as_ref().ok_or_else(|| {
+                rusvel_core::error::RusvelError::Config("Content engine not available".into())
+            })?;
+            let session_id = crate::load_active_session()?;
+            println!("Drafting content about: {topic}...\n");
+            let item = engine
+                .draft(
+                    &session_id,
+                    &topic,
+                    rusvel_core::domain::ContentKind::Blog,
+                )
+                .await?;
+            println!("Content drafted:");
+            println!("  ID:     {}", item.id);
+            println!("  Title:  {}", item.title);
+            println!("  Status: {:?}", item.status);
+            Ok(())
+        }
     }
 }
 

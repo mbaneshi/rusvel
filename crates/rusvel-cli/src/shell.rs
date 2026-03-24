@@ -219,7 +219,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             let action = crate::departments::DeptAction::List { kind, limit };
                             let cmd = dept_to_cmd(dept, action);
                             if let Some(cmd) = cmd {
-                                let _ = departments::handle_dept(cmd, ctx.storage.clone()).await;
+                                let _ = departments::handle_dept(cmd, ctx.storage.clone(), &departments::EngineRefs { code: None, content: None, harvest: None }).await;
                             }
                             continue;
                         }
@@ -227,7 +227,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             let action = crate::departments::DeptAction::Status;
                             let cmd = dept_to_cmd(dept, action);
                             if let Some(cmd) = cmd {
-                                let _ = departments::handle_dept(cmd, ctx.storage.clone()).await;
+                                let _ = departments::handle_dept(cmd, ctx.storage.clone(), &departments::EngineRefs { code: None, content: None, harvest: None }).await;
                             }
                             continue;
                         }
@@ -235,7 +235,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             let action = crate::departments::DeptAction::Events { limit: 10 };
                             let cmd = dept_to_cmd(dept, action);
                             if let Some(cmd) = cmd {
-                                let _ = departments::handle_dept(cmd, ctx.storage.clone()).await;
+                                let _ = departments::handle_dept(cmd, ctx.storage.clone(), &departments::EngineRefs { code: None, content: None, harvest: None }).await;
                             }
                             continue;
                         }
@@ -282,7 +282,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                         for &dept in departments::department_names() {
                             let action = crate::departments::DeptAction::Status;
                             if let Some(cmd) = dept_to_cmd(dept, action) {
-                                let _ = departments::handle_dept(cmd, ctx.storage.clone()).await;
+                                let _ = departments::handle_dept(cmd, ctx.storage.clone(), &departments::EngineRefs { code: None, content: None, harvest: None }).await;
                             }
                         }
                     }
@@ -328,7 +328,7 @@ pub async fn run_shell(ctx: ShellContext) -> Result<()> {
                             _ => crate::departments::DeptAction::Status,
                         };
                         if let Some(cmd) = dept_to_cmd(dept, action) {
-                            let _ = departments::handle_dept(cmd, ctx.storage.clone()).await;
+                            let _ = departments::handle_dept(cmd, ctx.storage.clone(), &departments::EngineRefs { code: None, content: None, harvest: None }).await;
                         }
                     }
                     other => {

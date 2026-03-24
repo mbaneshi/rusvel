@@ -14,6 +14,7 @@ pub mod capability;
 pub mod chat;
 pub mod config;
 pub mod department;
+pub mod engine_routes;
 pub mod help;
 pub mod hook_dispatch;
 pub mod hooks;
@@ -36,7 +37,10 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
+use code_engine::CodeEngine;
+use content_engine::ContentEngine;
 use forge_engine::ForgeEngine;
+use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{EmbeddingPort, EventPort, SessionPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentRegistry;
@@ -44,6 +48,9 @@ use rusvel_core::registry::DepartmentRegistry;
 /// Shared application state injected into all handlers.
 pub struct AppState {
     pub forge: Arc<ForgeEngine>,
+    pub code_engine: Option<Arc<CodeEngine>>,
+    pub content_engine: Option<Arc<ContentEngine>>,
+    pub harvest_engine: Option<Arc<HarvestEngine>>,
     pub sessions: Arc<dyn SessionPort>,
     pub events: Arc<dyn EventPort>,
     pub storage: Arc<dyn StoragePort>,
@@ -171,6 +178,16 @@ pub fn build_router_with_frontend(
                 .delete(workflows::delete_workflow),
         )
         .route("/api/workflows/{id}/run", post(workflows::run_workflow))
+        // Engine-specific routes (Code, Content, Harvest)
+        .route("/api/dept/code/analyze", post(engine_routes::code_analyze))
+        .route("/api/dept/code/search", get(engine_routes::code_search))
+        .route("/api/dept/content/draft", post(engine_routes::content_draft))
+        .route("/api/dept/content/publish", post(engine_routes::content_publish))
+        .route("/api/dept/content/list", get(engine_routes::content_list))
+        .route("/api/dept/harvest/score", post(engine_routes::harvest_score))
+        .route("/api/dept/harvest/proposal", post(engine_routes::harvest_proposal))
+        .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
+        .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
         // Capability Engine
         .route("/api/capability/build", post(capability::build_capability))
         // Analytics

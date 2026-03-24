@@ -823,7 +823,11 @@ async fn main() -> Result<()> {
         memory.clone(),
     ));
 
-    // 4. Build Forge Engine
+    // 4. Build engines
+    let agent_for_content = agent.clone();
+    let agent_for_harvest = agent.clone();
+    let jobs_for_engines = jobs.clone();
+
     let forge = Arc::new(ForgeEngine::new(
         agent,
         events.clone(),
@@ -834,11 +838,32 @@ async fn main() -> Result<()> {
         config,
     ));
 
+    // 4b. Domain engines (Code, Content, Harvest)
+    let code_engine = Arc::new(code_engine::CodeEngine::new(
+        db.clone() as Arc<dyn StoragePort>,
+        events.clone(),
+    ));
+    let content_engine = Arc::new(content_engine::ContentEngine::new(
+        db.clone() as Arc<dyn StoragePort>,
+        events.clone(),
+        agent_for_content,
+        jobs_for_engines,
+    ));
+    let harvest_engine = Arc::new(harvest_engine::HarvestEngine::new(
+        db.clone() as Arc<dyn StoragePort>,
+    )
+        .with_events(events.clone())
+        .with_agent(agent_for_harvest));
+    tracing::info!("Domain engines initialized: Code, Content, Harvest");
+
     // 5. Seed default data (agents, skills, rules) on first run
     let storage_ref: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
     seed_defaults(&storage_ref).await?;
 
     // 6. Spawn background job queue worker
+    let code_engine_worker = code_engine.clone();
+    let content_engine_worker = content_engine.clone();
+    let harvest_engine_worker = harvest_engine.clone();
     let _job_worker = tokio::spawn(async move {
         let job_port = jobs_for_worker;
         loop {
@@ -854,32 +879,81 @@ async fn main() -> Result<()> {
                     let job_id = job.id;
                     tracing::info!(job_id = %job_id, kind = ?job.kind, "Processing job");
 
-                    let result = match job.kind {
+                    let result: std::result::Result<JobResult, rusvel_core::error::RusvelError> = match job.kind {
+                        JobKind::CodeAnalyze => {
+                            let path_str = job.payload.get("path")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(".");
+                            match code_engine_worker.analyze(std::path::Path::new(path_str)).await {
+                                Ok(analysis) => Ok(JobResult {
+                                    output: serde_json::to_value(&analysis).unwrap_or_default(),
+                                    metadata: serde_json::json!({"engine": "code"}),
+                                }),
+                                Err(e) => {
+                                    tracing::error!(job_id = %job_id, error = %e, "Code analyze failed");
+                                    Err(e)
+                                }
+                            }
+                        }
                         JobKind::ContentPublish => {
-                            tracing::info!(job_id = %job_id, "Would publish content (placeholder)");
-                            Ok(JobResult {
-                                output: serde_json::json!({"action": "content_publish", "status": "placeholder"}),
-                                metadata: serde_json::json!({}),
-                            })
+                            let session_id_str = job.payload.get("session_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            let content_id_str = job.payload.get("content_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            let platform_str = job.payload.get("platform")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            if let (Ok(sid), Ok(cid), Ok(platform)) = (
+                                session_id_str.parse::<uuid::Uuid>().map(SessionId::from_uuid),
+                                content_id_str.parse::<uuid::Uuid>().map(rusvel_core::id::ContentId::from_uuid),
+                                serde_json::from_value::<Platform>(serde_json::json!(platform_str)),
+                            ) {
+                                match content_engine_worker.publish(&sid, cid, platform).await {
+                                    Ok(result) => Ok(JobResult {
+                                        output: serde_json::to_value(&result).unwrap_or_default(),
+                                        metadata: serde_json::json!({"engine": "content"}),
+                                    }),
+                                    Err(e) => {
+                                        tracing::error!(job_id = %job_id, error = %e, "Content publish failed");
+                                        Err(e)
+                                    }
+                                }
+                            } else {
+                                Ok(JobResult {
+                                    output: serde_json::json!({"error": "invalid job payload: missing session_id, content_id, or platform"}),
+                                    metadata: serde_json::json!({"engine": "content"}),
+                                })
+                            }
                         }
                         JobKind::HarvestScan => {
-                            tracing::info!(job_id = %job_id, "Would scan opportunities (placeholder)");
-                            Ok(JobResult {
-                                output: serde_json::json!({"action": "harvest_scan", "status": "placeholder"}),
-                                metadata: serde_json::json!({}),
-                            })
+                            let session_id_str = job.payload.get("session_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            if let Ok(sid) = session_id_str.parse::<uuid::Uuid>().map(SessionId::from_uuid) {
+                                match harvest_engine_worker.pipeline(&sid).await {
+                                    Ok(stats) => Ok(JobResult {
+                                        output: serde_json::to_value(&stats).unwrap_or_default(),
+                                        metadata: serde_json::json!({"engine": "harvest"}),
+                                    }),
+                                    Err(e) => {
+                                        tracing::error!(job_id = %job_id, error = %e, "Harvest scan failed");
+                                        Err(e)
+                                    }
+                                }
+                            } else {
+                                Ok(JobResult {
+                                    output: serde_json::json!({"error": "invalid job payload: missing session_id"}),
+                                    metadata: serde_json::json!({"engine": "harvest"}),
+                                })
+                            }
                         }
                         JobKind::OutreachSend => {
-                            tracing::info!(job_id = %job_id, "Would send outreach (placeholder)");
+                            // GTM engine not yet wired — keep as placeholder
+                            tracing::info!(job_id = %job_id, "OutreachSend: GTM engine not yet wired");
                             Ok(JobResult {
-                                output: serde_json::json!({"action": "outreach_send", "status": "placeholder"}),
-                                metadata: serde_json::json!({}),
-                            })
-                        }
-                        JobKind::CodeAnalyze => {
-                            tracing::info!(job_id = %job_id, "Would analyze code (placeholder)");
-                            Ok(JobResult {
-                                output: serde_json::json!({"action": "code_analyze", "status": "placeholder"}),
+                                output: serde_json::json!({"action": "outreach_send", "status": "engine_not_wired"}),
                                 metadata: serde_json::json!({}),
                             })
                         }
@@ -899,7 +973,7 @@ async fn main() -> Result<()> {
                             }
                         }
                         Err(error) => {
-                            if let Err(e) = job_port.fail(&job_id, error).await {
+                            if let Err(e) = job_port.fail(&job_id, error.to_string()).await {
                                 tracing::error!(job_id = %job_id, error = %e, "Failed to mark job failed");
                             }
                         }
@@ -950,7 +1024,12 @@ async fn main() -> Result<()> {
     let storage_port: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
     if cli.command.is_some() {
         // Subcommand present -> CLI handler (includes `shell` command)
-        rusvel_cli::run(cli, forge.clone(), sessions.clone(), storage_port).await?;
+        let engine_refs = rusvel_cli::departments::EngineRefs {
+            code: Some(code_engine.clone()),
+            content: Some(content_engine.clone()),
+            harvest: Some(harvest_engine.clone()),
+        };
+        rusvel_cli::run(cli, forge.clone(), sessions.clone(), storage_port, engine_refs).await?;
     } else if cli.tui {
         // --tui flag: launch TUI dashboard
         tracing::info!("Launching TUI dashboard...");
@@ -1072,6 +1151,9 @@ async fn main() -> Result<()> {
 
         let state = AppState {
             forge: forge.clone(),
+            code_engine: Some(code_engine.clone()),
+            content_engine: Some(content_engine.clone()),
+            harvest_engine: Some(harvest_engine.clone()),
             sessions: sessions.clone(),
             events: events.clone(),
             storage: db.clone() as Arc<dyn StoragePort>,

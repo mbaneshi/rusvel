@@ -95,6 +95,12 @@ define_id!(
     UserId,
     /// Identifies a logical workspace.
     WorkspaceId,
+    /// Identifies a flow (DAG workflow) definition.
+    FlowId,
+    /// Identifies a single execution of a flow.
+    FlowExecutionId,
+    /// Identifies a node within a flow definition.
+    FlowNodeId,
 );
 
 // ── Tests ──────────────────────────────────────────────────────────

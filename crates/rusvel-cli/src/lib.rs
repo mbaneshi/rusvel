@@ -216,6 +216,7 @@ pub async fn run(
     engine: Arc<ForgeEngine>,
     session_port: Arc<dyn SessionPort>,
     storage: Arc<dyn StoragePort>,
+    engines: departments::EngineRefs,
 ) -> Result<()> {
     match cli.command {
         None => {
@@ -235,37 +236,48 @@ pub async fn run(
         }
         // Department commands — convert to DeptCmd and dispatch
         Some(Commands::Finance { action }) => {
-            departments::handle_dept(departments::DeptCmd::Finance { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Finance { action }, storage, &engines)
+                .await
         }
         Some(Commands::Growth { action }) => {
-            departments::handle_dept(departments::DeptCmd::Growth { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Growth { action }, storage, &engines)
+                .await
         }
         Some(Commands::Distro { action }) => {
-            departments::handle_dept(departments::DeptCmd::Distro { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Distro { action }, storage, &engines)
+                .await
         }
         Some(Commands::Legal { action }) => {
-            departments::handle_dept(departments::DeptCmd::Legal { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Legal { action }, storage, &engines)
+                .await
         }
         Some(Commands::Support { action }) => {
-            departments::handle_dept(departments::DeptCmd::Support { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Support { action }, storage, &engines)
+                .await
         }
         Some(Commands::Infra { action }) => {
-            departments::handle_dept(departments::DeptCmd::Infra { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Infra { action }, storage, &engines)
+                .await
         }
         Some(Commands::Product { action }) => {
-            departments::handle_dept(departments::DeptCmd::Product { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Product { action }, storage, &engines)
+                .await
         }
         Some(Commands::Code { action }) => {
-            departments::handle_dept(departments::DeptCmd::Code { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Code { action }, storage, &engines)
+                .await
         }
         Some(Commands::Harvest { action }) => {
-            departments::handle_dept(departments::DeptCmd::Harvest { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Harvest { action }, storage, &engines)
+                .await
         }
         Some(Commands::Content { action }) => {
-            departments::handle_dept(departments::DeptCmd::Content { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Content { action }, storage, &engines)
+                .await
         }
         Some(Commands::Gtm { action }) => {
-            departments::handle_dept(departments::DeptCmd::Gtm { action }, storage).await
+            departments::handle_dept(departments::DeptCmd::Gtm { action }, storage, &engines)
+                .await
         }
     }
 }

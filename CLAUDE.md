@@ -89,6 +89,10 @@ frontend/               SvelteKit 5 + Tailwind 4 (dept/[id], chat, settings, onb
 - **Frontend embedding** — rust-embed compiles `frontend/build/` into binary, ServeDir SPA fallback
 - **Onboarding** — CommandPalette, OnboardingChecklist, ProductTour, DeptHelpTooltip components
 - **Workflow Builder** — AgentNode + WorkflowBuilder visual components in frontend
+- **Domain engines wired** — CodeEngine, ContentEngine, HarvestEngine instantiated in main.rs
+- **Engine API routes** — 9 engine-specific endpoints (`/api/dept/code/analyze`, `/api/dept/content/draft`, etc.)
+- **Engine CLI commands** — `rusvel code analyze`, `rusvel code search`, `rusvel content draft`, `rusvel harvest pipeline`
+- **Job queue worker** — Background worker processes CodeAnalyze, ContentPublish, HarvestScan jobs via real engines
 
 ## Three-Tier CLI Interface
 
@@ -100,14 +104,15 @@ rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 
 **Tier 1 departments:** finance, growth, distro, legal, support, infra, product, code, harvest, content, gtm
 **Tier 1 actions:** `status`, `list [--kind X]`, `events`
+**Engine-specific actions:** `code analyze [path]`, `code search <query>`, `content draft <topic>`, `harvest pipeline`
 **Tier 2 REPL:** `use <dept>` to switch context, Tab completion, Ctrl+R history search
 **Tier 3 TUI:** Tasks, Goals, Pipeline, Events panels — press `q` to exit
 
 ## Not Yet Wired
 
 - **Approval workflow** — ApprovalStatus enum exists, no API/UI yet
-- **7 domain engines** — Have real code but aren't instantiated in main.rs (chat still works via generic agent)
-- **Job queue worker** — JobPort exists but no worker loop processes jobs
+- **8 domain engines** — GTM, Finance, Product, Growth, Distro, Legal, Support, Infra are stubs (chat works via generic agent)
+- **OutreachSend jobs** — GTM engine not yet wired, job handler is placeholder
 
 ## Design Docs
 
@@ -160,11 +165,11 @@ curl -X POST http://localhost:3000/api/system/visual-report/self-correct  # Auto
 
 MCP tool: `visual_inspect` — run visual tests from Claude sessions.
 
-## API Modules (rusvel-api, 47 routes)
+## API Modules (rusvel-api, 56 routes)
 
 agents, analytics, approvals, build_cmd, capability, chat, config, department,
-help, hook_dispatch, hooks, mcp_servers, routes, rules, skills, system,
-visual_report, workflows
+engine_routes, help, hook_dispatch, hooks, mcp_servers, routes, rules, skills,
+system, visual_report, workflows
 
 ## Python Scripts (uv)
 

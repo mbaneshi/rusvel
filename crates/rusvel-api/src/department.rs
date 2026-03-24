@@ -326,6 +326,41 @@ pub async fn dept_chat(
         }
     }
 
+    // Inject engine-specific capabilities into system prompt
+    match engine_kind {
+        rusvel_core::domain::EngineKind::Code => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Department Actions ---\n\
+                 This department has a wired Code Engine with real capabilities:\n\
+                 - Analyze code: POST /api/dept/code/analyze {\"path\": \"<repo_path>\"}\n\
+                 - Search symbols: GET /api/dept/code/search?q=<query>&limit=20\n\
+                 You can direct users to these endpoints or describe the analysis results.",
+            );
+        }
+        rusvel_core::domain::EngineKind::Content => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Department Actions ---\n\
+                 This department has a wired Content Engine with real capabilities:\n\
+                 - Draft content: POST /api/dept/content/draft {session_id, topic, kind}\n\
+                 - Publish content: POST /api/dept/content/publish {session_id, content_id, platform}\n\
+                 - List content: GET /api/dept/content/list?session_id=<id>&status=<filter>\n\
+                 Content kinds: LongForm, Tweet, Thread, LinkedInPost, Blog, VideoScript, Email, Proposal\n\
+                 Platforms: DevTo, Twitter, LinkedIn, Mastodon, Bluesky, Medium",
+            );
+        }
+        rusvel_core::domain::EngineKind::Harvest => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Department Actions ---\n\
+                 This department has a wired Harvest Engine with real capabilities:\n\
+                 - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id}\n\
+                 - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile}\n\
+                 - Pipeline stats: GET /api/dept/harvest/pipeline?session_id=<id>\n\
+                 - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>",
+            );
+        }
+        _ => {}
+    }
+
     // RAG: retrieve relevant knowledge
     if let (Some(embed_port), Some(vector_store)) = (&state.embedding, &state.vector_store)
         && let Ok(query_emb) = embed_port.embed_one(&body.message).await

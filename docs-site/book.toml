@@ -1,0 +1,16 @@
+[book]
+title = "RUSVEL"
+description = "The Solo Builder's AI-Powered Virtual Agency"
+authors = ["Mehdi Baneshi"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/mbaneshi/all-in-one-rusvel"
+edit-url-template = "https://github.com/mbaneshi/all-in-one-rusvel/edit/main/docs-site/{path}"
+site-url = "/all-in-one-rusvel/"
