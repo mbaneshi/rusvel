@@ -9,6 +9,7 @@ members = [
     "crates/rusvel-event",
     "crates/rusvel-memory",
     "crates/rusvel-tool",
+    "crates/rusvel-builtin-tools",
     "crates/rusvel-jobs",
     "crates/rusvel-auth",
     "crates/rusvel-config",
@@ -121,6 +122,7 @@ rusvel-agent = { path = "crates/rusvel-agent" }
 rusvel-event = { path = "crates/rusvel-event" }
 rusvel-memory = { path = "crates/rusvel-memory" }
 rusvel-tool = { path = "crates/rusvel-tool" }
+rusvel-builtin-tools = { path = "crates/rusvel-builtin-tools" }
 rusvel-jobs = { path = "crates/rusvel-jobs" }
 rusvel-auth = { path = "crates/rusvel-auth" }
 rusvel-config = { path = "crates/rusvel-config" }

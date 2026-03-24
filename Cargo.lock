@@ -6151,6 +6151,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusvel-builtin-tools"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "glob",
+ "reqwest",
+ "rusvel-core",
+ "rusvel-tool",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "rusvel-cli"
 version = "0.1.0"
 dependencies = [

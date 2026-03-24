@@ -67,35 +67,51 @@ impl AgentRuntime {
         }
     }
 
-    /// Build the initial [`LlmRequest`] from config instructions + user input.
-    fn build_request(config: &AgentConfig, messages: &[LlmMessage]) -> LlmRequest {
+    /// Build an [`LlmRequest`] from config, messages, and available tool definitions.
+    fn build_request(
+        config: &AgentConfig,
+        messages: &[LlmMessage],
+        tool_defs: &[ToolDefinition],
+    ) -> LlmRequest {
         let model = config.model.clone().unwrap_or_else(|| ModelRef {
             provider: ModelProvider::Claude,
             model: "claude-sonnet-4-20250514".into(),
         });
 
+        // Convert ToolDefinitions to the JSON Schema format LLM providers expect.
+        let tools: Vec<serde_json::Value> = tool_defs
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.parameters,
+                })
+            })
+            .collect();
+
         LlmRequest {
             model,
             messages: messages.to_vec(),
-            tools: vec![],
+            tools,
             temperature: None,
             max_tokens: None,
             metadata: serde_json::json!({}),
         }
     }
 
-    /// Extract tool name and arguments from the LLM response content.
+    /// Extract the first tool call from an LLM response.
     ///
-    /// Expects the response metadata to carry `tool_name` and `tool_args`
-    /// fields when `finish_reason == ToolUse`.
-    fn extract_tool_call(response: &LlmResponse) -> Option<(String, serde_json::Value)> {
-        let name = response.metadata.get("tool_name")?.as_str()?;
-        let args = response
-            .metadata
-            .get("tool_args")
-            .cloned()
-            .unwrap_or(serde_json::json!({}));
-        Some((name.to_string(), args))
+    /// Scans `Part::ToolCall` variants in the response content.
+    fn extract_tool_call(
+        response: &LlmResponse,
+    ) -> Option<(String, String, serde_json::Value)> {
+        for part in &response.content.parts {
+            if let Part::ToolCall { id, name, args } = part {
+                return Some((id.clone(), name.clone(), args.clone()));
+            }
+        }
+        None
     }
 }
 
@@ -154,6 +170,9 @@ impl AgentPort for AgentRuntime {
         let mut total_usage = LlmUsage::default();
         let mut tool_calls: u32 = 0;
 
+        // Resolve available tool definitions once before the loop.
+        let tool_defs = self.tools.list();
+
         // ── Agent loop ───────────────────────────────────────────────
         for iteration in 0..MAX_ITERATIONS {
             debug!(%run_id, iteration, "agent loop iteration");
@@ -168,7 +187,7 @@ impl AgentPort for AgentRuntime {
                 }
             }
 
-            let request = Self::build_request(&config, &messages);
+            let request = Self::build_request(&config, &messages, &tool_defs);
             let response = self.llm.generate(request).await?;
 
             // Accumulate usage.
@@ -199,28 +218,52 @@ impl AgentPort for AgentRuntime {
                         s.status = AgentStatus::AwaitingTool;
                     });
 
-                    let (tool_name, tool_args) =
+                    let (tool_call_id, tool_name, tool_args) =
                         Self::extract_tool_call(&response).ok_or_else(|| {
                             RusvelError::Agent(
-                                "ToolUse finish_reason but no tool call in metadata".into(),
+                                "ToolUse finish_reason but no Part::ToolCall found".into(),
                             )
                         })?;
 
                     debug!(%run_id, %tool_name, "calling tool");
 
-                    // Append the assistant message.
+                    // Append the assistant message (includes the ToolCall part).
                     messages.push(LlmMessage {
                         role: LlmRole::Assistant,
                         content: response.content,
                     });
 
-                    let tool_result = self.tools.call(&tool_name, tool_args).await?;
+                    // Execute the tool.
+                    let tool_result = self.tools.call(&tool_name, tool_args).await;
                     tool_calls += 1;
 
-                    // Append tool result as a Tool message.
+                    // Build a ToolResult part with the proper tool_call_id.
+                    let (result_text, is_error) = match &tool_result {
+                        Ok(r) => {
+                            let text = r
+                                .output
+                                .parts
+                                .iter()
+                                .filter_map(|p| match p {
+                                    Part::Text(t) => Some(t.as_str()),
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>()
+                                .join("");
+                            (text, !r.success)
+                        }
+                        Err(e) => (format!("Tool error: {e}"), true),
+                    };
+
                     messages.push(LlmMessage {
                         role: LlmRole::Tool,
-                        content: tool_result.output,
+                        content: Content {
+                            parts: vec![Part::ToolResult {
+                                tool_call_id,
+                                content: result_text,
+                                is_error,
+                            }],
+                        },
                     });
 
                     // Transition back to Running.
@@ -392,16 +435,19 @@ mod tests {
 
     fn tool_use_response(tool_name: &str) -> LlmResponse {
         LlmResponse {
-            content: Content::text("I need to call a tool"),
+            content: Content {
+                parts: vec![Part::ToolCall {
+                    id: format!("call_{tool_name}"),
+                    name: tool_name.into(),
+                    args: serde_json::json!({"query": "test"}),
+                }],
+            },
             finish_reason: FinishReason::ToolUse,
             usage: LlmUsage {
                 input_tokens: 10,
                 output_tokens: 5,
             },
-            metadata: serde_json::json!({
-                "tool_name": tool_name,
-                "tool_args": {"query": "test"},
-            }),
+            metadata: serde_json::json!({}),
         }
     }
 
