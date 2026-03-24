@@ -1,14 +1,14 @@
 # PROJECT_CONTEXT.md
 
-Authoritative snapshot of the **all-in-one-rusvel** / **RUSVEL** workspace: purpose, architecture, crates, stack, data flow, decisions, state, and how to work on it. Counts and membership are taken from the root `Cargo.toml` workspace list unless noted.
+Authoritative snapshot of the **rusvel** / **RUSVEL** workspace: purpose, architecture, crates, stack, data flow, decisions, state, and how to work on it. Counts and membership are taken from the root `Cargo.toml` workspace list unless noted.
 
 ---
 
 ## 1. Project Overview
 
-### What is Rusvel / all-in-one-rusvel?
+### What is Rusvel / rusvel?
 
-**RUSVEL** is a **single Rust binary** that bundles a multi-department “virtual agency”: AI-assisted workflows across code, content, opportunity discovery, go-to-market, and seven additional business domains. The repository **all-in-one-rusvel** is the monorepo for that product: Rust workspace + embedded SvelteKit frontend + auxiliary Python tooling.
+**RUSVEL** is a **single Rust binary** that bundles a multi-department “virtual agency”: AI-assisted workflows across code, content, opportunity discovery, go-to-market, and seven additional business domains. The repository **rusvel** is the monorepo for that product: Rust workspace + embedded SvelteKit frontend + auxiliary Python tooling.
 
 ### What problem does it solve?
 

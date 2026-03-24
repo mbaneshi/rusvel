@@ -485,7 +485,7 @@ rusvel-app (binary, composition root)
 ## Workspace (updated)
 
 ```
-all-in-one-rusvel/
+rusvel/
 ├── crates/
 │   ├── rusvel-core/        ← 10 port traits + shared domain types + DepartmentRegistry
 │   ├── rusvel-db/          ← SQLite WAL + 5 canonical stores

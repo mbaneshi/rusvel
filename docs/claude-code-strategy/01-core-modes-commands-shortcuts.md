@@ -18,7 +18,7 @@ RUSVEL's vision is a **self-aware, self-building system**. Claude Code isn't jus
 
 **RUSVEL-specific workflow:**
 ```bash
-claude                              # Start session in /all-in-one-rusvel
+claude                              # Start session in /rusvel
 # → CLAUDE.md loads automatically (architecture rules, conventions)
 # → Auto-memory recalls Mehdi's preferences, strategy, prior decisions
 # → Full codebase context available

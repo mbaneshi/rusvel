@@ -61,6 +61,36 @@ test.describe('Visual Regression — Core Routes', () => {
 	});
 });
 
+test.describe('Visual Regression — RusvelBase / Database', () => {
+	test.beforeEach(async ({ page }) => {
+		await setupSession(page);
+	});
+
+	test('database schema /database/schema', async ({ page }) => {
+		await navigateAndWait(page, '/database/schema');
+		await expect(page).toHaveScreenshot('database-schema.png', {
+			fullPage: true,
+			maxDiffPixelRatio: 0.05
+		});
+	});
+
+	test('database tables /database/tables', async ({ page }) => {
+		await navigateAndWait(page, '/database/tables');
+		await expect(page).toHaveScreenshot('database-tables.png', {
+			fullPage: true,
+			maxDiffPixelRatio: 0.05
+		});
+	});
+
+	test('database sql /database/sql', async ({ page }) => {
+		await navigateAndWait(page, '/database/sql');
+		await expect(page).toHaveScreenshot('database-sql.png', {
+			fullPage: true,
+			maxDiffPixelRatio: 0.05
+		});
+	});
+});
+
 test.describe('Visual Regression — Department Pages', () => {
 	test.beforeEach(async ({ page }) => {
 		await setupSession(page);

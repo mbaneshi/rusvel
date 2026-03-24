@@ -65,7 +65,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "column_decltype"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }

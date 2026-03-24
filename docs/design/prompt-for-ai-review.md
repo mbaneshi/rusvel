@@ -108,7 +108,7 @@ $ rusvel code analyze .     → analyze current codebase
 ## Workspace Structure
 
 ```
-all-in-one-rusvel/
+rusvel/
 ├── crates/
 │   ├── rusvel-core/        ← ports (traits only, zero deps)
 │   ├── rusvel-db/          ← StoragePort adapter (SQLite WAL)

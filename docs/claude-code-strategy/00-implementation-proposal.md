@@ -208,7 +208,7 @@ test-files.md       → "mock ports for engines, in-memory SQLite for DB"
     "rusvel": {
       "command": "cargo",
       "args": ["run", "--", "--mcp"],
-      "cwd": "/Users/bm/all-in-one-rusvel"
+      "cwd": "/Users/bm/rusvel"
     }
   }
 }

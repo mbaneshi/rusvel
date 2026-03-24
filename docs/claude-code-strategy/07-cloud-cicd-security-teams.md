@@ -157,7 +157,7 @@ RUSVEL handles sensitive data across multiple engines:
   "sandbox": {
     "enabled": true,
     "allowPaths": [
-      "/Users/bm/all-in-one-rusvel/",
+      "/Users/bm/rusvel/",
       "/Users/bm/.rusvel/"
     ]
   }

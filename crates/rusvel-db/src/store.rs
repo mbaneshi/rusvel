@@ -19,7 +19,59 @@ use rusvel_core::{
 };
 use rusvel_core::{EventId, JobId, RunId, SessionId, ThreadId};
 
+use serde::Serialize;
+
 use crate::migrations;
+
+// ════════════════════════════════════════════════════════════════════
+//  Schema introspection types
+// ════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TableInfo {
+    pub name: String,
+    pub columns: Vec<ColumnInfo>,
+    pub indexes: Vec<IndexInfo>,
+    pub foreign_keys: Vec<ForeignKeyInfo>,
+    pub row_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ColumnInfo {
+    pub name: String,
+    pub col_type: String,
+    pub nullable: bool,
+    pub default_value: Option<String>,
+    pub primary_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct IndexInfo {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub unique: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ForeignKeyInfo {
+    pub from_column: String,
+    pub to_table: String,
+    pub to_column: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SqlResult {
+    pub columns: Vec<SqlColumn>,
+    pub rows: Vec<Vec<serde_json::Value>>,
+    pub row_count: usize,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SqlColumn {
+    pub name: String,
+    pub col_type: String,
+}
 
 // ════════════════════════════════════════════════════════════════════
 //  Database
@@ -70,6 +122,247 @@ impl Database {
     ) -> rusvel_core::Result<R> {
         let guard = self.conn();
         f(&guard)
+    }
+
+    // ── Schema introspection ─────────────────────────────────────
+
+    /// List all user tables with row counts.
+    pub fn list_tables(&self) -> rusvel_core::Result<Vec<TableInfo>> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let names: Vec<String> = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|e| RusvelError::Storage(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(stmt);
+
+        let mut tables = Vec::new();
+        for name in names {
+            tables.push(self.table_info_inner(&conn, &name)?);
+        }
+        Ok(tables)
+    }
+
+    /// Get detailed info for a single table.
+    pub fn get_table_info(&self, name: &str) -> rusvel_core::Result<TableInfo> {
+        // Validate table name exists
+        let conn = self.conn();
+        let exists: bool = conn
+            .query_row(
+                "SELECT count(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                [name],
+                |row| row.get(0),
+            )
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        if !exists {
+            return Err(RusvelError::NotFound {
+                kind: "table".into(),
+                id: name.into(),
+            });
+        }
+        self.table_info_inner(&conn, name)
+    }
+
+    fn table_info_inner(
+        &self,
+        conn: &Connection,
+        table: &str,
+    ) -> rusvel_core::Result<TableInfo> {
+        // Columns via PRAGMA table_info
+        let mut col_stmt = conn
+            .prepare(&format!("PRAGMA table_info('{table}')"))
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let columns: Vec<ColumnInfo> = col_stmt
+            .query_map([], |row| {
+                Ok(ColumnInfo {
+                    name: row.get(1)?,
+                    col_type: row.get::<_, String>(2).unwrap_or_default(),
+                    nullable: row.get::<_, i32>(3).unwrap_or(1) == 0,
+                    default_value: row.get(4).ok(),
+                    primary_key: row.get::<_, i32>(5).unwrap_or(0) != 0,
+                })
+            })
+            .map_err(|e| RusvelError::Storage(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Indexes via PRAGMA index_list + index_info
+        let mut idx_stmt = conn
+            .prepare(&format!("PRAGMA index_list('{table}')"))
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let idx_list: Vec<(String, bool)> = idx_stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i32>(2).unwrap_or(0) != 0,
+                ))
+            })
+            .map_err(|e| RusvelError::Storage(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(idx_stmt);
+
+        let mut indexes = Vec::new();
+        for (idx_name, unique) in &idx_list {
+            let mut info_stmt = conn
+                .prepare(&format!("PRAGMA index_info('{idx_name}')"))
+                .map_err(|e| RusvelError::Storage(e.to_string()))?;
+            let cols: Vec<String> = info_stmt
+                .query_map([], |row| row.get(2))
+                .map_err(|e| RusvelError::Storage(e.to_string()))?
+                .filter_map(|r| r.ok())
+                .collect();
+            indexes.push(IndexInfo {
+                name: idx_name.clone(),
+                columns: cols,
+                unique: *unique,
+            });
+        }
+
+        // Foreign keys via PRAGMA foreign_key_list
+        let mut fk_stmt = conn
+            .prepare(&format!("PRAGMA foreign_key_list('{table}')"))
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        let foreign_keys: Vec<ForeignKeyInfo> = fk_stmt
+            .query_map([], |row| {
+                Ok(ForeignKeyInfo {
+                    to_table: row.get(2)?,
+                    from_column: row.get(3)?,
+                    to_column: row.get(4)?,
+                })
+            })
+            .map_err(|e| RusvelError::Storage(e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Row count
+        let row_count: u64 = conn
+            .query_row(&format!("SELECT count(*) FROM \"{table}\""), [], |row| {
+                row.get(0)
+            })
+            .unwrap_or(0);
+
+        Ok(TableInfo {
+            name: table.to_string(),
+            columns,
+            indexes,
+            foreign_keys,
+            row_count,
+        })
+    }
+
+    /// Get paginated rows from a table.
+    pub fn get_table_rows(
+        &self,
+        table: &str,
+        limit: u32,
+        offset: u32,
+        order: Option<&str>,
+        select: Option<&str>,
+    ) -> rusvel_core::Result<SqlResult> {
+        // Validate table exists
+        let conn = self.conn();
+        let exists: bool = conn
+            .query_row(
+                "SELECT count(*) > 0 FROM sqlite_master WHERE type='table' AND name = ?1",
+                [table],
+                |row| row.get(0),
+            )
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+        if !exists {
+            return Err(RusvelError::NotFound {
+                kind: "table".into(),
+                id: table.into(),
+            });
+        }
+
+        let cols = select.unwrap_or("*");
+        let order_clause = order
+            .map(|o| format!(" ORDER BY {o}"))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "SELECT {cols} FROM \"{table}\"{order_clause} LIMIT {limit} OFFSET {offset}"
+        );
+        self.execute_sql_inner(&conn, &sql)
+    }
+
+    /// Execute an arbitrary SQL query (read-only by default).
+    pub fn execute_sql(&self, sql: &str) -> rusvel_core::Result<SqlResult> {
+        let conn = self.conn();
+        self.execute_sql_inner(&conn, sql)
+    }
+
+    fn execute_sql_inner(
+        &self,
+        conn: &Connection,
+        sql: &str,
+    ) -> rusvel_core::Result<SqlResult> {
+        let start = std::time::Instant::now();
+        let mut stmt = conn
+            .prepare(sql)
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+
+        let col_count = stmt.column_count();
+        let columns: Vec<SqlColumn> = (0..col_count)
+            .map(|i| SqlColumn {
+                name: stmt.column_name(i).unwrap_or("?").to_string(),
+                col_type: String::new(),
+            })
+            .collect();
+
+        let mut rows: Vec<Vec<serde_json::Value>> = Vec::new();
+        let mut raw_rows = stmt
+            .query([])
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+
+        while let Some(row) = raw_rows
+            .next()
+            .map_err(|e| RusvelError::Storage(e.to_string()))?
+        {
+            let mut vals = Vec::new();
+            for i in 0..col_count {
+                let val = row_value_to_json(row, i);
+                vals.push(val);
+            }
+            rows.push(vals);
+        }
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let row_count = rows.len();
+
+        Ok(SqlResult {
+            columns,
+            rows,
+            row_count,
+            duration_ms,
+        })
+    }
+}
+
+/// Convert a rusqlite row value at a given index to a serde_json::Value.
+fn row_value_to_json(row: &rusqlite::Row<'_>, idx: usize) -> serde_json::Value {
+    use rusqlite::types::ValueRef;
+    match row.get_ref(idx) {
+        Ok(ValueRef::Null) => serde_json::Value::Null,
+        Ok(ValueRef::Integer(i)) => serde_json::json!(i),
+        Ok(ValueRef::Real(f)) => serde_json::json!(f),
+        Ok(ValueRef::Text(s)) => {
+            let s = String::from_utf8_lossy(s);
+            // Try to parse as JSON if it looks like JSON
+            if (s.starts_with('{') || s.starts_with('['))
+                && let Ok(v) = serde_json::from_str::<serde_json::Value>(&s)
+            {
+                v
+            } else {
+                serde_json::Value::String(s.into_owned())
+            }
+        }
+        Ok(ValueRef::Blob(b)) => serde_json::json!(format!("<blob {}B>", b.len())),
+        Err(_) => serde_json::Value::Null,
     }
 }
 

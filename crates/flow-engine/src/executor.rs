@@ -1,12 +1,10 @@
 //! DAG executor — builds a petgraph from a FlowDef and walks it.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::{EdgeRef, Topo};
-use tokio::sync::Mutex;
 
 use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
@@ -22,26 +20,18 @@ pub async fn execute_flow(
 ) -> Result<FlowExecution> {
     let exec_id = FlowExecutionId::new();
     let started_at = Utc::now();
-    let node_results: Arc<Mutex<HashMap<String, FlowNodeResult>>> =
-        Arc::new(Mutex::new(HashMap::new()));
 
-    // Map node IDs to graph indices
+    // Build the graph
     let mut graph: StableDiGraph<FlowNodeId, String> = StableDiGraph::new();
     let mut id_to_index: HashMap<FlowNodeId, NodeIndex> = HashMap::new();
     let mut id_to_node: HashMap<FlowNodeId, &FlowNodeDef> = HashMap::new();
-    // Map from node ID string (for expression resolution) to FlowNodeId
-    let mut name_to_id: HashMap<String, FlowNodeId> = HashMap::new();
 
     for node in &flow.nodes {
         let idx = graph.add_node(node.id);
         id_to_index.insert(node.id, idx);
         id_to_node.insert(node.id, node);
-        name_to_id.insert(node.id.to_string(), node.id);
-        // Also allow lookup by node name
-        name_to_id.insert(node.name.clone(), node.id);
     }
 
-    // Add edges
     for conn in &flow.connections {
         if let (Some(&src_idx), Some(&tgt_idx)) = (
             id_to_index.get(&conn.source_node),
@@ -51,15 +41,16 @@ pub async fn execute_flow(
         }
     }
 
-    // Detect cycles
     if petgraph::algo::is_cyclic_directed(&graph) {
         return Err(RusvelError::Validation("Flow contains a cycle".into()));
     }
 
-    // Topological walk
-    let outputs: Arc<Mutex<HashMap<FlowNodeId, serde_json::Value>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    // State: node outputs and results (no mutex needed — sequential walk)
+    let mut outputs: HashMap<FlowNodeId, serde_json::Value> = HashMap::new();
+    let mut node_results: HashMap<String, FlowNodeResult> = HashMap::new();
+    let mut skipped: HashSet<FlowNodeId> = HashSet::new();
 
+    // Walk in topological order
     let mut topo = Topo::new(&graph);
     while let Some(node_idx) = topo.next(&graph) {
         let node_id = graph[node_idx];
@@ -68,36 +59,31 @@ pub async fn execute_flow(
             None => continue,
         };
 
-        // Mark as running
-        {
-            let mut results = node_results.lock().await;
-            results.insert(
+        // Skip if marked by a condition branch
+        if skipped.contains(&node_id) {
+            node_results.insert(
                 node_id.to_string(),
                 FlowNodeResult {
-                    status: FlowNodeStatus::Running,
+                    status: FlowNodeStatus::Skipped,
                     output: None,
                     error: None,
-                    started_at: Some(Utc::now()),
+                    started_at: None,
                     finished_at: None,
                 },
             );
+            continue;
         }
 
         // Gather inputs from upstream nodes
         let mut inputs: HashMap<String, serde_json::Value> = HashMap::new();
         for edge in graph.edges_directed(node_idx, petgraph::Direction::Incoming) {
             let source_id = graph[edge.source()];
-            let output_name = edge.weight();
-            let outs = outputs.lock().await;
-            if let Some(data) = outs.get(&source_id) {
-                // Check if this edge matches the output that was produced
+            if let Some(data) = outputs.get(&source_id) {
                 inputs.insert(source_id.to_string(), data.clone());
             }
-            drop(outs);
-            let _ = output_name; // used for routing in connection matching
         }
 
-        // If no upstream inputs, use trigger data
+        // Root nodes get trigger data
         if inputs.is_empty() {
             inputs.insert("trigger".into(), trigger_data.clone());
         }
@@ -106,17 +92,6 @@ pub async fn execute_flow(
         let handler = match registry.get(&node_def.node_type) {
             Some(h) => h,
             None => {
-                let mut results = node_results.lock().await;
-                results.insert(
-                    node_id.to_string(),
-                    FlowNodeResult {
-                        status: FlowNodeStatus::Failed,
-                        output: None,
-                        error: Some(format!("Unknown node type: {}", node_def.node_type)),
-                        started_at: Some(Utc::now()),
-                        finished_at: Some(Utc::now()),
-                    },
-                );
                 return Err(RusvelError::Internal(format!(
                     "Unknown node type: {}",
                     node_def.node_type
@@ -132,11 +107,8 @@ pub async fn execute_flow(
 
         match handler.execute(&ctx).await {
             Ok(output) => {
-                // Store output for downstream nodes
-                outputs.lock().await.insert(node_id, output.data.clone());
-
-                let mut results = node_results.lock().await;
-                results.insert(
+                outputs.insert(node_id, output.data.clone());
+                node_results.insert(
                     node_id.to_string(),
                     FlowNodeResult {
                         status: FlowNodeStatus::Succeeded,
@@ -147,27 +119,17 @@ pub async fn execute_flow(
                     },
                 );
 
-                // For condition nodes, skip edges that don't match the output_name
+                // Condition routing: mark non-matching branches as skipped
                 if node_def.node_type == "condition" {
-                    // Mark downstream nodes on non-matching branches as skipped
                     for edge in graph.edges_directed(node_idx, petgraph::Direction::Outgoing) {
-                        let edge_output = edge.weight();
-                        if *edge_output != output.output_name {
-                            let target_id = graph[edge.target()];
-                            mark_subtree_skipped(
-                                &graph,
-                                edge.target(),
-                                &node_results,
-                            )
-                            .await;
-                            let _ = target_id;
+                        if *edge.weight() != output.output_name {
+                            mark_skipped(&graph, edge.target(), &mut skipped);
                         }
                     }
                 }
             }
             Err(e) => {
-                let mut results = node_results.lock().await;
-                results.insert(
+                node_results.insert(
                     node_id.to_string(),
                     FlowNodeResult {
                         status: FlowNodeStatus::Failed,
@@ -185,51 +147,37 @@ pub async fn execute_flow(
                             flow_id: flow.id,
                             status: FlowExecutionStatus::Failed,
                             trigger_data,
-                            node_results: results.clone(),
+                            node_results,
                             started_at,
                             finished_at: Some(Utc::now()),
                             error: Some(e.to_string()),
                             metadata: serde_json::json!({}),
                         });
                     }
-                    FlowErrorBehavior::ContinueOnFail => {
-                        // Continue to next node
-                    }
+                    FlowErrorBehavior::ContinueOnFail => {}
                     FlowErrorBehavior::UseErrorOutput => {
-                        // Store error as output for "error" connections
-                        outputs.lock().await.insert(
-                            node_id,
-                            serde_json::json!({"error": e.to_string()}),
-                        );
+                        outputs
+                            .insert(node_id, serde_json::json!({"error": e.to_string()}));
                     }
                 }
             }
         }
-
-        // Skip nodes already marked as skipped
-        let results = node_results.lock().await;
-        if let Some(r) = results.get(&node_id.to_string()) {
-            if r.status == FlowNodeStatus::Skipped {
-                continue;
-            }
-        }
     }
 
-    let final_results = node_results.lock().await.clone();
-    let all_succeeded = final_results
+    let all_ok = node_results
         .values()
         .all(|r| r.status == FlowNodeStatus::Succeeded || r.status == FlowNodeStatus::Skipped);
 
     Ok(FlowExecution {
         id: exec_id,
         flow_id: flow.id,
-        status: if all_succeeded {
+        status: if all_ok {
             FlowExecutionStatus::Succeeded
         } else {
             FlowExecutionStatus::Failed
         },
         trigger_data,
-        node_results: final_results,
+        node_results,
         started_at,
         finished_at: Some(Utc::now()),
         error: None,
@@ -237,27 +185,16 @@ pub async fn execute_flow(
     })
 }
 
-/// Recursively mark all downstream nodes as skipped.
-async fn mark_subtree_skipped(
+/// Recursively mark a node and all its downstream descendants as skipped.
+fn mark_skipped(
     graph: &StableDiGraph<FlowNodeId, String>,
-    start: NodeIndex,
-    results: &Arc<Mutex<HashMap<String, FlowNodeResult>>>,
+    node_idx: NodeIndex,
+    skipped: &mut HashSet<FlowNodeId>,
 ) {
-    let node_id = graph[start];
-    let mut r = results.lock().await;
-    r.insert(
-        node_id.to_string(),
-        FlowNodeResult {
-            status: FlowNodeStatus::Skipped,
-            output: None,
-            error: None,
-            started_at: None,
-            finished_at: None,
-        },
-    );
-    drop(r);
-
-    for edge in graph.edges_directed(start, petgraph::Direction::Outgoing) {
-        Box::pin(mark_subtree_skipped(graph, edge.target(), results)).await;
+    let node_id = graph[node_idx];
+    if skipped.insert(node_id) {
+        for edge in graph.edges_directed(node_idx, petgraph::Direction::Outgoing) {
+            mark_skipped(graph, edge.target(), skipped);
+        }
     }
 }

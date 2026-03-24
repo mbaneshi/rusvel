@@ -263,8 +263,8 @@ impl RusvelMcp {
                 // Find project dir
                 let project_dir = if std::path::Path::new("frontend").exists() {
                     "frontend".to_string()
-                } else if std::path::Path::new("/Users/bm/all-in-one-rusvel/frontend").exists() {
-                    "/Users/bm/all-in-one-rusvel/frontend".to_string()
+                } else if std::path::Path::new("/Users/bm/rusvel/frontend").exists() {
+                    "/Users/bm/rusvel/frontend".to_string()
                 } else {
                     return Err(McpError::InvalidParams("Cannot find frontend directory".into()));
                 };

@@ -97,7 +97,7 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 ## Workspace Layout
 
 ```
-all-in-one-rusvel/
+rusvel/
 ├── crates/
 │   ├── rusvel-core/        10 port traits + shared domain types
 │   ├── rusvel-db/          SQLite WAL + 5 canonical stores

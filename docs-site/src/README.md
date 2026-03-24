@@ -8,8 +8,8 @@ RUSVEL is an AI-powered virtual agency built with **Rust + SvelteKit**. It gives
 ## Quick Start
 
 ```bash
-git clone https://github.com/mbaneshi/all-in-one-rusvel
-cd all-in-one-rusvel
+git clone https://github.com/mbaneshi/rusvel
+cd rusvel
 cargo run
 # Open http://localhost:3000
 ```

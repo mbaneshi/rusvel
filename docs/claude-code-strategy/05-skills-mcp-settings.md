@@ -153,7 +153,7 @@ if args.mcp {
     "rusvel": {
       "command": "cargo",
       "args": ["run", "--", "--mcp"],
-      "cwd": "/Users/bm/all-in-one-rusvel"
+      "cwd": "/Users/bm/rusvel"
     }
   }
 }

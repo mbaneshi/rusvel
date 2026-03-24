@@ -271,3 +271,19 @@ async fn publish_uses_mock_platform_after_approve() {
     assert_eq!(pub_st, StatusCode::OK);
     assert_eq!(mock_tw.published_items().len(), 1);
 }
+
+#[tokio::test]
+async fn get_db_tables_lists_user_tables() {
+    let (mut router, _, _) = test_router().await;
+    let (status, body) = json_request(&mut router, "GET", "/api/db/tables", None).await;
+    assert_eq!(status, StatusCode::OK);
+    let tables: Vec<Value> = serde_json::from_slice(&body).expect("json array");
+    let names: Vec<&str> = tables
+        .iter()
+        .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+        .collect();
+    assert!(
+        names.iter().any(|n| *n == "sessions" || *n == "events"),
+        "expected core tables, got {names:?}"
+    );
+}

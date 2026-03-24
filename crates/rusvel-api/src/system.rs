@@ -262,7 +262,7 @@ pub fn find_project_dir() -> String {
     // Try common locations
     for path in &[
         std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
-        "/Users/bm/all-in-one-rusvel".into(),
+        "/Users/bm/rusvel".into(),
     ] {
         if std::path::Path::new(path).join("Cargo.toml").exists() {
             return path.clone();

@@ -6,7 +6,7 @@
 ## Quick Commands
 
 ```bash
-cargo build                    # Build all crates (27 crates)
+cargo build                    # Build all crates (30 crates)
 cargo test                     # Run all tests (197 tests)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
@@ -67,6 +67,7 @@ crates/
 ├── legal-engine/       Contract drafting, compliance checks, IP management
 ├── support-engine/     Ticket management, knowledge base, NPS tracking
 ├── infra-engine/       Deployment, monitoring, incident response
+├── flow-engine/        DAG workflow engine: petgraph executor, code/condition/agent nodes
 ├── rusvel-cli/         3-tier CLI: one-shot commands + REPL shell (reedline) + 11 dept subcommands
 ├── rusvel-api/         Axum HTTP: 44 routes, 16 modules (dept, chat, CRUD, analytics, capability)
 ├── rusvel-mcp/         MCP server (stdio JSON-RPC) — wired via --mcp flag
@@ -93,6 +94,7 @@ frontend/               SvelteKit 5 + Tailwind 4 (dept/[id], chat, settings, onb
 - **Engine API routes** — 9 engine-specific endpoints (`/api/dept/code/analyze`, `/api/dept/content/draft`, etc.)
 - **Engine CLI commands** — `rusvel code analyze`, `rusvel code search`, `rusvel content draft`, `rusvel harvest pipeline`
 - **Job queue worker** — Background worker processes CodeAnalyze, ContentPublish, HarvestScan jobs via real engines
+- **Flow Engine** — DAG workflow engine (petgraph), 3 node types (code, condition, agent), 7 API routes at `/api/flows`
 
 ## Three-Tier CLI Interface
 

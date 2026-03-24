@@ -7,6 +7,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use rusqlite::Connection;
+use rusqlite::Statement;
 use rusqlite::types::ValueRef;
 use serde::Serialize;
 use serde_json::{Number, Value};
@@ -93,6 +94,16 @@ fn parse_order(s: &str) -> rusvel_core::Result<(String, bool)> {
     Err(RusvelError::Validation(format!("invalid order: {s}")))
 }
 
+fn statement_columns(stmt: &Statement<'_>) -> Vec<SqlColumnMeta> {
+    stmt.columns()
+        .into_iter()
+        .map(|c| SqlColumnMeta {
+            name: c.name().to_string(),
+            col_type: c.decl_type().unwrap_or("").to_string(),
+        })
+        .collect()
+}
+
 fn value_ref_to_json(v: ValueRef<'_>) -> Value {
     match v {
         ValueRef::Null => Value::Null,
@@ -120,13 +131,7 @@ fn run_sql(conn: &Connection, query: &str) -> rusvel_core::Result<(Vec<SqlColumn
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
         return Ok((vec![], vec![], n));
     }
-    let mut cols = Vec::with_capacity(ncols);
-    for i in 0..ncols {
-        cols.push(SqlColumnMeta {
-            name: stmt.column_name(i).unwrap_or("").to_string(),
-            col_type: String::new(),
-        });
-    }
+    let cols = statement_columns(&stmt);
     let mut rows = Vec::new();
     let mut rows_iter = stmt
         .query([])
@@ -206,14 +211,8 @@ pub async fn get_table_rows(
             let mut stmt = conn
                 .prepare(&sql)
                 .map_err(|e| RusvelError::Storage(e.to_string()))?;
-            let ncols = stmt.column_count();
-            let mut cols = Vec::with_capacity(ncols);
-            for i in 0..ncols {
-                cols.push(SqlColumnMeta {
-                    name: stmt.column_name(i).unwrap_or("").to_string(),
-                    col_type: String::new(),
-                });
-            }
+            let cols = statement_columns(&stmt);
+            let ncols = cols.len();
             let limit_i = i64::from(limit);
             let offset_i = i64::from(offset);
             let mut rows = Vec::new();

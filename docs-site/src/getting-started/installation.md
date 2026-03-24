@@ -52,8 +52,8 @@ If you skip Ollama, you can configure Claude API or OpenAI keys instead.
 ## Clone and Build
 
 ```bash
-git clone https://github.com/your-org/all-in-one-rusvel.git
-cd all-in-one-rusvel
+git clone https://github.com/your-org/rusvel.git
+cd rusvel
 cargo build
 ```
 
