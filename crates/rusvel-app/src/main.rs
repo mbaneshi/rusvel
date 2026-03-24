@@ -826,6 +826,7 @@ async fn main() -> Result<()> {
     // 4. Build engines
     let agent_for_content = agent.clone();
     let agent_for_harvest = agent.clone();
+    let agent_for_flow = agent.clone();
     let jobs_for_engines = jobs.clone();
 
     let forge = Arc::new(ForgeEngine::new(
@@ -854,7 +855,12 @@ async fn main() -> Result<()> {
     )
         .with_events(events.clone())
         .with_agent(agent_for_harvest));
-    tracing::info!("Domain engines initialized: Code, Content, Harvest");
+    let flow_engine = Arc::new(flow_engine::FlowEngine::new(
+        db.clone() as Arc<dyn StoragePort>,
+        events.clone(),
+        agent_for_flow,
+    ));
+    tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow");
 
     // 5. Seed default data (agents, skills, rules) on first run
     let storage_ref: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
@@ -1154,6 +1160,7 @@ async fn main() -> Result<()> {
             code_engine: Some(code_engine.clone()),
             content_engine: Some(content_engine.clone()),
             harvest_engine: Some(harvest_engine.clone()),
+            flow_engine: Some(flow_engine.clone()),
             sessions: sessions.clone(),
             events: events.clone(),
             storage: db.clone() as Arc<dyn StoragePort>,

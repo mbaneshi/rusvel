@@ -37,7 +37,7 @@ impl NodeHandler for CodeNode {
 
         let result = engine
             .eval_with_scope::<rhai::Dynamic>(&mut scope, script)
-            .map_err(|e| RusvelError::Engine(format!("Rhai error: {e}")))?;
+            .map_err(|e| RusvelError::Internal(format!("Rhai error: {e}")))?;
 
         // Convert Rhai result to JSON
         let output = rhai_to_json(&result);

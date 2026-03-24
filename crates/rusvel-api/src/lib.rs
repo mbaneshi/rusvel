@@ -15,6 +15,7 @@ pub mod chat;
 pub mod config;
 pub mod department;
 pub mod engine_routes;
+pub mod flow_routes;
 pub mod help;
 pub mod hook_dispatch;
 pub mod hooks;
@@ -39,6 +40,7 @@ use tower_http::trace::TraceLayer;
 
 use code_engine::CodeEngine;
 use content_engine::ContentEngine;
+use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
@@ -51,6 +53,7 @@ pub struct AppState {
     pub code_engine: Option<Arc<CodeEngine>>,
     pub content_engine: Option<Arc<ContentEngine>>,
     pub harvest_engine: Option<Arc<HarvestEngine>>,
+    pub flow_engine: Option<Arc<FlowEngine>>,
     pub sessions: Arc<dyn SessionPort>,
     pub events: Arc<dyn EventPort>,
     pub storage: Arc<dyn StoragePort>,
@@ -188,6 +191,18 @@ pub fn build_router_with_frontend(
         .route("/api/dept/harvest/proposal", post(engine_routes::harvest_proposal))
         .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
+        // Flow Engine (DAG workflows)
+        .route("/api/flows", get(flow_routes::list_flows).post(flow_routes::create_flow))
+        .route(
+            "/api/flows/{id}",
+            get(flow_routes::get_flow)
+                .put(flow_routes::update_flow)
+                .delete(flow_routes::delete_flow),
+        )
+        .route("/api/flows/{id}/run", post(flow_routes::run_flow))
+        .route("/api/flows/{id}/executions", get(flow_routes::list_executions))
+        .route("/api/flows/executions/{id}", get(flow_routes::get_execution))
+        .route("/api/flows/node-types", get(flow_routes::list_node_types))
         // Capability Engine
         .route("/api/capability/build", post(capability::build_capability))
         // Analytics
