@@ -64,6 +64,7 @@ impl ContentCalendar {
 
         // Enqueue a job for the publish worker.
         let payload = serde_json::json!({
+            "session_id": session_id.to_string(),
             "content_id": content_id.to_string(),
             "platform": platform,
             "publish_at": publish_at,

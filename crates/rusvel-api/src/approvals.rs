@@ -9,6 +9,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 
 use rusvel_core::domain::{Job, JobFilter, JobStatus};
+use rusvel_core::error::RusvelError;
 use rusvel_core::id::JobId;
 
 use crate::AppState;
@@ -25,8 +26,7 @@ pub async fn list_pending(
     };
 
     let jobs = state
-        .storage
-        .jobs()
+        .jobs
         .list(filter)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -43,28 +43,14 @@ pub async fn approve_job(
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid job id".into()))?;
     let job_id = JobId::from_uuid(uuid);
 
-    let mut job = state
-        .storage
-        .jobs()
-        .get(&job_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or((StatusCode::NOT_FOUND, "job not found".into()))?;
-
-    if job.status != JobStatus::AwaitingApproval {
-        return Err((
+    state.jobs.approve(&job_id).await.map_err(|e| match e {
+        RusvelError::NotFound { .. } => (StatusCode::NOT_FOUND, "job not found".into()),
+        RusvelError::InvalidState { from, .. } => (
             StatusCode::CONFLICT,
-            format!("job is not awaiting approval (status: {:?})", job.status),
-        ));
-    }
-
-    job.status = JobStatus::Queued;
-    state
-        .storage
-        .jobs()
-        .update(&job)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            format!("job is not awaiting approval (status: {from})"),
+        ),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    })?;
 
     Ok(StatusCode::OK)
 }
@@ -78,7 +64,8 @@ pub async fn reject_job(
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid job id".into()))?;
     let job_id = JobId::from_uuid(uuid);
 
-    let mut job = state
+    // Reject is only valid for the approval gate; `JobPort::cancel` also allows `Queued`.
+    let job = state
         .storage
         .jobs()
         .get(&job_id)
@@ -93,13 +80,14 @@ pub async fn reject_job(
         ));
     }
 
-    job.status = JobStatus::Cancelled;
-    state
-        .storage
-        .jobs()
-        .update(&job)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state.jobs.cancel(&job_id).await.map_err(|e| match e {
+        RusvelError::NotFound { .. } => (StatusCode::NOT_FOUND, "job not found".into()),
+        RusvelError::InvalidState { from, .. } => (
+            StatusCode::CONFLICT,
+            format!("job is not awaiting approval (status: {from})"),
+        ),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    })?;
 
     Ok(StatusCode::OK)
 }

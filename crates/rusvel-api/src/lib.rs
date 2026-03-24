@@ -44,7 +44,9 @@ use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
-use rusvel_core::ports::{EmbeddingPort, EventPort, SessionPort, StoragePort, VectorStorePort};
+use rusvel_core::ports::{
+    EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, VectorStorePort,
+};
 use rusvel_core::registry::DepartmentRegistry;
 
 /// Shared application state injected into all handlers.
@@ -56,6 +58,8 @@ pub struct AppState {
     pub flow_engine: Option<Arc<FlowEngine>>,
     pub sessions: Arc<dyn SessionPort>,
     pub events: Arc<dyn EventPort>,
+    /// Same SQLite job queue as [`StoragePort::jobs`] when using `rusvel_db::Database`.
+    pub jobs: Arc<dyn JobPort>,
     pub storage: Arc<dyn StoragePort>,
     pub profile: Option<UserProfile>,
     pub registry: DepartmentRegistry,

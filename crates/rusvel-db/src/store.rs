@@ -14,8 +14,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use rusvel_core::error::RusvelError;
 use rusvel_core::ports::*;
 use rusvel_core::{
-    Event, EventFilter, Job, JobFilter, JobKind, JobStatus, MetricFilter, MetricPoint,
-    ObjectFilter, Run, Session, SessionSummary, Thread,
+    Event, EventFilter, Job, JobFilter, JobKind, JobResult, JobStatus, MetricFilter, MetricPoint,
+    NewJob, ObjectFilter, Run, Session, SessionSummary, Thread,
 };
 use rusvel_core::{EventId, JobId, RunId, SessionId, ThreadId};
 
@@ -726,34 +726,34 @@ impl JobStore for Database {
 
     async fn dequeue(&self, kinds: &[JobKind]) -> rusvel_core::Result<Option<Job>> {
         let conn = self.conn();
+        let now = Utc::now().to_rfc3339();
+        let queued_status = serde_json::to_string(&JobStatus::Queued)?;
 
-        // Build a WHERE clause for the kinds list
-        if kinds.is_empty() {
-            return Ok(None);
-        }
+        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        param_values.push(Box::new(queued_status.clone()));
+        param_values.push(Box::new(now));
 
-        let kind_strings: Vec<String> = kinds
-            .iter()
-            .map(|k| serde_json::to_string(k).unwrap_or_default())
-            .collect();
-        let placeholders: Vec<String> = (1..=kind_strings.len())
-            .map(|i| format!("?{}", i + 1))
-            .collect();
+        let kind_filter = if kinds.is_empty() {
+            String::new()
+        } else {
+            let placeholders: Vec<String> = (0..kinds.len())
+                .map(|i| format!("?{}", i + 3))
+                .collect();
+            for k in kinds {
+                param_values.push(Box::new(serde_json::to_string(k)?));
+            }
+            format!(" AND kind IN ({})", placeholders.join(", "))
+        };
+
         let sql = format!(
             "SELECT id, session_id, kind, payload, status, scheduled_at, started_at, completed_at, retries, max_retries, error, metadata
              FROM jobs
-             WHERE status = ?1 AND kind IN ({})
+             WHERE status = ?1 AND (scheduled_at IS NULL OR scheduled_at <= ?2){}
              ORDER BY rowid ASC
              LIMIT 1",
-            placeholders.join(", ")
+            kind_filter
         );
 
-        let queued_status = serde_json::to_string(&JobStatus::Queued)?;
-        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-        param_values.push(Box::new(queued_status));
-        for ks in &kind_strings {
-            param_values.push(Box::new(ks.clone()));
-        }
         let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
             .iter()
             .map(std::convert::AsRef::as_ref)
@@ -974,6 +974,137 @@ fn row_to_job(row: &rusqlite::Row<'_>) -> rusvel_core::Result<Job> {
         error,
         metadata: serde_json::from_str(&meta_str)?,
     })
+}
+
+fn job_from_new_job(new: NewJob) -> Job {
+    Job {
+        id: JobId::new(),
+        session_id: new.session_id,
+        kind: new.kind,
+        payload: new.payload,
+        status: JobStatus::Queued,
+        scheduled_at: None,
+        started_at: None,
+        completed_at: None,
+        retries: 0,
+        max_retries: new.max_retries,
+        error: None,
+        metadata: new.metadata,
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  JobPort (SQLite-backed; same store as JobStore / StoragePort::jobs)
+// ════════════════════════════════════════════════════════════════════
+
+#[async_trait]
+impl JobPort for Database {
+    async fn enqueue(&self, new: NewJob) -> rusvel_core::Result<JobId> {
+        let job = job_from_new_job(new);
+        let id = job.id;
+        JobStore::enqueue(self, &job).await?;
+        Ok(id)
+    }
+
+    async fn dequeue(&self, kinds: &[JobKind]) -> rusvel_core::Result<Option<Job>> {
+        JobStore::dequeue(self, kinds).await
+    }
+
+    async fn complete(&self, id: &JobId, result: JobResult) -> rusvel_core::Result<()> {
+        let mut job = JobStore::get(self, id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        if job.status != JobStatus::Running {
+            return Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "Succeeded".into(),
+            });
+        }
+
+        job.status = JobStatus::Succeeded;
+        job.completed_at = Some(Utc::now());
+        job.metadata["result"] =
+            serde_json::to_value(&result).map_err(|e| RusvelError::Serialization(e.to_string()))?;
+        JobStore::update(self, &job).await
+    }
+
+    async fn fail(&self, id: &JobId, error: String) -> rusvel_core::Result<()> {
+        let mut job = JobStore::get(self, id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        if job.status != JobStatus::Running {
+            return Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "Failed".into(),
+            });
+        }
+
+        job.status = JobStatus::Failed;
+        job.completed_at = Some(Utc::now());
+        job.error = Some(error);
+        JobStore::update(self, &job).await
+    }
+
+    async fn schedule(&self, new: NewJob, cron: &str) -> rusvel_core::Result<JobId> {
+        let mut job = job_from_new_job(new);
+        job.scheduled_at = Some(Utc::now());
+        job.metadata["cron"] = serde_json::Value::String(cron.to_string());
+        let id = job.id;
+        JobStore::enqueue(self, &job).await?;
+        Ok(id)
+    }
+
+    async fn cancel(&self, id: &JobId) -> rusvel_core::Result<()> {
+        let mut job = JobStore::get(self, id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        match job.status {
+            JobStatus::Queued | JobStatus::AwaitingApproval => {
+                job.status = JobStatus::Cancelled;
+                job.completed_at = Some(Utc::now());
+                JobStore::update(self, &job).await
+            }
+            _ => Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "Cancelled".into(),
+            }),
+        }
+    }
+
+    async fn approve(&self, id: &JobId) -> rusvel_core::Result<()> {
+        let mut job = JobStore::get(self, id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        if job.status != JobStatus::AwaitingApproval {
+            return Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "Queued".into(),
+            });
+        }
+
+        job.status = JobStatus::Queued;
+        JobStore::update(self, &job).await
+    }
+
+    async fn list(&self, filter: JobFilter) -> rusvel_core::Result<Vec<Job>> {
+        JobStore::list(self, filter).await
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1285,13 +1416,43 @@ mod tests {
 
         JobStore::enqueue(&db, &job).await.unwrap();
 
-        let dequeued = db.dequeue(&[JobKind::AgentRun]).await.unwrap().unwrap();
+        let dequeued = JobStore::dequeue(&db, &[JobKind::AgentRun])
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(dequeued.id, job.id);
         assert_eq!(dequeued.status, JobStatus::Running);
 
         // No more jobs to dequeue
-        let none = db.dequeue(&[JobKind::AgentRun]).await.unwrap();
+        let none = JobStore::dequeue(&db, &[JobKind::AgentRun])
+            .await
+            .unwrap();
         assert!(none.is_none());
+    }
+
+    #[tokio::test]
+    async fn job_dequeue_empty_kinds_matches_any_kind() {
+        let db = test_db();
+        let job = Job {
+            id: JobId::new(),
+            session_id: SessionId::new(),
+            kind: JobKind::HarvestScan,
+            payload: serde_json::json!({}),
+            status: JobStatus::Queued,
+            scheduled_at: None,
+            started_at: None,
+            completed_at: None,
+            retries: 0,
+            max_retries: 3,
+            error: None,
+            metadata: serde_json::json!({}),
+        };
+
+        JobStore::enqueue(&db, &job).await.unwrap();
+
+        let dequeued = JobStore::dequeue(&db, &[]).await.unwrap().unwrap();
+        assert_eq!(dequeued.id, job.id);
+        assert_eq!(dequeued.kind, JobKind::HarvestScan);
     }
 
     #[tokio::test]

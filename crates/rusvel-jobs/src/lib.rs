@@ -1,7 +1,8 @@
 //! In-memory job queue implementing [`JobPort`] from `rusvel-core`.
 //!
-//! Phase 0: backed by a `Mutex<Vec<Job>>`. Will swap to a
-//! [`JobStore`]-backed implementation once `rusvel-db` is wired up.
+//! The production binary uses [`rusvel_db::Database`] as [`JobPort`]
+//! (SQLite, shared with [`rusvel_core::ports::JobStore`]). This crate
+//! remains useful for fast unit tests and the [`spawn_worker`] helper.
 
 use std::future::Future;
 use std::sync::Arc;

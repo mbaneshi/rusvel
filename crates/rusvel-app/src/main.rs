@@ -25,12 +25,11 @@ use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
 use rusvel_core::id::AgentProfileId;
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::{EmbeddingPort, SessionPort, StoragePort, VectorStorePort};
+use rusvel_core::ports::{EmbeddingPort, JobPort, SessionPort, StoragePort, VectorStorePort};
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_db::Database;
 use rusvel_embed::FastEmbedAdapter;
 use rusvel_event::EventBus;
-use rusvel_jobs::JobQueue;
 use rusvel_llm::ClaudeCliProvider;
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
@@ -812,7 +811,7 @@ async fn main() -> Result<()> {
         data_dir.join("memory.db").to_str().unwrap_or("memory.db"),
     )?);
     let tools: Arc<dyn rusvel_core::ports::ToolPort> = Arc::new(ToolRegistry::new());
-    let jobs: Arc<dyn rusvel_core::ports::JobPort> = Arc::new(JobQueue::new());
+    let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let jobs_for_worker = jobs.clone();
     let _auth = Arc::new(InMemoryAuthAdapter::from_env());
     let sessions: Arc<dyn SessionPort> =
@@ -834,7 +833,7 @@ async fn main() -> Result<()> {
         events.clone(),
         memory,
         db.clone() as Arc<dyn StoragePort>,
-        jobs,
+        jobs.clone(),
         sessions.clone(),
         config,
     ));
@@ -1163,6 +1162,7 @@ async fn main() -> Result<()> {
             flow_engine: Some(flow_engine.clone()),
             sessions: sessions.clone(),
             events: events.clone(),
+            jobs: jobs.clone(),
             storage: db.clone() as Arc<dyn StoragePort>,
             profile,
             registry,

@@ -19,7 +19,6 @@ rusvel-agent  = { workspace = true }
 rusvel-event  = { workspace = true }
 rusvel-memory = { workspace = true }
 rusvel-tool   = { workspace = true }
-rusvel-jobs   = { workspace = true }
 rusvel-auth   = { workspace = true }
 rusvel-config = { workspace = true }
 
@@ -36,6 +35,7 @@ distro-engine  = { workspace = true }
 legal-engine   = { workspace = true }
 support-engine = { workspace = true }
 infra-engine   = { workspace = true }
+flow-engine    = { workspace = true }
 
 # ─── RAG ───
 rusvel-embed  = { workspace = true }
