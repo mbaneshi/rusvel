@@ -1,0 +1,16 @@
+[package]
+name = "rusvel-schema"
+description = "SQLite schema introspection for RUSVEL (RusvelBase)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+rusvel-core = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true

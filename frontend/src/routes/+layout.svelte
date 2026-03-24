@@ -24,7 +24,8 @@
 	// Static nav items (non-department pages)
 	const staticNavBefore = [
 		{ href: '/chat', label: 'Chat', icon: '>', tour: 'nav-chat' },
-		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' }
+		{ href: '/', label: 'Dashboard', icon: '~', tour: 'nav-dashboard' },
+		{ href: '/database/schema', label: 'Database', icon: 'B', tour: '' }
 	];
 	const staticNavAfter = [
 		{ href: '/settings', label: 'Settings', icon: '%', tour: 'nav-settings' }

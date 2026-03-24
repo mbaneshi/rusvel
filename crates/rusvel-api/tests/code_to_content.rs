@@ -162,6 +162,7 @@ async fn test_router() -> (Router, Arc<MockPlatformAdapter>, SessionId) {
         sessions,
         events,
         jobs,
+        database: db.clone(),
         storage,
         profile: None,
         registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),

@@ -8,6 +8,8 @@ repository.workspace = true
 
 [dependencies]
 rusvel-core = { workspace = true }
+rusvel-db = { workspace = true }
+rusvel-schema = { workspace = true }
 rusvel-llm = { workspace = true }
 forge-engine = { workspace = true }
 code-engine = { workspace = true }
@@ -24,6 +26,7 @@ chrono = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 futures = { workspace = true }
+rusqlite = { workspace = true }
 tokio-stream = "0.1"
 reqwest = { workspace = true }
 

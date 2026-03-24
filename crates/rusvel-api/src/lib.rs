@@ -13,6 +13,7 @@ pub mod build_cmd;
 pub mod capability;
 pub mod chat;
 pub mod config;
+pub mod db_routes;
 pub mod department;
 pub mod engine_routes;
 pub mod flow_routes;
@@ -48,6 +49,7 @@ use rusvel_core::ports::{
     DeployPort, EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
+use rusvel_db::Database;
 
 /// Shared application state injected into all handlers.
 pub struct AppState {
@@ -60,6 +62,8 @@ pub struct AppState {
     pub events: Arc<dyn EventPort>,
     /// Same SQLite job queue as [`StoragePort::jobs`] when using `rusvel_db::Database`.
     pub jobs: Arc<dyn JobPort>,
+    /// Same database as `storage` when using `rusvel_db::Database` — for RusvelBase / schema API.
+    pub database: Arc<Database>,
     pub storage: Arc<dyn StoragePort>,
     pub profile: Option<UserProfile>,
     pub registry: DepartmentRegistry,
@@ -109,6 +113,17 @@ pub fn build_router_with_frontend(
         .route("/api/config/tools", get(config::list_tools))
         // Department Registry
         .route("/api/departments", get(department::list_departments))
+        // RusvelBase — DB browser (schema, rows, SQL)
+        .route("/api/db/tables", get(db_routes::list_tables))
+        .route(
+            "/api/db/tables/{table}/schema",
+            get(db_routes::get_table_schema),
+        )
+        .route(
+            "/api/db/tables/{table}/rows",
+            get(db_routes::get_table_rows),
+        )
+        .route("/api/db/sql", axum::routing::post(db_routes::post_sql))
         // Profile
         .route("/api/profile", get(department::get_profile))
         .route(

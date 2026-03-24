@@ -14,6 +14,7 @@
 	import WorkflowsTab from './WorkflowsTab.svelte';
 	import DirsTab from './DirsTab.svelte';
 	import EventsTab from './EventsTab.svelte';
+	import EngineTab from './EngineTab.svelte';
 
 	let {
 		dept,
@@ -78,6 +79,7 @@
 	const tabDefs = $derived(
 		[
 			{ id: 'actions', label: 'Actions' },
+			{ id: 'engine', label: 'Engine' },
 			{ id: 'agents', label: 'Agents' },
 			{ id: 'workflows', label: 'Flows' },
 			{ id: 'skills', label: 'Skills' },
@@ -167,6 +169,8 @@
 		<div class="flex-1 overflow-y-auto">
 			{#if activeTab === 'actions'}
 				<ActionsTab {dept} {quickActions} {deptHsl} />
+			{:else if activeTab === 'engine'}
+				<EngineTab {dept} {deptHsl} />
 			{:else if activeTab === 'agents'}
 				<AgentsTab {dept} {deptHsl} />
 			{:else if activeTab === 'skills'}

@@ -5912,12 +5912,14 @@ dependencies = [
  "futures",
  "harvest-engine",
  "reqwest",
+ "rusqlite",
  "rusvel-config",
  "rusvel-core",
  "rusvel-db",
  "rusvel-event",
  "rusvel-llm",
  "rusvel-memory",
+ "rusvel-schema",
  "serde",
  "serde_json",
  "tokio",
@@ -6171,6 +6173,15 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "rusvel-schema"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "rusvel-core",
+ "serde",
 ]
 
 [[package]]

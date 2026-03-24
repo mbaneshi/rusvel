@@ -1271,6 +1271,7 @@ async fn main() -> Result<()> {
             sessions: sessions.clone(),
             events: events.clone(),
             jobs: jobs.clone(),
+            database: db.clone(),
             storage: db.clone() as Arc<dyn StoragePort>,
             profile,
             registry,

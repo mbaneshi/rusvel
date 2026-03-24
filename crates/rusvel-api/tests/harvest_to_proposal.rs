@@ -196,6 +196,7 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         sessions,
         events,
         jobs,
+        database: db.clone(),
         storage,
         profile: None,
         registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),

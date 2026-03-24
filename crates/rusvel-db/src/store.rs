@@ -61,6 +61,16 @@ impl Database {
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().expect("database mutex poisoned")
     }
+
+    /// Run synchronous work on the underlying SQLite connection (e.g. schema introspection).
+    /// Callers that run from async contexts should use `tokio::task::spawn_blocking`.
+    pub fn with_connection<R>(
+        &self,
+        f: impl FnOnce(&Connection) -> rusvel_core::Result<R>,
+    ) -> rusvel_core::Result<R> {
+        let guard = self.conn();
+        f(&guard)
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════

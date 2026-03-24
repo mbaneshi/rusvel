@@ -97,7 +97,7 @@ impl DepartmentRegistry {
                     color: "emerald".into(),
                     system_prompt: "You are the Code department of RUSVEL.\n\nYou have full access to Claude Code tools:\n- Read, Write, Edit files across all project directories\n- Run shell commands (build, test, git, pnpm, cargo, etc.)\n- Search codebases with grep and glob\n- Fetch web content and search the web\n- Spawn sub-agents for parallel work\n- Manage background tasks\n\nFocus: code intelligence, implementation, debugging, testing, refactoring.\nWhen writing code, follow existing patterns. Be thorough.".into(),
                     capabilities: vec!["code_analysis".into(), "tool_use".into()],
-                    tabs: vec!["actions".into(), "agents".into(), "workflows".into(), "skills".into(), "rules".into(), "mcp".into(), "hooks".into(), "dirs".into(), "events".into()],
+                    tabs: vec!["actions".into(), "engine".into(), "agents".into(), "workflows".into(), "skills".into(), "rules".into(), "mcp".into(), "hooks".into(), "dirs".into(), "events".into()],
                     quick_actions: vec![
                         QuickAction { label: "Analyze codebase".into(), prompt: "Analyze the codebase structure, dependencies, and code quality.".into() },
                         QuickAction { label: "Run tests".into(), prompt: "Run `cargo test` and report results. If any fail, show the errors.".into() },
@@ -121,7 +121,7 @@ impl DepartmentRegistry {
                     color: "amber".into(),
                     system_prompt: "You are the Harvest department of RUSVEL.\n\nFocus: finding opportunities, scoring gigs, drafting proposals.\nSources: Upwork, LinkedIn, GitHub.".into(),
                     capabilities: vec!["opportunity_discovery".into()],
-                    tabs: vec!["actions".into(), "agents".into(), "skills".into(), "rules".into(), "events".into()],
+                    tabs: vec!["actions".into(), "engine".into(), "agents".into(), "skills".into(), "rules".into(), "events".into()],
                     quick_actions: vec![
                         QuickAction { label: "Scan opportunities".into(), prompt: "Scan for new freelance opportunities on Upwork, LinkedIn, and GitHub.".into() },
                         QuickAction { label: "Score pipeline".into(), prompt: "Score all opportunities in the pipeline by fit, budget, and probability.".into() },
@@ -138,7 +138,7 @@ impl DepartmentRegistry {
                     color: "purple".into(),
                     system_prompt: "You are the Content department of RUSVEL.\n\nFocus: content creation, platform adaptation, publishing strategy.\nDraft in Markdown. Adapt for LinkedIn, Twitter/X, DEV.to, Substack.".into(),
                     capabilities: vec!["content_creation".into()],
-                    tabs: vec!["actions".into(), "agents".into(), "skills".into(), "rules".into(), "events".into()],
+                    tabs: vec!["actions".into(), "engine".into(), "agents".into(), "skills".into(), "rules".into(), "events".into()],
                     quick_actions: vec![
                         QuickAction { label: "Draft blog post".into(), prompt: "Draft a blog post. Ask me for the topic, audience, and key points.".into() },
                         QuickAction { label: "Adapt for Twitter".into(), prompt: "Adapt the latest content piece into a Twitter/X thread.".into() },

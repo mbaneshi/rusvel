@@ -616,6 +616,119 @@ export async function getDepartments(): Promise<DepartmentDef[]> {
 	return res.json();
 }
 
+export interface DbTableSummary {
+	name: string;
+	row_count: number;
+}
+export interface DbColumnInfo {
+	name: string;
+	col_type: string;
+	nullable: boolean;
+	default_value: string | null;
+	primary_key: boolean;
+}
+export interface DbIndexInfo {
+	name: string;
+	columns: string[];
+	unique: boolean;
+}
+export interface DbForeignKeyInfo {
+	from_column: string;
+	to_table: string;
+	to_column: string;
+}
+export interface DbTableInfo {
+	name: string;
+	columns: DbColumnInfo[];
+	indexes: DbIndexInfo[];
+	foreign_keys: DbForeignKeyInfo[];
+	row_count: number;
+}
+export interface DbSqlColumnMeta {
+	name: string;
+	type: string;
+}
+export interface DbRowsResponse {
+	columns: DbSqlColumnMeta[];
+	rows: unknown[][];
+	row_count: number;
+	table_row_count: number;
+}
+export interface DbSqlExecuteResponse {
+	columns: DbSqlColumnMeta[];
+	rows: unknown[][];
+	row_count: number;
+	duration_ms: number;
+}
+export async function getDbTables(): Promise<DbTableSummary[]> {
+	const res = await fetch(`${BASE}/api/db/tables`);
+	if (!res.ok) throw new Error(await res.text());
+	return res.json();
+}
+export async function getDbTableSchema(table: string): Promise<DbTableInfo> {
+	const res = await fetch(
+		`${BASE}/api/db/tables/${encodeURIComponent(table)}/schema`
+	);
+	if (!res.ok) throw new Error(await res.text());
+	return res.json();
+}
+export async function getDbTableRows(
+	table: string,
+	params?: { limit?: number; offset?: number; order?: string }
+): Promise<DbRowsResponse> {
+	const sp = new URLSearchParams();
+	if (params?.limit != null) sp.set('limit', String(params.limit));
+	if (params?.offset != null) sp.set('offset', String(params.offset));
+	if (params?.order) sp.set('order', params.order);
+	const q = sp.toString();
+	const url = `${BASE}/api/db/tables/${encodeURIComponent(table)}/rows${q ? `?${q}` : ''}`;
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(await res.text());
+	return res.json();
+}
+export async function postDbSql(
+	query: string,
+	readOnly = true
+): Promise<DbSqlExecuteResponse> {
+	return request('/api/db/sql', {
+		method: 'POST',
+		body: JSON.stringify({ query, read_only: readOnly })
+	});
+}
+export async function postCodeAnalyze(path: string): Promise<unknown> {
+	return request('/api/dept/code/analyze', {
+		method: 'POST',
+		body: JSON.stringify({ path })
+	});
+}
+export async function getCodeSearch(q: string, limit?: number): Promise<unknown> {
+	const sp = new URLSearchParams({ q });
+	if (limit != null) sp.set('limit', String(limit));
+	return request(`/api/dept/code/search?${sp}`);
+}
+export async function postContentDraft(
+	sessionId: string,
+	topic: string,
+	kind?: string
+): Promise<unknown> {
+	return request('/api/dept/content/draft', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			topic,
+			...(kind ? { kind } : {})
+		})
+	});
+}
+export async function getContentList(sessionId: string): Promise<unknown> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	return request(`/api/dept/content/list?${sp}`);
+}
+export async function getHarvestPipeline(sessionId: string): Promise<unknown> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	return request(`/api/dept/harvest/pipeline?${sp}`);
+}
+
 export async function getProfile(): Promise<unknown> {
 	const res = await fetch(`${BASE}/api/profile`);
 	return res.json();

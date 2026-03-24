@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     # ─── Foundation (ports + adapters) ───
     "crates/rusvel-core",
+    "crates/rusvel-schema",
     "crates/rusvel-db",
     "crates/rusvel-llm",
     "crates/rusvel-agent",
@@ -46,7 +47,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Mehdi Baneshi <mehdi@mbaneshi.click>"]
-repository = "https://github.com/mbaneshi/all-in-one-rusvel"
+repository = "https://github.com/mbaneshi/rusvel"
 
 [workspace.dependencies]
 # Async
@@ -117,6 +118,7 @@ rust-embed = { version = "8", features = ["compression"] }
 
 # Internal crates
 rusvel-core = { path = "crates/rusvel-core" }
+rusvel-schema = { path = "crates/rusvel-schema" }
 rusvel-db = { path = "crates/rusvel-db" }
 rusvel-llm = { path = "crates/rusvel-llm" }
 rusvel-agent = { path = "crates/rusvel-agent" }
