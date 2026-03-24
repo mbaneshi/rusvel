@@ -49,3 +49,4 @@ Each department is **autonomous** — own config, own chat, own agents, own even
 - **SvelteKit 5**, Tailwind CSS 4
 - **LLM**: Claude CLI (Max subscription), Ollama, OpenAI, Claude API
 - **RAG**: fastembed (local ONNX embeddings) + lancedb (vector search)
+
