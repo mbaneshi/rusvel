@@ -45,7 +45,7 @@ use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
-    EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, VectorStorePort,
+    DeployPort, EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
 
@@ -65,6 +65,7 @@ pub struct AppState {
     pub registry: DepartmentRegistry,
     pub embedding: Option<Arc<dyn EmbeddingPort>>,
     pub vector_store: Option<Arc<dyn VectorStorePort>>,
+    pub deploy: Option<Arc<dyn DeployPort>>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -189,9 +190,18 @@ pub fn build_router_with_frontend(
         .route("/api/dept/code/analyze", post(engine_routes::code_analyze))
         .route("/api/dept/code/search", get(engine_routes::code_search))
         .route("/api/dept/content/draft", post(engine_routes::content_draft))
+        .route(
+            "/api/dept/content/from-code",
+            post(engine_routes::content_from_code),
+        )
+        .route(
+            "/api/dept/content/{id}/approve",
+            axum::routing::patch(engine_routes::content_approve),
+        )
         .route("/api/dept/content/publish", post(engine_routes::content_publish))
         .route("/api/dept/content/list", get(engine_routes::content_list))
         .route("/api/dept/harvest/score", post(engine_routes::harvest_score))
+        .route("/api/dept/harvest/scan", post(engine_routes::harvest_scan))
         .route("/api/dept/harvest/proposal", post(engine_routes::harvest_proposal))
         .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))

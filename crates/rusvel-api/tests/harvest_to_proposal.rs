@@ -1,0 +1,318 @@
+//! Harvest scan → proposal persistence; mock source only (no live RSS).
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+use axum::Router;
+use axum::body::{Body, to_bytes};
+use axum::http::{Request, StatusCode};
+use chrono::Utc;
+use forge_engine::ForgeEngine;
+use harvest_engine::HarvestEngine;
+use rusvel_api::{AppState, build_router};
+use rusvel_config::TomlConfig;
+use rusvel_core::domain::{
+    AgentOutput, AgentStatus, Content, Session, SessionConfig, SessionKind,
+};
+use rusvel_core::error::Result;
+use rusvel_core::id::{RunId, SessionId};
+use rusvel_core::ports::{AgentPort, ConfigPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort};
+use rusvel_core::registry::DepartmentRegistry;
+use rusvel_db::Database;
+use rusvel_event::EventBus;
+use rusvel_memory::MemoryStore;
+use serde_json::{Value, json};
+use tower::{Service, ServiceExt};
+
+struct SessionAdapter(Arc<dyn StoragePort>);
+
+#[async_trait]
+impl SessionPort for SessionAdapter {
+    async fn create(&self, session: Session) -> Result<SessionId> {
+        let id = session.id;
+        self.0.sessions().put_session(&session).await?;
+        Ok(id)
+    }
+    async fn load(&self, id: &SessionId) -> Result<Session> {
+        self.0.sessions().get_session(id).await?.ok_or_else(|| {
+            rusvel_core::error::RusvelError::NotFound {
+                kind: "session".into(),
+                id: id.to_string(),
+            }
+        })
+    }
+    async fn save(&self, session: &Session) -> Result<()> {
+        self.0.sessions().put_session(session).await
+    }
+    async fn list(&self) -> Result<Vec<rusvel_core::domain::SessionSummary>> {
+        self.0.sessions().list_sessions().await
+    }
+}
+
+struct StaticForgeAgent;
+
+#[async_trait]
+impl AgentPort for StaticForgeAgent {
+    async fn create(&self, _: rusvel_core::domain::AgentConfig) -> Result<RunId> {
+        Ok(RunId::new())
+    }
+    async fn run(&self, _: &RunId, _: Content) -> Result<AgentOutput> {
+        Ok(AgentOutput {
+            run_id: RunId::new(),
+            content: Content::text("ok"),
+            tool_calls: 0,
+            usage: rusvel_core::domain::LlmUsage::default(),
+            cost_estimate: 0.0,
+            metadata: json!({}),
+        })
+    }
+    async fn stop(&self, _: &RunId) -> Result<()> {
+        Ok(())
+    }
+    async fn status(&self, _: &RunId) -> Result<AgentStatus> {
+        Ok(AgentStatus::Idle)
+    }
+}
+
+/// Returns JSON matching [`harvest_engine::proposal::ProposalGenerator`] expectations.
+struct StaticProposalAgent;
+
+#[async_trait]
+impl AgentPort for StaticProposalAgent {
+    async fn create(&self, _: rusvel_core::domain::AgentConfig) -> Result<RunId> {
+        Ok(RunId::new())
+    }
+    async fn run(&self, _: &RunId, _: Content) -> Result<AgentOutput> {
+        Ok(AgentOutput {
+            run_id: RunId::new(),
+            content: Content::text(
+                r#"{"body":"Tailored proposal for the gig.","estimated_value":5000.0,"tone":"professional"}"#,
+            ),
+            tool_calls: 0,
+            usage: rusvel_core::domain::LlmUsage::default(),
+            cost_estimate: 0.0,
+            metadata: json!({}),
+        })
+    }
+    async fn stop(&self, _: &RunId) -> Result<()> {
+        Ok(())
+    }
+    async fn status(&self, _: &RunId) -> Result<AgentStatus> {
+        Ok(AgentStatus::Idle)
+    }
+}
+
+async fn json_request(
+    router: &mut Router,
+    method: &str,
+    uri: &str,
+    body: Option<Value>,
+) -> (StatusCode, Vec<u8>) {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json");
+    let req: Request<Body> = if let Some(b) = body {
+        builder
+            .body(Body::from(serde_json::to_vec(&b).unwrap()))
+            .unwrap()
+    } else {
+        builder.body(Body::empty()).unwrap()
+    };
+    let res = ServiceExt::<Request<Body>>::ready(&mut *router)
+        .await
+        .unwrap()
+        .call(req)
+        .await
+        .unwrap();
+    let status = res.status();
+    let bytes = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+    (status, bytes.to_vec())
+}
+
+async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
+    let base = std::env::temp_dir().join(format!("rusvel-harvest-ict-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir_all(&base).expect("temp dir");
+    let db_path = base.join("rusvel.db");
+    let db: Arc<Database> = Arc::new(Database::open(&db_path).expect("db"));
+    let storage: Arc<dyn StoragePort> = db.clone();
+    let config: Arc<dyn ConfigPort> = Arc::new(
+        TomlConfig::load(base.join("config.toml")).expect("config"),
+    );
+    let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+    ));
+    let memory: Arc<dyn MemoryPort> = Arc::new(
+        MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
+    );
+    let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
+    let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
+
+    let forge = Arc::new(ForgeEngine::new(
+        Arc::new(StaticForgeAgent),
+        events.clone(),
+        memory,
+        storage.clone(),
+        jobs.clone(),
+        sessions.clone(),
+        config.clone(),
+    ));
+
+    let harvest_engine = Arc::new(
+        HarvestEngine::new(storage.clone())
+            .with_events(events.clone())
+            .with_agent(Arc::new(StaticProposalAgent))
+            .with_config(harvest_engine::HarvestConfig {
+                skills: vec!["rust".into()],
+                min_budget: None,
+            }),
+    );
+    let harvest_for_tests = harvest_engine.clone();
+
+    let now = Utc::now();
+    let session_a = SessionId::new();
+    let session_b = SessionId::new();
+    for (id, name) in [(session_a, "a"), (session_b, "b")] {
+        let session = Session {
+            id,
+            name: name.into(),
+            kind: SessionKind::General,
+            tags: vec![],
+            config: SessionConfig::default(),
+            created_at: now,
+            updated_at: now,
+            metadata: json!({}),
+        };
+        sessions.create(session).await.expect("session");
+    }
+
+    let state = AppState {
+        forge,
+        code_engine: None,
+        content_engine: None,
+        harvest_engine: Some(harvest_engine),
+        flow_engine: None,
+        sessions,
+        events,
+        jobs,
+        storage,
+        profile: None,
+        registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),
+        embedding: None,
+        vector_store: None,
+        deploy: None,
+    };
+
+    (
+        build_router(state),
+        session_a,
+        session_b,
+        harvest_for_tests,
+    )
+}
+
+#[tokio::test]
+async fn post_harvest_scan_mock_persists_opportunities() {
+    let (mut router, session_a, _, _) = test_router().await;
+    let (status, body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/scan",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "sources": ["mock"],
+            "query": "rust",
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let ops: Vec<Value> = serde_json::from_slice(&body).expect("json");
+    assert!(!ops.is_empty(), "expected opportunities from MockSource");
+
+    let (st2, list_body) = json_request(
+        &mut router,
+        "GET",
+        &format!(
+            "/api/dept/harvest/list?session_id={}",
+            session_a.to_string()
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(st2, StatusCode::OK);
+    let listed: Vec<Value> = serde_json::from_slice(&list_body).unwrap();
+    assert_eq!(listed.len(), ops.len());
+}
+
+#[tokio::test]
+async fn post_harvest_proposal_persists_proposal() {
+    let (mut router, session_a, _, harvest) = test_router().await;
+    let (st, scan_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/scan",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "sources": ["mock"],
+            "query": "rust",
+        })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    let ops: Vec<Value> = serde_json::from_slice(&scan_body).unwrap();
+    let opp_id = ops[0]["id"].as_str().unwrap();
+
+    let (st2, prop_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/proposal",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "opportunity_id": opp_id,
+            "profile": "Senior Rust engineer",
+        })),
+    )
+    .await;
+    assert_eq!(st2, StatusCode::OK);
+    let proposal: Value = serde_json::from_slice(&prop_body).unwrap();
+    assert_eq!(
+        proposal["body"].as_str().unwrap(),
+        "Tailored proposal for the gig."
+    );
+
+    let stored = harvest.get_proposals(&session_a).await.unwrap();
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].body, "Tailored proposal for the gig.");
+}
+
+#[tokio::test]
+async fn harvest_session_isolation() {
+    let (mut router, session_a, session_b, _) = test_router().await;
+    let (st, _) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/scan",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "sources": ["mock"],
+            "query": "rust",
+        })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+
+    let (st2, list_b) = json_request(
+        &mut router,
+        "GET",
+        &format!(
+            "/api/dept/harvest/list?session_id={}",
+            session_b.to_string()
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(st2, StatusCode::OK);
+    let listed: Vec<Value> = serde_json::from_slice(&list_b).unwrap();
+    assert!(listed.is_empty());
+}

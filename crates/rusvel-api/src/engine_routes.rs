@@ -3,13 +3,16 @@
 //! These routes expose real domain logic (code analysis, content drafting,
 //! harvest scoring) — not just CRUD or generic chat.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
 
+use rusvel_core::domain::{CodeAnalysisSummary, ContentItem, ContentKind, Opportunity};
+use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContentId, SessionId};
 
 use crate::AppState;
@@ -105,6 +108,68 @@ pub async fn content_draft(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct FromCodeRequest {
+    pub session_id: String,
+    pub path: String,
+    pub kinds: Vec<String>,
+}
+
+/// POST /api/dept/content/from-code — analyze a path, then draft one item per requested kind.
+pub async fn content_from_code(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<FromCodeRequest>,
+) -> ApiResult<Vec<ContentItem>> {
+    let code_engine = state
+        .code_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Code engine not available".into()))?;
+    let content_engine = state
+        .content_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let analysis = code_engine
+        .analyze(Path::new(&body.path))
+        .await
+        .map_err(engine_err)?;
+    let summary: CodeAnalysisSummary = (&analysis).into();
+
+    let mut items = Vec::new();
+    for k in &body.kinds {
+        let kind: ContentKind = serde_json::from_value(serde_json::json!(k)).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("invalid content kind `{k}`: {e}"),
+            )
+        })?;
+        let topic = content_engine::build_code_prompt(&summary, &kind);
+        let item = content_engine
+            .draft(&sid, &topic, kind)
+            .await
+            .map_err(engine_err)?;
+        items.push(item);
+    }
+    Ok(Json(items))
+}
+
+/// PATCH /api/dept/content/{id}/approve — set content item approval to Approved (object store).
+pub async fn content_approve(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+) -> ApiResult<ContentItem> {
+    let engine = state
+        .content_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let cid = parse_content_id(&id)?;
+    let item = engine.approve_content(cid).await.map_err(|e| match e {
+        RusvelError::NotFound { .. } => (StatusCode::NOT_FOUND, e.to_string()),
+        _ => engine_err(e),
+    })?;
+    Ok(Json(item))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct PublishRequest {
     pub session_id: String,
     pub content_id: String,
@@ -163,6 +228,61 @@ pub async fn content_list(
 pub struct ScoreRequest {
     pub session_id: String,
     pub opportunity_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HarvestScanRequest {
+    pub session_id: String,
+    pub sources: Vec<String>,
+    pub query: String,
+}
+
+/// POST /api/dept/harvest/scan — run configured sources, score, persist opportunities.
+pub async fn harvest_scan(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HarvestScanRequest>,
+) -> ApiResult<Vec<Opportunity>> {
+    let engine = state
+        .harvest_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let skills: Vec<String> = engine.harvest_skills().iter().cloned().collect();
+    let mut all = Vec::new();
+    for s in &body.sources {
+        match s.to_lowercase().as_str() {
+            "mock" => {
+                let src = harvest_engine::source::MockSource::new();
+                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
+                all.append(&mut v);
+            }
+            "upwork" => {
+                let src = harvest_engine::source::UpworkRssSource::new(
+                    body.query.clone(),
+                    skills.clone(),
+                )
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
+                all.append(&mut v);
+            }
+            "freelancer" => {
+                let src = harvest_engine::source::FreelancerRssSource::new(
+                    body.query.clone(),
+                    skills.clone(),
+                )
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
+                all.append(&mut v);
+            }
+            other => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    format!("unknown harvest source: {other}"),
+                ));
+            }
+        }
+    }
+    Ok(Json(all))
 }
 
 pub async fn harvest_score(

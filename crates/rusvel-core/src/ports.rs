@@ -24,6 +24,8 @@
 //! **Not here (ADR-006):** `HarvestPort` and `PublishPort` are
 //! engine-internal traits, not cross-cutting concerns.
 
+use std::path::Path;
+
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -251,6 +253,9 @@ pub trait JobPort: Send + Sync {
     /// Mark a job as successfully completed.
     async fn complete(&self, id: &JobId, result: JobResult) -> Result<()>;
 
+    /// Park a running job until human approval; stores `result` for a follow-up [`complete`].
+    async fn hold_for_approval(&self, id: &JobId, result: JobResult) -> Result<()>;
+
     /// Mark a job as failed.
     async fn fail(&self, id: &JobId, error: String) -> Result<()>;
 
@@ -405,4 +410,16 @@ pub trait ConfigPort: Send + Sync {
         let v = serde_json::to_value(value)?;
         self.set_value(key, v)
     }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  14. DeployPort — artifact deployment (e.g. Fly.io)
+// ════════════════════════════════════════════════════════════════════
+
+/// Push a build artifact to a hosting provider and read deployment status.
+#[async_trait]
+pub trait DeployPort: Send + Sync {
+    async fn deploy(&self, artifact_path: &Path, service_name: &str) -> Result<DeployedUrl>;
+
+    async fn status(&self, deployment_id: &str) -> Result<DeployStatus>;
 }

@@ -14,6 +14,7 @@ members = [
     "crates/rusvel-jobs",
     "crates/rusvel-auth",
     "crates/rusvel-config",
+    "crates/rusvel-deploy",
     "crates/rusvel-embed",
     "crates/rusvel-vector",
 
@@ -110,7 +111,6 @@ arrow-schema = "53"
 
 # DAG workflows
 petgraph = "0.7"
-rhai = "1"
 
 # Embed frontend
 rust-embed = { version = "8", features = ["compression"] }
@@ -128,6 +128,7 @@ rusvel-mcp-client = { path = "crates/rusvel-mcp-client" }
 rusvel-jobs = { path = "crates/rusvel-jobs" }
 rusvel-auth = { path = "crates/rusvel-auth" }
 rusvel-config = { path = "crates/rusvel-config" }
+rusvel-deploy = { path = "crates/rusvel-deploy" }
 rusvel-embed = { path = "crates/rusvel-embed" }
 rusvel-vector = { path = "crates/rusvel-vector" }
 forge-engine = { path = "crates/forge-engine" }

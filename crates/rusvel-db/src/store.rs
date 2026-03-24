@@ -307,6 +307,14 @@ impl ObjectStore for Database {
         param_values.push(Box::new(kind.to_string()));
         let mut idx = 2;
 
+        if let Some(ref sid) = filter.session_id {
+            sql.push_str(&format!(
+                " AND json_extract(data, '$.session_id') = ?{idx}"
+            ));
+            param_values.push(Box::new(sid.to_string()));
+            idx += 1;
+        }
+
         if let Some(limit) = filter.limit {
             sql.push_str(&format!(" LIMIT ?{idx}"));
             param_values.push(Box::new(i64::from(limit)));
@@ -1032,6 +1040,27 @@ impl JobPort for Database {
         JobStore::update(self, &job).await
     }
 
+    async fn hold_for_approval(&self, id: &JobId, result: JobResult) -> rusvel_core::Result<()> {
+        let mut job = JobStore::get(self, id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        if job.status != JobStatus::Running {
+            return Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "AwaitingApproval".into(),
+            });
+        }
+
+        job.status = JobStatus::AwaitingApproval;
+        job.metadata["approval_pending_result"] =
+            serde_json::to_value(&result).map_err(|e| RusvelError::Serialization(e.to_string()))?;
+        JobStore::update(self, &job).await
+    }
+
     async fn fail(&self, id: &JobId, error: String) -> rusvel_core::Result<()> {
         let mut job = JobStore::get(self, id)
             .await?
@@ -1326,6 +1355,64 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(limited.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn object_list_filters_by_session_id_json() {
+        let db = test_db();
+        let sid_a = SessionId::new();
+        let sid_b = SessionId::new();
+
+        ObjectStore::put(
+            &db,
+            "content",
+            "c1",
+            serde_json::json!({
+                "id": "00000000-0000-0000-0000-000000000001",
+                "session_id": sid_a.to_string(),
+                "title": "A",
+            }),
+        )
+        .await
+        .unwrap();
+        ObjectStore::put(
+            &db,
+            "content",
+            "c2",
+            serde_json::json!({
+                "id": "00000000-0000-0000-0000-000000000002",
+                "session_id": sid_b.to_string(),
+                "title": "B",
+            }),
+        )
+        .await
+        .unwrap();
+
+        let for_a = ObjectStore::list(
+            &db,
+            "content",
+            ObjectFilter {
+                session_id: Some(sid_a),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(for_a.len(), 1);
+        assert_eq!(for_a[0]["title"], "A");
+
+        let for_b = ObjectStore::list(
+            &db,
+            "content",
+            ObjectFilter {
+                session_id: Some(sid_b),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(for_b.len(), 1);
+        assert_eq!(for_b[0]["title"], "B");
     }
 
     // ── SessionStore tests ────────────────────────────────────────

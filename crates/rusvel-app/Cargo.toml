@@ -21,6 +21,7 @@ rusvel-memory = { workspace = true }
 rusvel-tool   = { workspace = true }
 rusvel-auth   = { workspace = true }
 rusvel-config = { workspace = true }
+rusvel-deploy = { workspace = true }
 
 # ─── Domain Engines ───
 forge-engine   = { workspace = true }

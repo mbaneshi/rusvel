@@ -19,6 +19,97 @@ pub struct ContentReview {
     pub approved: bool,
 }
 
+/// Build a drafting prompt from a code analysis summary and target content kind.
+///
+/// Pure string construction — callers pass the result to [`ContentWriter::draft`] as `topic`.
+pub fn build_code_prompt(summary: &CodeAnalysisSummary, kind: &ContentKind) -> String {
+    let stats_line = format!(
+        "{} files, {} symbols",
+        summary.total_files, summary.total_symbols
+    );
+    let symbols = if summary.top_symbols.is_empty() {
+        "(no function symbols listed)".to_string()
+    } else {
+        summary.top_symbols.join(", ")
+    };
+    let largest = summary
+        .largest_function
+        .as_deref()
+        .unwrap_or("not identified");
+
+    match kind {
+        ContentKind::LinkedInPost => {
+            format!(
+                "LinkedIn post about this codebase (repo: {}).\n\n\
+                 Open with one sharp hook line about what the project is.\n\
+                 Then give exactly 3 bullet lines with key stats: {}, top API areas: {}, largest function: {}.\n\
+                 Add 2–3 sentences on what makes the architecture or tech choices interesting for engineers.\n\
+                 Close with a clear CTA (e.g. try it, read the repo, or follow for updates).\n\n\
+                 Snapshot id: {}",
+                summary.repo_path, stats_line, symbols, largest, summary.snapshot_id
+            )
+        }
+        ContentKind::Thread => {
+            let mut chunks = Vec::new();
+            chunks.push(format!(
+                "Tweet 1: Hook — what is `{}` and why it matters.",
+                summary.repo_path
+            ));
+            chunks.push(format!("Tweet 2: Scale — {}.", stats_line));
+            chunks.push(format!("Tweet 3: Surface area — symbols to know: {}.", symbols));
+            chunks.push(format!(
+                "Tweet 4: Complexity hotspot — largest function: {}.",
+                largest
+            ));
+            chunks.push(format!(
+                "Tweet 5: Why engineers should care — one concrete takeaway from the structure."
+            ));
+            chunks.push(format!(
+                "Tweet 6: CTA — snapshot `{}`, invite readers to dig into the repo.",
+                summary.snapshot_id
+            ));
+            chunks.push(
+                "Tweet 7 (optional): One risk or next step you'd highlight for maintainers.".into(),
+            );
+            chunks.push(
+                "Tweet 8 (optional): Shout-out to a pattern or tool you noticed in the codebase."
+                    .into(),
+            );
+            format!(
+                "Twitter/X thread: write 6–8 short tweets (each one insight, under ~280 chars when published).\n\n{}",
+                chunks.join("\n\n")
+            )
+        }
+        ContentKind::Blog => {
+            format!(
+                "Technical blog post about repository `{}` (analysis snapshot {}).\n\n\
+                 Use this structure in markdown:\n\
+                 1. Title (you will put it on the first line as `# ...`)\n\
+                 2. Introduction — problem space and what the codebase does\n\
+                 3. Repository overview — {}, {}\n\
+                 4. Notable symbols and modules — {}\n\
+                 5. Complexity / hotspots — discuss `{}`\n\
+                 6. Engineering takeaways — patterns, testing, dependencies\n\
+                 7. Conclusion — who benefits and suggested next steps\n\n\
+                 Ground claims in the metrics above; do not invent file paths not implied by the summary.",
+                summary.repo_path,
+                summary.snapshot_id,
+                stats_line,
+                summary.total_symbols,
+                symbols,
+                largest
+            )
+        }
+        other => {
+            format!(
+                "Write a {other:?} piece about this codebase.\n\
+                 Repo: {}\nMetrics: {}\nTop symbols: {}\nLargest function: {}\nSnapshot: {}",
+                summary.repo_path, stats_line, symbols, largest, summary.snapshot_id
+            )
+        }
+    }
+}
+
 /// AI content writer backed by an [`AgentPort`].
 pub struct ContentWriter {
     agent: Arc<dyn AgentPort>,
@@ -160,4 +251,46 @@ fn extract_text(content: &Content) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod prompt_tests {
+    use super::build_code_prompt;
+    use rusvel_core::domain::{CodeAnalysisSummary, ContentKind};
+
+    fn sample_summary() -> CodeAnalysisSummary {
+        CodeAnalysisSummary {
+            snapshot_id: "snap-1".into(),
+            repo_path: "/repo".into(),
+            total_files: 10,
+            total_symbols: 200,
+            top_symbols: vec!["main".into(), "run".into()],
+            largest_function: Some("process_batch".into()),
+        }
+    }
+
+    #[test]
+    fn linkedin_prompt_includes_stats_and_cta() {
+        let p = build_code_prompt(&sample_summary(), &ContentKind::LinkedInPost);
+        assert!(p.contains("10 files, 200 symbols"));
+        assert!(p.contains("main, run"));
+        assert!(p.contains("CTA"));
+        assert!(p.contains("snap-1"));
+    }
+
+    #[test]
+    fn thread_prompt_has_multiple_insights() {
+        let p = build_code_prompt(&sample_summary(), &ContentKind::Thread);
+        assert!(p.contains("Tweet 1"));
+        assert!(p.contains("Tweet 6"));
+        assert!(p.contains("/repo"));
+    }
+
+    #[test]
+    fn blog_prompt_has_section_structure() {
+        let p = build_code_prompt(&sample_summary(), &ContentKind::Blog);
+        assert!(p.contains("Introduction"));
+        assert!(p.contains("Conclusion"));
+        assert!(p.contains("process_batch"));
+    }
 }

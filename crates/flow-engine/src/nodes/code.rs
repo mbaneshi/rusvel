@@ -1,4 +1,8 @@
-//! Code node — evaluates Rhai scripts for data transformation.
+//! Code node — returns a literal JSON value or extracts a field from inputs.
+//!
+//! Parameters:
+//!   - `"value"`: a literal JSON value to output
+//!   - `"extract"`: a dot-path to extract from the first input (e.g. "text", "score")
 
 use async_trait::async_trait;
 use rusvel_core::error::{Result, RusvelError};
@@ -14,54 +18,53 @@ impl NodeHandler for CodeNode {
     }
 
     async fn execute(&self, ctx: &NodeContext) -> Result<NodeOutput> {
-        let script = ctx
-            .node
-            .parameters
-            .get("script")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| RusvelError::Validation("Code node requires 'script' parameter".into()))?;
-
-        let mut engine = rhai::Engine::new();
-        // Inject inputs as variables
-        let mut scope = rhai::Scope::new();
-        for (key, value) in &ctx.inputs {
-            let json_str = serde_json::to_string(value).unwrap_or_default();
-            scope.push(key.clone(), json_str);
-        }
-        for (key, value) in &ctx.variables {
-            scope.push(key.clone(), value.clone());
+        // If "value" parameter exists, return it directly
+        if let Some(value) = ctx.node.parameters.get("value") {
+            return Ok(NodeOutput {
+                data: value.clone(),
+                output_name: "main".into(),
+            });
         }
 
-        // Limit execution to prevent infinite loops
-        engine.set_max_operations(10_000);
+        // If "extract" parameter exists, extract field from first input
+        if let Some(field) = ctx.node.parameters.get("extract").and_then(|v| v.as_str()) {
+            let input = ctx
+                .inputs
+                .values()
+                .next()
+                .ok_or_else(|| RusvelError::Validation("Code node has no inputs to extract from".into()))?;
 
-        let result = engine
-            .eval_with_scope::<rhai::Dynamic>(&mut scope, script)
-            .map_err(|e| RusvelError::Internal(format!("Rhai error: {e}")))?;
+            let extracted = walk_json_path(input, field);
+            return Ok(NodeOutput {
+                data: extracted,
+                output_name: "main".into(),
+            });
+        }
 
-        // Convert Rhai result to JSON
-        let output = rhai_to_json(&result);
+        // Default: pass through first input
+        let data = ctx
+            .inputs
+            .values()
+            .next()
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
 
         Ok(NodeOutput {
-            data: output,
+            data,
             output_name: "main".into(),
         })
     }
 }
 
-fn rhai_to_json(val: &rhai::Dynamic) -> serde_json::Value {
-    if val.is_string() {
-        serde_json::Value::String(val.clone().into_string().unwrap_or_default())
-    } else if val.is_int() {
-        serde_json::json!(val.as_int().unwrap_or(0))
-    } else if val.is_float() {
-        serde_json::json!(val.as_float().unwrap_or(0.0))
-    } else if val.is_bool() {
-        serde_json::json!(val.as_bool().unwrap_or(false))
-    } else if val.is_unit() {
-        serde_json::Value::Null
-    } else {
-        // Fallback: convert to string
-        serde_json::Value::String(format!("{val:?}"))
+/// Walk a dot-separated path into a JSON value.
+/// e.g. `walk_json_path({"a": {"b": 5}}, "a.b")` → `5`
+fn walk_json_path(value: &serde_json::Value, path: &str) -> serde_json::Value {
+    let mut current = value;
+    for segment in path.split('.') {
+        match current.get(segment) {
+            Some(v) => current = v,
+            None => return serde_json::Value::Null,
+        }
     }
+    current.clone()
 }

@@ -25,7 +25,9 @@ use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
 use rusvel_core::id::AgentProfileId;
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::{EmbeddingPort, JobPort, SessionPort, StoragePort, VectorStorePort};
+use rusvel_core::ports::{
+    ConfigPort, DeployPort, EmbeddingPort, JobPort, SessionPort, StoragePort, VectorStorePort,
+};
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_db::Database;
 use rusvel_embed::FastEmbedAdapter;
@@ -110,6 +112,43 @@ impl SessionPort for SessionAdapter {
     }
     async fn list(&self) -> rusvel_core::error::Result<Vec<SessionSummary>> {
         self.0.sessions().list_sessions().await
+    }
+}
+
+fn build_harvest_config(
+    config: &TomlConfig,
+    profile_path: &std::path::Path,
+) -> harvest_engine::HarvestConfig {
+    let mut skills: Vec<String> = Vec::new();
+    if let Ok(Some(v)) = config.get_value("harvest.skills") {
+        if let Some(arr) = v.as_array() {
+            skills.extend(
+                arr.iter()
+                    .filter_map(|x| x.as_str().map(str::trim))
+                    .filter(|s| !s.is_empty())
+                    .map(String::from),
+            );
+        } else if let Some(s) = v.as_str() {
+            skills.extend(
+                s.split(',')
+                    .map(str::trim)
+                    .filter(|t| !t.is_empty())
+                    .map(String::from),
+            );
+        }
+    }
+    if skills.is_empty() {
+        if let Ok(p) = UserProfile::load(profile_path) {
+            skills.extend(p.skills.primary);
+            skills.extend(p.skills.secondary);
+        }
+    }
+    if skills.is_empty() {
+        skills.push("rust".into());
+    }
+    harvest_engine::HarvestConfig {
+        skills,
+        min_budget: None,
     }
 }
 
@@ -837,7 +876,7 @@ async fn main() -> Result<()> {
         db.clone() as Arc<dyn StoragePort>,
         jobs.clone(),
         sessions.clone(),
-        config,
+        config.clone(),
     ));
 
     // 4b. Domain engines (Code, Content, Harvest)
@@ -851,11 +890,21 @@ async fn main() -> Result<()> {
         agent_for_content,
         jobs_for_engines,
     ));
-    let harvest_engine = Arc::new(harvest_engine::HarvestEngine::new(
-        db.clone() as Arc<dyn StoragePort>,
-    )
-        .with_events(events.clone())
-        .with_agent(agent_for_harvest));
+    content_engine.register_platform(Arc::new(
+        content_engine::adapters::linkedin::LinkedInAdapter::new(config.clone()),
+    ));
+    content_engine.register_platform(Arc::new(
+        content_engine::adapters::twitter::TwitterAdapter::new(config.clone()),
+    ));
+    let harvest_cfg = build_harvest_config(config.as_ref(), &data_dir.join("profile.toml"));
+    let harvest_engine = Arc::new(
+        harvest_engine::HarvestEngine::new(db.clone() as Arc<dyn StoragePort>)
+            .with_events(events.clone())
+            .with_agent(agent_for_harvest)
+            .with_config(harvest_cfg),
+    );
+    let config_port: Arc<dyn ConfigPort> = config.clone();
+    let deploy: Arc<dyn DeployPort> = Arc::new(rusvel_deploy::FlyDeployPort::new(config_port));
     let flow_engine = Arc::new(flow_engine::FlowEngine::new(
         db.clone() as Arc<dyn StoragePort>,
         events.clone(),
@@ -886,16 +935,24 @@ async fn main() -> Result<()> {
                     let job_id = job.id;
                     tracing::info!(job_id = %job_id, kind = ?job.kind, "Processing job");
 
-                    let result: std::result::Result<JobResult, rusvel_core::error::RusvelError> = match job.kind {
+                    let job_finish: std::result::Result<
+                        Option<JobResult>,
+                        rusvel_core::error::RusvelError,
+                    > = match job.kind {
                         JobKind::CodeAnalyze => {
-                            let path_str = job.payload.get("path")
+                            let path_str = job
+                                .payload
+                                .get("path")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".");
-                            match code_engine_worker.analyze(std::path::Path::new(path_str)).await {
-                                Ok(analysis) => Ok(JobResult {
+                            match code_engine_worker
+                                .analyze(std::path::Path::new(path_str))
+                                .await
+                            {
+                                Ok(analysis) => Ok(Some(JobResult {
                                     output: serde_json::to_value(&analysis).unwrap_or_default(),
                                     metadata: serde_json::json!({"engine": "code"}),
-                                }),
+                                })),
                                 Err(e) => {
                                     tracing::error!(job_id = %job_id, error = %e, "Code analyze failed");
                                     Err(e)
@@ -904,75 +961,130 @@ async fn main() -> Result<()> {
                         }
                         JobKind::ContentPublish => {
                             let sid = job.session_id;
-                            let content_id_str = job.payload.get("content_id")
+                            let content_id_str = job
+                                .payload
+                                .get("content_id")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
-                            let platform_str = job.payload.get("platform")
+                            let platform_str = job
+                                .payload
+                                .get("platform")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default();
                             if let (Ok(cid), Ok(platform)) = (
-                                content_id_str.parse::<uuid::Uuid>().map(rusvel_core::id::ContentId::from_uuid),
+                                content_id_str
+                                    .parse::<uuid::Uuid>()
+                                    .map(rusvel_core::id::ContentId::from_uuid),
                                 serde_json::from_value::<Platform>(serde_json::json!(platform_str)),
                             ) {
                                 match content_engine_worker.publish(&sid, cid, platform).await {
-                                    Ok(result) => Ok(JobResult {
+                                    Ok(result) => Ok(Some(JobResult {
                                         output: serde_json::to_value(&result).unwrap_or_default(),
                                         metadata: serde_json::json!({"engine": "content"}),
-                                    }),
+                                    })),
                                     Err(e) => {
                                         tracing::error!(job_id = %job_id, error = %e, "Content publish failed");
                                         Err(e)
                                     }
                                 }
                             } else {
-                                Ok(JobResult {
+                                Ok(Some(JobResult {
                                     output: serde_json::json!({"error": "invalid job payload: missing content_id or platform"}),
                                     metadata: serde_json::json!({"engine": "content"}),
-                                })
+                                }))
                             }
                         }
                         JobKind::HarvestScan => {
                             let sid = job.session_id;
                             match harvest_engine_worker
-                                .scan(&sid, &harvest_engine::source::MockSource)
+                                .scan(&sid, &harvest_engine::source::MockSource::new())
                                 .await
                             {
-                                Ok(opportunities) => Ok(JobResult {
+                                Ok(opportunities) => Ok(Some(JobResult {
                                     output: serde_json::json!({
                                         "count": opportunities.len(),
                                         "ids": opportunities.iter().map(|o| o.id.to_string()).collect::<Vec<_>>(),
                                     }),
                                     metadata: serde_json::json!({"engine": "harvest"}),
-                                }),
+                                })),
                                 Err(e) => {
                                     tracing::error!(job_id = %job_id, error = %e, "Harvest scan failed");
                                     Err(e)
                                 }
                             }
                         }
+                        JobKind::ProposalDraft => {
+                            let sid = job.session_id;
+                            if let Some(v) = job.metadata.get("approval_pending_result") {
+                                match serde_json::from_value::<JobResult>(v.clone()) {
+                                    Ok(result) => Ok(Some(result)),
+                                    Err(e) => Err(rusvel_core::error::RusvelError::Serialization(
+                                        e.to_string(),
+                                    )),
+                                }
+                            } else if let Some(opp) = job
+                                .payload
+                                .get("opportunity_id")
+                                .and_then(|x| x.as_str())
+                            {
+                                let profile = job
+                                    .payload
+                                    .get("profile")
+                                    .and_then(|x| x.as_str())
+                                    .unwrap_or("");
+                                match harvest_engine_worker
+                                    .generate_proposal(&sid, opp, profile)
+                                    .await
+                                {
+                                    Ok(proposal) => {
+                                        let job_result = JobResult {
+                                            output: serde_json::to_value(&proposal)
+                                                .unwrap_or_default(),
+                                            metadata: serde_json::json!({"engine": "harvest"}),
+                                        };
+                                        match job_port
+                                            .hold_for_approval(&job_id, job_result)
+                                            .await
+                                        {
+                                            Ok(()) => Ok(None),
+                                            Err(e) => Err(e),
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::error!(job_id = %job_id, error = %e, "Proposal draft failed");
+                                        Err(e)
+                                    }
+                                }
+                            } else {
+                                Err(rusvel_core::error::RusvelError::Validation(
+                                    "ProposalDraft job missing opportunity_id".into(),
+                                ))
+                            }
+                        }
                         JobKind::OutreachSend => {
                             // GTM engine not yet wired — keep as placeholder
                             tracing::info!(job_id = %job_id, "OutreachSend: GTM engine not yet wired");
-                            Ok(JobResult {
+                            Ok(Some(JobResult {
                                 output: serde_json::json!({"action": "outreach_send", "status": "engine_not_wired"}),
                                 metadata: serde_json::json!({}),
-                            })
+                            }))
                         }
                         _ => {
                             tracing::warn!(job_id = %job_id, kind = ?job.kind, "Unknown job kind");
-                            Ok(JobResult {
+                            Ok(Some(JobResult {
                                 output: serde_json::json!({"action": "unknown", "kind": format!("{:?}", job.kind)}),
                                 metadata: serde_json::json!({}),
-                            })
+                            }))
                         }
                     };
 
-                    match result {
-                        Ok(job_result) => {
+                    match job_finish {
+                        Ok(Some(job_result)) => {
                             if let Err(e) = job_port.complete(&job_id, job_result).await {
                                 tracing::error!(job_id = %job_id, error = %e, "Failed to mark job complete");
                             }
                         }
+                        Ok(None) => {}
                         Err(error) => {
                             if let Err(e) = job_port.fail(&job_id, error.to_string()).await {
                                 tracing::error!(job_id = %job_id, error = %e, "Failed to mark job failed");
@@ -1164,6 +1276,7 @@ async fn main() -> Result<()> {
             registry,
             embedding,
             vector_store,
+            deploy: Some(deploy),
         };
 
         // Look for frontend build in known locations (filesystem first)

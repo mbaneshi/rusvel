@@ -1,6 +1,10 @@
 //! Source adapter trait and implementations for opportunity discovery.
 
+use std::sync::OnceLock;
+
 use async_trait::async_trait;
+use regex::Regex;
+use reqwest::Url;
 use rusvel_core::{OpportunitySource, Result, RusvelError};
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +37,12 @@ pub trait HarvestSource: Send + Sync {
 
 /// Returns hardcoded test opportunities for development and testing.
 pub struct MockSource;
+
+impl MockSource {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 #[async_trait]
 impl HarvestSource for MockSource {
@@ -139,7 +149,7 @@ impl RssSource {
             let pub_date = Self::extract_tag(item_xml, "pubDate");
 
             if !title.is_empty() {
-                results.push(RawOpportunity {
+                let mut row = RawOpportunity {
                     title,
                     description,
                     url: link,
@@ -147,13 +157,160 @@ impl RssSource {
                     skills: Vec::new(),
                     posted_at: pub_date,
                     source_data: serde_json::json!({"rss": true}),
-                });
+                };
+                enrich_from_description(&mut row);
+                results.push(row);
             }
 
             search_from = abs_start + item_end_rel + 7;
         }
 
         results
+    }
+}
+
+/// Best-effort budget and skills extraction from RSS description HTML / text.
+pub fn enrich_from_description(raw: &mut RawOpportunity) {
+    let plain = strip_html_tags(&raw.description);
+    let combined = format!("{} {}", raw.title, plain);
+
+    static BUDGET: OnceLock<Regex> = OnceLock::new();
+    let budget_re = BUDGET.get_or_init(|| {
+        Regex::new(r"\$[\d,]+(?:\.\d{2})?(?:\s*-\s*\$?[\d,]+(?:\.\d{2})?)?")
+            .expect("budget regex")
+    });
+    if raw.budget.is_none()
+        && let Some(m) = budget_re.find(&combined)
+    {
+        raw.budget = Some(m.as_str().to_string());
+    }
+
+    if raw.skills.is_empty() {
+        let lower = combined.to_lowercase();
+        if let Some(idx) = lower.find("skills:").or_else(|| lower.find("skills :")) {
+            let tail = combined[idx..].split_once(':').map(|(_, r)| r).unwrap_or(&combined[idx..]);
+            let end = tail.find('\n').unwrap_or(tail.len());
+            let part = tail[..end].trim();
+            raw.skills = part
+                .split(|c| c == ',' || c == '·' || c == '|')
+                .map(|s| s.trim().trim_matches(|c| c == ' ' || c == '\t'))
+                .filter(|s| !s.is_empty() && s.len() < 48)
+                .take(16)
+                .map(String::from)
+                .collect();
+        }
+    }
+
+    static TAG: OnceLock<Regex> = OnceLock::new();
+    let tag_re = TAG.get_or_init(|| Regex::new(r"(?i)<a[^>]*>([^<]{2,40})</a>").expect("tag regex"));
+    if raw.skills.len() < 3 {
+        for cap in tag_re.captures_iter(&raw.description) {
+            if let Some(m) = cap.get(1) {
+                let s = m.as_str().trim();
+                if s.chars().any(|c| c.is_alphabetic()) && !raw.skills.contains(&s.to_string()) {
+                    raw.skills.push(s.to_string());
+                }
+                if raw.skills.len() >= 12 {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+fn strip_html_tags(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Upwork job RSS (`q` + optional skills, sort by recency).
+pub struct UpworkRssSource {
+    inner: RssSource,
+}
+
+impl UpworkRssSource {
+    pub fn new(query: String, skills: Vec<String>) -> Result<Self> {
+        let mut q = query.trim().to_string();
+        for s in skills {
+            if !s.is_empty() {
+                q.push(' ');
+                q.push_str(s.trim());
+            }
+        }
+        let mut url = Url::parse("https://www.upwork.com/ab/feed/jobs/rss")
+            .map_err(|e| RusvelError::Internal(format!("invalid Upwork URL: {e}")))?;
+        url.query_pairs_mut()
+            .append_pair("q", q.trim())
+            .append_pair("sort", "recency");
+        Ok(Self {
+            inner: RssSource::new("upwork_rss", url.to_string(), OpportunitySource::Upwork),
+        })
+    }
+}
+
+#[async_trait]
+impl HarvestSource for UpworkRssSource {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn source_kind(&self) -> OpportunitySource {
+        self.inner.source_kind()
+    }
+
+    async fn scan(&self) -> Result<Vec<RawOpportunity>> {
+        self.inner.scan().await
+    }
+}
+
+/// Freelancer.com project RSS.
+pub struct FreelancerRssSource {
+    inner: RssSource,
+}
+
+impl FreelancerRssSource {
+    pub fn new(query: String, skills: Vec<String>) -> Result<Self> {
+        let mut q = query.trim().to_string();
+        for s in skills {
+            if !s.is_empty() {
+                q.push(' ');
+                q.push_str(s.trim());
+            }
+        }
+        let mut url = Url::parse("https://www.freelancer.com/rss/projects")
+            .map_err(|e| RusvelError::Internal(format!("invalid Freelancer URL: {e}")))?;
+        url.query_pairs_mut().append_pair("query", q.trim());
+        Ok(Self {
+            inner: RssSource::new(
+                "freelancer_rss",
+                url.to_string(),
+                OpportunitySource::Freelancer,
+            ),
+        })
+    }
+}
+
+#[async_trait]
+impl HarvestSource for FreelancerRssSource {
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    fn source_kind(&self) -> OpportunitySource {
+        self.inner.source_kind()
+    }
+
+    async fn scan(&self) -> Result<Vec<RawOpportunity>> {
+        self.inner.scan().await
     }
 }
 
@@ -205,5 +362,36 @@ mod tests {
         assert_eq!(items[0].title, "Rust Developer Needed");
         assert_eq!(items[1].title, "Python ML Engineer");
         assert_eq!(items[0].url, Some("https://example.com/1".into()));
+    }
+
+    #[test]
+    fn enrich_extracts_budget_and_skills_line() {
+        let mut raw = RawOpportunity {
+            title: "Gig".into(),
+            description: "<p>Budget: $2,500 - $4,000</p><p>Skills: Rust, Tokio, SQL</p>".into(),
+            url: None,
+            budget: None,
+            skills: vec![],
+            posted_at: None,
+            source_data: serde_json::json!({}),
+        };
+        enrich_from_description(&mut raw);
+        assert_eq!(raw.budget.as_deref(), Some("$2,500 - $4,000"));
+        assert!(raw.skills.iter().any(|s| s.contains("Rust")));
+    }
+
+    #[test]
+    fn upwork_rss_url_contains_query() {
+        let u = UpworkRssSource::new("rust developer".into(), vec!["wasm".into()]).unwrap();
+        assert!(u.inner.url.contains("upwork.com"));
+        assert!(u.inner.url.contains("q=rust"));
+        assert!(u.inner.url.contains("wasm") || u.inner.url.contains("developer"));
+    }
+
+    #[test]
+    fn freelancer_rss_url_contains_query() {
+        let u = FreelancerRssSource::new("react".into(), vec![]).unwrap();
+        assert!(u.inner.url.contains("freelancer.com"));
+        assert!(u.inner.url.contains("query="));
     }
 }

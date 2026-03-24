@@ -372,6 +372,8 @@ pub enum JobKind {
     OutreachSend,
     HarvestScan,
     CodeAnalyze,
+    /// Generate a freelance proposal; parks at [`JobStatus::AwaitingApproval`] after generation.
+    ProposalDraft,
     ScheduledCron,
     Custom(String),
 }
@@ -635,6 +637,32 @@ pub struct CodeSnapshotRef {
     pub id: SnapshotId,
     pub repo: RepoRef,
     pub analyzed_at: DateTime<Utc>,
+}
+
+/// Compact summary of a code analysis run for content / social prompts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeAnalysisSummary {
+    pub snapshot_id: String,
+    pub repo_path: String,
+    pub total_files: usize,
+    pub total_symbols: usize,
+    pub top_symbols: Vec<String>,
+    pub largest_function: Option<String>,
+}
+
+/// Result of a successful deploy (URL + provider-specific id).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeployedUrl {
+    pub url: String,
+    pub deployment_id: String,
+}
+
+/// Observed state of a deployment on the provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeployStatus {
+    pub id: String,
+    pub state: String,
+    pub url: Option<String>,
 }
 
 // ════════════════════════════════════════════════════════════════════

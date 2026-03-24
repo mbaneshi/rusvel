@@ -10,7 +10,6 @@ description = "DAG-based workflow engine for RUSVEL"
 [dependencies]
 rusvel-core = { workspace = true }
 petgraph = { workspace = true }
-rhai = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

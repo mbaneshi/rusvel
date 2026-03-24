@@ -29,8 +29,14 @@ reqwest = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }
-axum-test = "16"
+forge-engine = { workspace = true }
+rusvel-config = { workspace = true }
 rusvel-core = { workspace = true }
+rusvel-db = { workspace = true }
+rusvel-event = { workspace = true }
+rusvel-memory = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

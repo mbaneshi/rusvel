@@ -194,7 +194,7 @@ mod tests {
                     id: n1,
                     node_type: "code".into(),
                     name: "step1".into(),
-                    parameters: serde_json::json!({"script": r#""hello""#}),
+                    parameters: serde_json::json!({"value": "hello"}),
                     position: (0.0, 0.0),
                     on_error: FlowErrorBehavior::StopFlow,
                     metadata: serde_json::json!({}),
@@ -203,7 +203,7 @@ mod tests {
                     id: n2,
                     node_type: "code".into(),
                     name: "step2".into(),
-                    parameters: serde_json::json!({"script": r#""world""#}),
+                    parameters: serde_json::json!({"value": "world"}),
                     position: (200.0, 0.0),
                     on_error: FlowErrorBehavior::StopFlow,
                     metadata: serde_json::json!({}),
@@ -253,7 +253,7 @@ mod tests {
                     id: n1,
                     node_type: "condition".into(),
                     name: "check".into(),
-                    parameters: serde_json::json!({"expression": "true"}),
+                    parameters: serde_json::json!({"result": true}),
                     position: (0.0, 0.0),
                     on_error: FlowErrorBehavior::StopFlow,
                     metadata: serde_json::json!({}),
@@ -262,7 +262,7 @@ mod tests {
                     id: n_true,
                     node_type: "code".into(),
                     name: "yes".into(),
-                    parameters: serde_json::json!({"script": r#""yes""#}),
+                    parameters: serde_json::json!({"value": "yes"}),
                     position: (200.0, -100.0),
                     on_error: FlowErrorBehavior::StopFlow,
                     metadata: serde_json::json!({}),
@@ -271,7 +271,7 @@ mod tests {
                     id: n_false,
                     node_type: "code".into(),
                     name: "no".into(),
-                    parameters: serde_json::json!({"script": r#""no""#}),
+                    parameters: serde_json::json!({"value": "no"}),
                     position: (200.0, 100.0),
                     on_error: FlowErrorBehavior::StopFlow,
                     metadata: serde_json::json!({}),
@@ -306,17 +306,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rhai_code_produces_output() {
+    async fn code_node_returns_value() {
         let n1 = FlowNodeId::new();
         let flow = FlowDef {
             id: FlowId::new(),
-            name: "rhai-test".into(),
-            description: "compute".into(),
+            name: "value-test".into(),
+            description: "literal value".into(),
             nodes: vec![FlowNodeDef {
                 id: n1,
                 node_type: "code".into(),
-                name: "calc".into(),
-                parameters: serde_json::json!({"script": "2 + 3"}),
+                name: "literal".into(),
+                parameters: serde_json::json!({"value": {"score": 85, "name": "test"}}),
                 position: (0.0, 0.0),
                 on_error: FlowErrorBehavior::StopFlow,
                 metadata: serde_json::json!({}),
@@ -333,21 +333,24 @@ mod tests {
 
         assert_eq!(exec.status, FlowExecutionStatus::Succeeded);
         let result = exec.node_results.get(&n1.to_string()).unwrap();
-        assert_eq!(result.output, Some(serde_json::json!(5)));
+        assert_eq!(
+            result.output,
+            Some(serde_json::json!({"score": 85, "name": "test"}))
+        );
     }
 
     #[tokio::test]
-    async fn error_stops_flow() {
+    async fn unknown_node_type_fails() {
         let n1 = FlowNodeId::new();
         let flow = FlowDef {
             id: FlowId::new(),
             name: "error-test".into(),
-            description: "bad script".into(),
+            description: "bad type".into(),
             nodes: vec![FlowNodeDef {
                 id: n1,
-                node_type: "code".into(),
+                node_type: "nonexistent".into(),
                 name: "bad".into(),
-                parameters: serde_json::json!({"script": "let x = ????"}),
+                parameters: serde_json::json!({}),
                 position: (0.0, 0.0),
                 on_error: FlowErrorBehavior::StopFlow,
                 metadata: serde_json::json!({}),
@@ -358,11 +361,8 @@ mod tests {
         };
 
         let reg = make_registry();
-        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg)
-            .await
-            .unwrap();
-
-        assert_eq!(exec.status, FlowExecutionStatus::Failed);
+        let result = executor::execute_flow(&flow, serde_json::json!({}), &reg).await;
+        assert!(result.is_err());
     }
 
     #[test]

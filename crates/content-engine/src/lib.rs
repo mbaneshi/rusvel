@@ -14,6 +14,7 @@ use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::*;
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
 
+pub mod adapters;
 pub mod analytics;
 pub mod calendar;
 pub mod platform;
@@ -22,7 +23,7 @@ pub mod writer;
 pub use analytics::ContentAnalytics;
 pub use calendar::{ContentCalendar, ScheduledPost};
 pub use platform::{MockPlatformAdapter, PlatformAdapter, PostMetrics, PublishResult};
-pub use writer::{ContentReview, ContentWriter};
+pub use writer::{build_code_prompt, ContentReview, ContentWriter};
 
 // ════════════════════════════════════════════════════════════════════
 //  Event constants
@@ -199,6 +200,22 @@ impl ContentEngine {
         self.emit(events::CONTENT_SCHEDULED, Some(*session_id), &content_id)
             .await?;
         Ok(())
+    }
+
+    /// Mark a content item as human-approved (ADR-008 content gate before publish).
+    pub async fn approve_content(&self, content_id: ContentId) -> Result<ContentItem> {
+        let json = self.load_content(&content_id).await?;
+        let mut item: ContentItem = serde_json::from_value(json)?;
+        item.approval = ApprovalStatus::Approved;
+        self.storage
+            .objects()
+            .put(
+                "content",
+                &content_id.to_string(),
+                serde_json::to_value(&item)?,
+            )
+            .await?;
+        Ok(item)
     }
 
     /// List content items, optionally filtered by status.

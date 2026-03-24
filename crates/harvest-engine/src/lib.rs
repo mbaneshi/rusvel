@@ -7,8 +7,8 @@ use chrono::Utc;
 use rusvel_core::engine::Engine;
 use rusvel_core::ports::{AgentPort, EventPort, StoragePort};
 use rusvel_core::{
-    Capability, EngineKind, Event, EventId, HealthStatus, Opportunity, OpportunityId,
-    OpportunityStage, Result, RusvelError, SessionId,
+    Capability, EngineKind, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
+    OpportunityId, OpportunityStage, Result, RusvelError, SessionId,
 };
 
 pub mod events;
@@ -19,6 +19,14 @@ pub mod source;
 
 use pipeline::{Pipeline, PipelineStats};
 use proposal::{Proposal, ProposalGenerator};
+
+/// Persisted proposal row in the object store (`kind`: `"proposal"`).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct StoredProposalRecord {
+    session_id: SessionId,
+    opportunity_id: String,
+    proposal: Proposal,
+}
 use scorer::OpportunityScorer;
 use source::HarvestSource;
 
@@ -69,6 +77,11 @@ impl HarvestEngine {
     pub fn with_config(mut self, config: HarvestConfig) -> Self {
         self.config = config;
         self
+    }
+
+    /// Skills used for scoring and RSS query expansion (see [`HarvestConfig`]).
+    pub fn harvest_skills(&self) -> &[String] {
+        &self.config.skills
     }
 
     /// Emit a domain event if the event port is configured.
@@ -244,7 +257,50 @@ impl HarvestEngine {
         )
         .await;
 
+        let ts = Utc::now().timestamp_millis();
+        let key = format!("{opportunity_id}_{ts}");
+        let record = StoredProposalRecord {
+            session_id: *session_id,
+            opportunity_id: opportunity_id.to_string(),
+            proposal: proposal.clone(),
+        };
+        self.storage
+            .objects()
+            .put(
+                "proposal",
+                &key,
+                serde_json::to_value(&record)?,
+            )
+            .await?;
+
+        self.emit(
+            session_id,
+            events::PROPOSAL_PERSISTED,
+            serde_json::json!({
+                "key": key,
+                "opportunity_id": opportunity_id,
+            }),
+        )
+        .await;
+
         Ok(proposal)
+    }
+
+    /// List persisted proposals for a session (`kind`: `"proposal"`).
+    pub async fn get_proposals(&self, session_id: &SessionId) -> Result<Vec<Proposal>> {
+        let filter = ObjectFilter {
+            session_id: Some(*session_id),
+            tags: vec![],
+            limit: None,
+            offset: None,
+        };
+        let rows = self.storage.objects().list("proposal", filter).await?;
+        let mut out = Vec::new();
+        for v in rows {
+            let rec: StoredProposalRecord = serde_json::from_value(v)?;
+            out.push(rec.proposal);
+        }
+        Ok(out)
     }
 
     /// Get pipeline statistics for a session.
@@ -353,14 +409,26 @@ mod tests {
             Ok(())
         }
 
-        async fn list(&self, kind: &str, _filter: ObjectFilter) -> Result<Vec<serde_json::Value>> {
-            Ok(self
-                .data
-                .lock()
-                .unwrap()
-                .get(kind)
-                .map(|m| m.values().cloned().collect())
-                .unwrap_or_default())
+        async fn list(&self, kind: &str, filter: ObjectFilter) -> Result<Vec<serde_json::Value>> {
+            let data = self.data.lock().unwrap();
+            let Some(m) = data.get(kind) else {
+                return Ok(vec![]);
+            };
+            let mut out: Vec<serde_json::Value> = m
+                .values()
+                .filter(|v| {
+                    filter.session_id.map_or(true, |sid| {
+                        v.get("session_id")
+                            .and_then(|x| x.as_str())
+                            .is_some_and(|s| s == sid.to_string())
+                    })
+                })
+                .cloned()
+                .collect();
+            if let Some(lim) = filter.limit {
+                out.truncate(lim as usize);
+            }
+            Ok(out)
         }
     }
 
@@ -546,5 +614,53 @@ mod tests {
         let engine = HarvestEngine::new(Arc::new(TestStorage::new()));
         let status = engine.health().await.unwrap();
         assert!(status.healthy);
+    }
+
+    #[tokio::test]
+    async fn get_proposals_respects_session_filter() {
+        let storage = Arc::new(TestStorage::new());
+        let engine = HarvestEngine::new(storage.clone());
+        let sid = SessionId::new();
+        let other = SessionId::new();
+        let proposal = Proposal {
+            body: "hello".into(),
+            estimated_value: None,
+            tone: "pro".into(),
+            metadata: serde_json::json!({}),
+        };
+        let rec = StoredProposalRecord {
+            session_id: sid,
+            opportunity_id: "opp-a".into(),
+            proposal,
+        };
+        storage
+            .objects()
+            .put(
+                "proposal",
+                "opp-a_1",
+                serde_json::to_value(&rec).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mut rec_other = rec.clone();
+        rec_other.session_id = other;
+        rec_other.opportunity_id = "opp-b".into();
+        storage
+            .objects()
+            .put(
+                "proposal",
+                "opp-b_1",
+                serde_json::to_value(&rec_other).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let mine = engine.get_proposals(&sid).await.unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].body, "hello");
+
+        let empty = engine.get_proposals(&SessionId::new()).await.unwrap();
+        assert!(empty.is_empty());
     }
 }

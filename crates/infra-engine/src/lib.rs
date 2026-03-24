@@ -327,6 +327,9 @@ mod tests {
         async fn complete(&self, _: &JobId, _: JobResult) -> Result<()> {
             Ok(())
         }
+        async fn hold_for_approval(&self, _: &JobId, _: JobResult) -> Result<()> {
+            Ok(())
+        }
         async fn fail(&self, _: &JobId, _: String) -> Result<()> {
             Ok(())
         }
@@ -370,7 +373,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(deployment.service, "rusvel-api");
-        assert_eq!(deployment.status, DeployStatus::Pending);
+        assert_eq!(deployment.status, crate::DeployStatus::Pending);
 
         let all = engine.deploy().list_deployments(sid).await.unwrap();
         assert_eq!(all.len(), 1);

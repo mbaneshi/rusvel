@@ -111,6 +111,29 @@ impl JobPort for JobQueue {
         Ok(())
     }
 
+    async fn hold_for_approval(&self, id: &JobId, result: JobResult) -> Result<()> {
+        let mut jobs = self.jobs.lock().await;
+        let job = jobs
+            .iter_mut()
+            .find(|j| &j.id == id)
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Job".into(),
+                id: id.to_string(),
+            })?;
+
+        if job.status != JobStatus::Running {
+            return Err(RusvelError::InvalidState {
+                from: format!("{:?}", job.status),
+                to: "AwaitingApproval".into(),
+            });
+        }
+
+        job.status = JobStatus::AwaitingApproval;
+        job.metadata["approval_pending_result"] =
+            serde_json::to_value(&result).map_err(|e| RusvelError::Serialization(e.to_string()))?;
+        Ok(())
+    }
+
     async fn fail(&self, id: &JobId, error: String) -> Result<()> {
         let mut jobs = self.jobs.lock().await;
         let job = jobs

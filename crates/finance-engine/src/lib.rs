@@ -312,6 +312,9 @@ mod tests {
         async fn complete(&self, _: &JobId, _: JobResult) -> Result<()> {
             Ok(())
         }
+        async fn hold_for_approval(&self, _: &JobId, _: JobResult) -> Result<()> {
+            Ok(())
+        }
         async fn fail(&self, _: &JobId, _: String) -> Result<()> {
             Ok(())
         }

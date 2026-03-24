@@ -31,6 +31,34 @@ pub struct CodeAnalysis {
     pub metrics: metrics::ProjectMetrics,
 }
 
+impl CodeAnalysis {
+    /// Build a compact summary for downstream content / social generation.
+    pub fn summary(&self) -> rusvel_core::domain::CodeAnalysisSummary {
+        use crate::parser::SymbolKind;
+        let top_symbols: Vec<String> = self
+            .symbols
+            .iter()
+            .filter(|s| s.kind == SymbolKind::Function)
+            .take(10)
+            .map(|s| s.name.clone())
+            .collect();
+        rusvel_core::domain::CodeAnalysisSummary {
+            snapshot_id: self.snapshot.id.to_string(),
+            repo_path: self.snapshot.repo.local_path.display().to_string(),
+            total_files: self.metrics.total_files,
+            total_symbols: self.metrics.total_symbols,
+            top_symbols,
+            largest_function: self.metrics.largest_function.clone(),
+        }
+    }
+}
+
+impl From<&CodeAnalysis> for rusvel_core::domain::CodeAnalysisSummary {
+    fn from(analysis: &CodeAnalysis) -> Self {
+        analysis.summary()
+    }
+}
+
 /// Code intelligence engine.
 pub struct CodeEngine {
     storage: Arc<dyn StoragePort>,
