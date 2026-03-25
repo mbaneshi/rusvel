@@ -46,7 +46,7 @@ use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
-    DeployPort, EmbeddingPort, EventPort, JobPort, SessionPort, StoragePort, ToolPort,
+    DeployPort, EmbeddingPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort, ToolPort,
     VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
@@ -71,6 +71,8 @@ pub struct AppState {
     pub registry: DepartmentRegistry,
     pub embedding: Option<Arc<dyn EmbeddingPort>>,
     pub vector_store: Option<Arc<dyn VectorStorePort>>,
+    /// Session-scoped FTS memory (SQLite + FTS5); required for hybrid search.
+    pub memory: Arc<dyn MemoryPort>,
     pub deploy: Option<Arc<dyn DeployPort>>,
     pub agent_runtime: Arc<AgentRuntime>,
     pub tools: Arc<dyn ToolPort>,
@@ -260,6 +262,10 @@ pub fn build_router_with_frontend(
         .route("/api/knowledge", get(knowledge::list_knowledge))
         .route("/api/knowledge/ingest", post(knowledge::ingest_knowledge))
         .route("/api/knowledge/search", post(knowledge::search_knowledge))
+        .route(
+            "/api/knowledge/hybrid-search",
+            post(knowledge::hybrid_search_knowledge),
+        )
         .route("/api/knowledge/stats", get(knowledge::knowledge_stats))
         .route(
             "/api/knowledge/{id}",

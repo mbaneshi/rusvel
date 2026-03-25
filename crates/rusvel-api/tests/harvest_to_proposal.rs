@@ -209,7 +209,7 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
     let forge = Arc::new(ForgeEngine::new(
         Arc::new(StaticForgeAgent),
         events.clone(),
-        memory,
+        memory.clone(),
         storage.clone(),
         jobs.clone(),
         sessions.clone(),
@@ -259,6 +259,7 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),
         embedding: None,
         vector_store: None,
+        memory: memory.clone(),
         deploy: None,
         agent_runtime,
         tools,

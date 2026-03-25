@@ -907,7 +907,7 @@ async fn main() -> Result<()> {
     let forge = Arc::new(ForgeEngine::new(
         agent,
         events.clone(),
-        memory,
+        memory.clone(),
         db.clone() as Arc<dyn StoragePort>,
         jobs.clone(),
         sessions.clone(),
@@ -1317,6 +1317,7 @@ async fn main() -> Result<()> {
             registry,
             embedding,
             vector_store,
+            memory: memory.clone(),
             deploy: Some(deploy),
             agent_runtime: agent_runtime.clone(),
             tools: tools.clone(),

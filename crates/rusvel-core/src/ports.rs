@@ -73,6 +73,24 @@ pub trait LlmPort: Send + Sync {
 
     /// List available models on this provider.
     async fn list_models(&self) -> Result<Vec<ModelRef>>;
+
+    /// Submit an async batch of [`LlmRequest`]s (discounted vs sync on supported providers).
+    ///
+    /// Default: not supported.
+    async fn submit_batch(&self, _batch: LlmBatchRequest) -> Result<LlmBatchSubmitResult> {
+        Err(crate::error::RusvelError::Llm(
+            "batch API not supported for this provider".into(),
+        ))
+    }
+
+    /// Poll a batch created by [`submit_batch`](Self::submit_batch).
+    ///
+    /// Default: not supported.
+    async fn poll_batch(&self, _handle: &BatchHandle) -> Result<LlmBatchPollResult> {
+        Err(crate::error::RusvelError::Llm(
+            "batch API not supported for this provider".into(),
+        ))
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════

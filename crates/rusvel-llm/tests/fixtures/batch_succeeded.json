@@ -1,0 +1,12 @@
+{
+  "custom_id": "fixture-1",
+  "result": {
+    "type": "succeeded",
+    "message": {
+      "content": [{ "type": "text", "text": "hello from batch" }],
+      "stop_reason": "end_turn",
+      "usage": { "input_tokens": 100, "output_tokens": 50 },
+      "model": "claude-sonnet-4-20250514"
+    }
+  }
+}

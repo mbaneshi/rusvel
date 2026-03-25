@@ -203,6 +203,112 @@ pub const RUSVEL_META_MODEL_TIER: &str = "rusvel.model_tier";
 /// Optional session scope for cost metrics (`SessionId` as string).
 pub const RUSVEL_META_SESSION_ID: &str = "rusvel.session_id";
 
+/// Marks spend from async batch API (e.g. 50% discount vs sync).
+pub const RUSVEL_META_BATCH: &str = "rusvel.batch";
+
+/// Per-response model hint for cost when the caller did not supply a full [`LlmRequest`] (batch poll).
+pub const RUSVEL_META_COST_MODEL: &str = "rusvel.cost_model";
+
+/// Provider name for [`RUSVEL_META_COST_MODEL`] (e.g. `"Claude"`).
+pub const RUSVEL_META_COST_PROVIDER: &str = "rusvel.cost_provider";
+
+/// Batch discount multiplier applied to estimated USD (e.g. `0.5` for 50% off).
+pub const RUSVEL_META_BATCH_DISCOUNT: &str = "rusvel.batch_discount";
+
+/// Default multiplier for [`estimate_llm_cost_usd`] on async batch completions (list-price proxy).
+pub const LLM_BATCH_COST_MULTIPLIER: f64 = 0.5;
+
+// ════════════════════════════════════════════════════════════════════
+//  LLM batch (LlmPort — async Message Batches / jobs layer)
+// ════════════════════════════════════════════════════════════════════
+
+/// Identifies a submitted batch job on a provider (used with [`crate::ports::LlmPort::poll_batch`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatchHandle {
+    pub provider: ModelProvider,
+    pub id: String,
+}
+
+/// One row in [`LlmBatchRequest`]; `id` becomes the provider `custom_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmBatchItem {
+    pub id: String,
+    pub request: LlmRequest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmBatchRequest {
+    pub items: Vec<LlmBatchItem>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmBatchSubmitResult {
+    pub handle: BatchHandle,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+/// Terminal and in-flight states for an async batch job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchJobStatus {
+    InProgress,
+    Ended,
+    Canceling,
+    Failed { message: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmBatchPollResult {
+    pub status: BatchJobStatus,
+    pub items: Vec<LlmBatchItemOutcome>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+/// One batch line result: either an [`LlmResponse`] or an error string from the provider.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmBatchItemOutcome {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response: Option<LlmResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl LlmBatchItemOutcome {
+    pub fn ok(id: impl Into<String>, response: LlmResponse) -> Self {
+        Self {
+            id: id.into(),
+            model: None,
+            response: Some(response),
+            error: None,
+        }
+    }
+
+    pub fn ok_with_model(id: impl Into<String>, model: ModelRef, response: LlmResponse) -> Self {
+        Self {
+            id: id.into(),
+            model: Some(model),
+            response: Some(response),
+            error: None,
+        }
+    }
+
+    pub fn err(id: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            model: None,
+            response: None,
+            error: Some(message.into()),
+        }
+    }
+}
+
 /// Heuristic USD estimate from usage (approximate public list prices; Ollama/local = 0).
 pub fn estimate_llm_cost_usd(provider: &ModelProvider, model: &str, usage: &LlmUsage) -> f64 {
     let in_m = usage.input_tokens as f64 / 1_000_000.0;
@@ -987,6 +1093,24 @@ pub struct VectorSearchResult {
     pub entry: VectorEntry,
     /// Cosine similarity score (higher = more relevant).
     pub score: f64,
+}
+
+/// Single hit from hybrid FTS + vector fusion ([`reciprocal_rank_fusion`](crate::rrf::reciprocal_rank_fusion)).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HybridSearchHit {
+    pub fusion_key: String,
+    pub rrf_score: f64,
+    pub source: HybridHitSource,
+    pub content: String,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HybridHitSource {
+    Fts,
+    Vector,
 }
 
 // ════════════════════════════════════════════════════════════════════

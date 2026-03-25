@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use rusvel_core::domain::*;
-use rusvel_core::error::RusvelError;
+use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::LlmPort;
 
 // ════════════════════════════════════════════════════════════════════
@@ -86,6 +86,14 @@ impl LlmPort for ClaudeProvider {
             model_ref("claude-3-5-sonnet-20241022"),
             model_ref("claude-3-5-haiku-20241022"),
         ])
+    }
+
+    async fn submit_batch(&self, batch: LlmBatchRequest) -> Result<LlmBatchSubmitResult> {
+        submit_message_batch(self, batch).await
+    }
+
+    async fn poll_batch(&self, handle: &BatchHandle) -> Result<LlmBatchPollResult> {
+        poll_message_batch(self, handle).await
     }
 }
 
@@ -297,6 +305,260 @@ fn extract_text(content: &Content) -> String {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Message Batches API (async, discounted)
+// ════════════════════════════════════════════════════════════════════
+
+const CLAUDE_BATCH_MAX_ITEMS: usize = 500;
+const ANTHROPIC_BATCH_BETA: &str = "message-batches-2024-09-24";
+
+#[derive(Serialize)]
+struct BatchCreateBody {
+    requests: Vec<BatchRequestRow>,
+}
+
+#[derive(Serialize)]
+struct BatchRequestRow {
+    custom_id: String,
+    params: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct MessageBatchRetrieve {
+    id: String,
+    processing_status: String,
+    #[serde(default)]
+    results_url: Option<String>,
+}
+
+fn apply_anthropic_headers(
+    provider: &ClaudeProvider,
+    req: reqwest::RequestBuilder,
+) -> reqwest::RequestBuilder {
+    req.header("x-api-key", &provider.api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+}
+
+fn apply_batch_headers(provider: &ClaudeProvider, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    apply_anthropic_headers(provider, req).header("anthropic-beta", ANTHROPIC_BATCH_BETA)
+}
+
+async fn submit_message_batch(
+    provider: &ClaudeProvider,
+    batch: LlmBatchRequest,
+) -> Result<LlmBatchSubmitResult> {
+    if batch.items.is_empty() {
+        return Err(RusvelError::Validation("batch has no items".into()));
+    }
+    if batch.items.len() > CLAUDE_BATCH_MAX_ITEMS {
+        return Err(RusvelError::Validation(format!(
+            "batch exceeds max of {CLAUDE_BATCH_MAX_ITEMS} items"
+        )));
+    }
+    for item in &batch.items {
+        if item.request.model.provider != ModelProvider::Claude {
+            return Err(RusvelError::Validation(
+                "Claude batch requires ModelProvider::Claude for every item".into(),
+            ));
+        }
+    }
+
+    let mut requests = Vec::with_capacity(batch.items.len());
+    for item in &batch.items {
+        let claude_req = to_claude_request(&item.request);
+        let params = serde_json::to_value(&claude_req).map_err(|e| {
+            RusvelError::Serialization(format!("batch params: {e}"))
+        })?;
+        requests.push(BatchRequestRow {
+            custom_id: item.id.clone(),
+            params,
+        });
+    }
+
+    let url = format!("{}/messages/batches", provider.base_url);
+    debug!(url = %url, n = requests.len(), "claude submit batch");
+
+    let req = provider.client.post(&url);
+    let http_resp = apply_batch_headers(provider, req)
+        .json(&BatchCreateBody { requests })
+        .send()
+        .await
+        .map_err(map_reqwest_error)?;
+
+    let status = http_resp.status();
+    if !status.is_success() {
+        let body = http_resp.text().await.unwrap_or_default();
+        return Err(map_claude_http_error(status.as_u16(), &body));
+    }
+
+    let created: MessageBatchRetrieve = http_resp.json().await.map_err(map_reqwest_error)?;
+    Ok(LlmBatchSubmitResult {
+        handle: BatchHandle {
+            provider: ModelProvider::Claude,
+            id: created.id,
+        },
+        metadata: serde_json::json!({}),
+    })
+}
+
+async fn poll_message_batch(
+    provider: &ClaudeProvider,
+    handle: &BatchHandle,
+) -> Result<LlmBatchPollResult> {
+    if handle.provider != ModelProvider::Claude {
+        return Err(RusvelError::Llm(
+            "batch handle is not for Claude provider".into(),
+        ));
+    }
+
+    let url = format!("{}/messages/batches/{}", provider.base_url, handle.id);
+    let req = provider.client.get(&url);
+    let http_resp = apply_batch_headers(provider, req)
+        .send()
+        .await
+        .map_err(map_reqwest_error)?;
+    let status = http_resp.status();
+    if !status.is_success() {
+        let body = http_resp.text().await.unwrap_or_default();
+        return Err(map_claude_http_error(status.as_u16(), &body));
+    }
+
+    let batch: MessageBatchRetrieve = http_resp.json().await.map_err(map_reqwest_error)?;
+
+    match batch.processing_status.as_str() {
+        "in_progress" => Ok(LlmBatchPollResult {
+            status: BatchJobStatus::InProgress,
+            items: vec![],
+            metadata: serde_json::json!({ "batch_id": batch.id }),
+        }),
+        "canceling" => Ok(LlmBatchPollResult {
+            status: BatchJobStatus::Canceling,
+            items: vec![],
+            metadata: serde_json::json!({ "batch_id": batch.id }),
+        }),
+        "ended" => {
+            let Some(results_url) = batch.results_url else {
+                return Ok(LlmBatchPollResult {
+                    status: BatchJobStatus::Ended,
+                    items: vec![],
+                    metadata: serde_json::json!({
+                        "batch_id": batch.id,
+                        "note": "no results_url yet",
+                    }),
+                });
+            };
+            fetch_batch_results_jsonl(provider, &results_url).await
+        }
+        other => Err(RusvelError::Llm(format!(
+            "unknown batch processing_status: {other}"
+        ))),
+    }
+}
+
+async fn fetch_batch_results_jsonl(
+    provider: &ClaudeProvider,
+    results_url: &str,
+) -> Result<LlmBatchPollResult> {
+    // Presigned `results_url` must be fetched without Anthropic auth headers.
+    let http_resp = provider
+        .client
+        .get(results_url)
+        .send()
+        .await
+        .map_err(map_reqwest_error)?;
+    let status = http_resp.status();
+    if !status.is_success() {
+        let body = http_resp.text().await.unwrap_or_default();
+        return Err(RusvelError::Llm(format!(
+            "batch results fetch HTTP {}: {}",
+            status.as_u16(),
+            body
+        )));
+    }
+
+    let text = http_resp.text().await.map_err(map_reqwest_error)?;
+    let mut items = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v: serde_json::Value =
+            serde_json::from_str(line).map_err(|e| RusvelError::Llm(format!("batch jsonl: {e}")))?;
+        let custom_id = v
+            .get("custom_id")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
+        let result = v.get("result");
+        let Some(result) = result else {
+            continue;
+        };
+        let ty = result.get("type").and_then(|x| x.as_str()).unwrap_or("");
+        match ty {
+            "succeeded" => {
+                let msg = result.get("message").cloned().ok_or_else(|| {
+                    RusvelError::Llm("batch line missing message".into())
+                })?;
+                let mut llm = message_value_to_llm_response(&msg)?;
+                let model = msg
+                    .get("model")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let mut meta = serde_json::Map::new();
+                meta.insert(RUSVEL_META_BATCH.to_string(), serde_json::json!(true));
+                meta.insert(
+                    RUSVEL_META_BATCH_DISCOUNT.to_string(),
+                    serde_json::json!(LLM_BATCH_COST_MULTIPLIER),
+                );
+                meta.insert(RUSVEL_META_COST_MODEL.to_string(), serde_json::json!(&model));
+                meta.insert(
+                    RUSVEL_META_COST_PROVIDER.to_string(),
+                    serde_json::json!("Claude"),
+                );
+                if let serde_json::Value::Object(m) = &mut llm.metadata {
+                    m.extend(meta);
+                } else {
+                    llm.metadata = serde_json::Value::Object(meta);
+                }
+                let model_ref = ModelRef {
+                    provider: ModelProvider::Claude,
+                    model: model.clone(),
+                };
+                items.push(LlmBatchItemOutcome::ok_with_model(custom_id, model_ref, llm));
+            }
+            "errored" => {
+                let err = result
+                    .get("error")
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "unknown batch error".into());
+                items.push(LlmBatchItemOutcome::err(custom_id, err));
+            }
+            _ => {
+                items.push(LlmBatchItemOutcome::err(
+                    custom_id,
+                    format!("unknown batch result type: {ty}"),
+                ));
+            }
+        }
+    }
+
+    Ok(LlmBatchPollResult {
+        status: BatchJobStatus::Ended,
+        items,
+        metadata: serde_json::json!({}),
+    })
+}
+
+fn message_value_to_llm_response(msg: &serde_json::Value) -> Result<LlmResponse> {
+    let claude_resp: ClaudeResponse = serde_json::from_value(msg.clone()).map_err(|e| {
+        RusvelError::Llm(format!("batch message parse: {e}"))
+    })?;
+    Ok(from_claude_response(claude_resp))
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Error mapping
 // ════════════════════════════════════════════════════════════════════
 
@@ -446,5 +708,21 @@ mod tests {
         let models = rt.block_on(provider.list_models()).unwrap();
         assert!(models.len() >= 3);
         assert!(models.iter().all(|m| m.provider == ModelProvider::Claude));
+    }
+
+    #[test]
+    fn batch_fixture_message_maps_to_response() {
+        let json = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/batch_succeeded.json"
+        ));
+        let v: serde_json::Value = serde_json::from_str(json).unwrap();
+        let msg = v["result"]["message"].clone();
+        let llm = message_value_to_llm_response(&msg).unwrap();
+        assert_eq!(llm.usage.input_tokens, 100);
+        match &llm.content.parts[0] {
+            Part::Text(t) => assert!(t.contains("batch")),
+            _ => panic!("expected text"),
+        }
     }
 }

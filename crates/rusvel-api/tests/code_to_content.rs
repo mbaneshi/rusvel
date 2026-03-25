@@ -178,7 +178,7 @@ async fn test_router() -> (Router, Arc<MockPlatformAdapter>, SessionId) {
     let forge = Arc::new(ForgeEngine::new(
         agent.clone(),
         events.clone(),
-        memory,
+        memory.clone(),
         storage.clone(),
         jobs.clone(),
         sessions.clone(),
@@ -224,6 +224,7 @@ async fn test_router() -> (Router, Arc<MockPlatformAdapter>, SessionId) {
         registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),
         embedding: None,
         vector_store: None,
+        memory: memory.clone(),
         deploy: None,
         agent_runtime,
         tools,

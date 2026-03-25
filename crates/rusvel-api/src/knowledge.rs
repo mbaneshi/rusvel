@@ -2,7 +2,11 @@
 //!
 //! Uses `EmbeddingPort` for text embedding and `VectorStorePort` for storage/retrieval.
 //! Chunking splits text by paragraphs (double newline), capping at 500 chars per chunk.
+//!
+//! Hybrid search fuses FTS5 session memory ([`rusvel_core::ports::MemoryPort`]) with
+//! LanceDB vector hits via [`rusvel_core::reciprocal_rank_fusion`] (v1: RRF only).
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::Json;
@@ -10,9 +14,19 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use rusvel_core::domain::{VectorEntry, VectorSearchResult};
+use rusvel_core::domain::{
+    HybridHitSource, HybridSearchHit, VectorEntry, VectorSearchResult,
+};
+use rusvel_core::id::SessionId;
+use rusvel_core::{reciprocal_rank_fusion, RRF_K_DEFAULT};
 
 use crate::AppState;
+
+/// Max candidates per leg and max fused results returned (explicit caps).
+pub const HYBRID_SEARCH_MAX_LIMIT: usize = 50;
+pub const HYBRID_DEFAULT_FTS_LIMIT: usize = 20;
+pub const HYBRID_DEFAULT_VECTOR_LIMIT: usize = 20;
+pub const HYBRID_DEFAULT_OUTPUT_LIMIT: usize = 10;
 
 // ── Request / Response types ─────────────────────────────────
 
@@ -31,6 +45,22 @@ pub struct IngestResponse {
 pub struct SearchRequest {
     pub query: String,
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HybridSearchRequest {
+    pub query: String,
+    /// Required — FTS leg is session-scoped.
+    pub session_id: String,
+    pub limit: Option<usize>,
+    pub fts_limit: Option<usize>,
+    pub vector_limit: Option<usize>,
+    pub rrf_k: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HybridSearchResponse {
+    pub hits: Vec<HybridSearchHit>,
 }
 
 #[derive(Debug, Serialize)]
@@ -219,6 +249,130 @@ pub async fn search_knowledge(
         })?;
 
     Ok(Json(results))
+}
+
+/// POST /api/knowledge/hybrid-search — RRF fusion of FTS memory + vector similarity (v1: no rerank).
+pub async fn hybrid_search_knowledge(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HybridSearchRequest>,
+) -> Result<Json<HybridSearchResponse>, (StatusCode, String)> {
+    let query = body.query.trim();
+    if query.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "query must not be empty".into()));
+    }
+
+    let session_uuid = uuid::Uuid::parse_str(body.session_id.trim()).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "session_id must be a valid UUID".into(),
+        )
+    })?;
+    let session_id = SessionId::from_uuid(session_uuid);
+
+    let embed_port = state.embedding.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Embedding service not available (required for hybrid vector leg)".into(),
+        )
+    })?;
+    let vector_store = state.vector_store.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available (required for hybrid vector leg)".into(),
+        )
+    })?;
+
+    let fts_limit = body
+        .fts_limit
+        .unwrap_or(HYBRID_DEFAULT_FTS_LIMIT)
+        .clamp(1, HYBRID_SEARCH_MAX_LIMIT);
+    let vector_limit = body
+        .vector_limit
+        .unwrap_or(HYBRID_DEFAULT_VECTOR_LIMIT)
+        .clamp(1, HYBRID_SEARCH_MAX_LIMIT);
+    let out_limit = body
+        .limit
+        .unwrap_or(HYBRID_DEFAULT_OUTPUT_LIMIT)
+        .clamp(1, HYBRID_SEARCH_MAX_LIMIT);
+    let rrf_k = body.rrf_k.unwrap_or(RRF_K_DEFAULT).max(1);
+
+    let mem_results = state
+        .memory
+        .search(&session_id, query, fts_limit)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Memory search failed: {e}"),
+            )
+        })?;
+
+    let query_embedding = embed_port.embed_one(query).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Embedding failed: {e}"),
+        )
+    })?;
+
+    let vec_results = vector_store
+        .search(&query_embedding, vector_limit)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Vector search failed: {e}"),
+            )
+        })?;
+
+    let mut fts_map: HashMap<String, rusvel_core::domain::MemoryEntry> = HashMap::new();
+    let mut fts_ids: Vec<String> = Vec::new();
+    for e in mem_results {
+        let Some(id) = e.id else {
+            continue;
+        };
+        let key = format!("fts:{}", id);
+        fts_ids.push(key.clone());
+        fts_map.insert(key, e);
+    }
+
+    let mut vec_map: HashMap<String, VectorSearchResult> = HashMap::new();
+    let mut vec_ids: Vec<String> = Vec::new();
+    for r in vec_results {
+        let key = format!("vec:{}", r.entry.id);
+        vec_ids.push(key.clone());
+        vec_map.insert(key, r);
+    }
+
+    let fused = reciprocal_rank_fusion(&[fts_ids, vec_ids], rrf_k);
+    let mut hits = Vec::new();
+    for (key, score) in fused.into_iter().take(out_limit) {
+        if let Some(entry) = fts_map.get(&key) {
+            hits.push(HybridSearchHit {
+                fusion_key: key,
+                rrf_score: score,
+                source: HybridHitSource::Fts,
+                content: entry.content.clone(),
+                metadata: serde_json::json!({
+                    "memory_kind": format!("{:?}", entry.kind),
+                    "memory": entry.metadata,
+                }),
+            });
+        } else if let Some(vr) = vec_map.get(&key) {
+            hits.push(HybridSearchHit {
+                fusion_key: key,
+                rrf_score: score,
+                source: HybridHitSource::Vector,
+                content: vr.entry.content.clone(),
+                metadata: serde_json::json!({
+                    "vector_score": vr.score,
+                    "source": vr.entry.source,
+                    "entry_metadata": vr.entry.metadata,
+                }),
+            });
+        }
+    }
+
+    Ok(Json(HybridSearchResponse { hits }))
 }
 
 /// GET /api/knowledge/stats — return knowledge base statistics.

@@ -90,6 +90,32 @@ impl LlmPort for MultiProvider {
         }
         Ok(all)
     }
+
+    async fn submit_batch(
+        &self,
+        batch: LlmBatchRequest,
+    ) -> rusvel_core::error::Result<LlmBatchSubmitResult> {
+        let first = batch
+            .items
+            .first()
+            .ok_or_else(|| RusvelError::Validation("batch has no items".into()))?;
+        let p = &first.request.model.provider;
+        for item in &batch.items[1..] {
+            if &item.request.model.provider != p {
+                return Err(RusvelError::Validation(
+                    "batch items must use the same model provider".into(),
+                ));
+            }
+        }
+        self.get(p)?.submit_batch(batch).await
+    }
+
+    async fn poll_batch(
+        &self,
+        handle: &BatchHandle,
+    ) -> rusvel_core::error::Result<LlmBatchPollResult> {
+        self.get(&handle.provider)?.poll_batch(handle).await
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
