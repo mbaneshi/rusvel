@@ -8,18 +8,17 @@
 
 | Metric | Count |
 |---|---|
-| Workspace crates | 49 |
-| Rust lines of code | ~43,276 |
+| Workspace crates | 48 |
+| Rust lines of code | ~43,670 |
 | Rust source files | 185 |
-| Total test suites | 98 (0 failures) |
-| API handler functions | ~115 |
-| API modules | 22+ |
-| Port traits (rusvel-core) | 20 (19 in ports.rs + Engine trait) |
+| Tests | 222 in 30 test binaries (0 failures) |
+| API handler functions | 124 across 23 modules |
+| Port traits (rusvel-core) | 19 (14 Port + 5 Store sub-traits) |
 | Domain types (rusvel-core) | 82 |
 | Departments | 12 |
 | Department crates (dept-*) | 13 |
-| Engines (wired / stub) | 5 / 8 |
-| Registered tools | 21+ (9 built-in + 12 engine + tool_search) |
+| Engines | 13 (all via DepartmentApp) |
+| Registered tools | 22+ (10 built-in incl. tool_search + 12 engine) |
 | MCP tools | 6 |
 | Frontend pages | 12+ (`/`, `/chat`, `/database/schema`, `/database/tables`, `/database/sql`, `/dept/[id]`, `/flows`, `/knowledge`, `/settings`, `+layout`, `+error`) |
 | Frontend Svelte components | ~40+ |
@@ -31,7 +30,7 @@
 | Check | Status |
 |---|---|
 | `cargo build` | Clean — 0 errors |
-| `cargo test` | 98 suites, 0 failures |
+| `cargo test` | 222 tests in 30 binaries, 0 failures |
 
 ---
 
@@ -39,7 +38,7 @@
 
 These features are wired from binary entry point through adapters to the frontend.
 
-**API server startup** — `rusvel-app/main.rs` boots all adapters (SQLite WAL, LLM with ModelTier routing + CostTracker, EventBus, MemoryStore, ScopedToolRegistry with 21+ tools, JobQueue, AgentRuntime with streaming, EmbeddingPort, VectorStore, TerminalPort), collects DepartmentApp instances from 13 dept-* crates, resolves dependencies via DepartmentManifest, calls register() in order, seeds default data, spawns job worker, starts Axum on `:3000` with graceful shutdown.
+**API server startup** — `rusvel-app/main.rs` boots all adapters (SQLite WAL, LLM with ModelTier routing + CostTracker, EventBus, MemoryStore, ScopedToolRegistry with 22+ tools, JobQueue, AgentRuntime with streaming, EmbeddingPort, VectorStore, TerminalPort), collects DepartmentApp instances from 13 dept-* crates, resolves dependencies via DepartmentManifest, calls register() in order, seeds default data, spawns job worker, starts Axum on `:3000` with graceful shutdown.
 
 **First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session.
 
@@ -107,7 +106,7 @@ These features are wired from binary entry point through adapters to the fronten
 
 ## 4. Built but Needs More Work
 
-**8 domain stub engines** — GTM, Finance, Product, Growth, Distro, Legal, Support, Infra exist with domain types and tests, but engine-specific logic isn't invoked via API or jobs. Chat works for all departments via generic agent.
+**8 domain engines (growing)** — GTM, Finance, Product, Growth, Distro, Legal, Support, Infra exist with domain types and DepartmentApp wrappers. Chat works for all 12 departments via the DepartmentApp pattern.
 
 **Authentication/authorization** — `rusvel-auth` is in-memory from env vars; no middleware on API routes.
 
@@ -117,7 +116,7 @@ These features are wired from binary entry point through adapters to the fronten
 
 ## 5. Test Breakdown by Crate
 
-98 test suites across the workspace, 0 failures. Distribution varies by crate;
+222 tests in 30 test binaries across the workspace, 0 failures. Distribution varies by crate;
 highest concentration in rusvel-llm, forge-engine, rusvel-api, rusvel-db, harvest-engine,
 rusvel-core (including DepartmentManifest + RegistrationContext tests), and rusvel-agent.
 
@@ -139,17 +138,17 @@ and the 8 stub engines.
 - **ModelTier routing** — Quick/Standard/Premium model selection based on task complexity
 - **CostTracker** — Per-session token usage and cost tracking
 - **LlmStreamEvent** — `stream()` method on `LlmPort` for incremental LLM output
-- **21+ registered tools** — 9 built-in + 12 engine-specific + tool_search
-- **TerminalPort** — New port trait in rusvel-core (port count 19 → 20)
+- **22+ registered tools** — 10 built-in (incl. tool_search) + 12 engine-specific
+- **TerminalPort** — New port trait in rusvel-core
 - **Approval UI shipped** — Frontend ApprovalCard, ApprovalQueue components
 - **ToolCallCard** — Frontend component for displaying tool calls in chat
 - **Manifest-aligned navigation** — Frontend nav driven by DepartmentManifest data
-- **Crate count**: 34 → 49
-- **Rust lines**: ~34k → ~43k
+- **Crate count**: 34 → 48
+- **Rust lines**: ~34k → ~43,670
 - **Source files**: → 185
-- **Test suites**: 118 → 98 (0 failures, consolidated)
-- **API handlers**: 79 → ~115
-- **Port traits**: 19 → 20
+- **Tests**: 118 → 222 in 30 binaries (0 failures)
+- **API handlers**: 79 → 124 across 23 modules
+- **Port traits**: 14 → 19 (14 Port + 5 Store)
 
 ## 7. History: Changes from 2026-03-23 Audit to 2026-03-24
 

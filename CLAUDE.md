@@ -6,8 +6,8 @@
 ## Quick Commands
 
 ```bash
-cargo build                    # Build all crates (49 crates)
-cargo test                     # Run all tests (98 suites, 0 failures)
+cargo build                    # Build all crates (48 crates)
+cargo test                     # Run all tests (222 tests in 30 binaries)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- --mcp             # Start MCP server (stdio JSON-RPC)
@@ -23,10 +23,10 @@ cargo run -- growth list       # List department items
 
 Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
-- **rusvel-core** — 14+ port traits + domain types + DepartmentApp trait + DepartmentManifest. Zero framework deps.
+- **rusvel-core** — 19 port traits (14 Port + 5 Store) + domain types + DepartmentApp trait + DepartmentManifest. Zero framework deps.
 - **Adapters** — Implement port traits (rusvel-db, rusvel-llm, rusvel-agent, etc.)
 - **Engines** — Domain logic, depend ONLY on rusvel-core traits (13 engines, all migrated to DepartmentApp pattern via ADR-014)
-- **dept-* wrappers** — 12 `dept-*` crates, one per department, each implementing DepartmentApp
+- **dept-* wrappers** — 13 `dept-*` crates (including dept-flow), each implementing DepartmentApp
 - **Surfaces** — CLI (3-tier: one-shot + REPL + TUI), API, MCP — wire adapters into engines
 - **rusvel-app** — Composition root, the single binary
 
@@ -42,11 +42,11 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 8. **NEVER use npm.** Use `pnpm` for all frontend/Node.js work. (`pnpm install`, `pnpm build`, `pnpm exec`).
 9. **NEVER use pip/pip3/python -m pip.** Use `uv` for all Python work. (`uv run`, `uv add`, `uv sync`).
 
-## Workspace Layout (49 crates)
+## Workspace Layout (48 crates)
 
 ```
 crates/
-├── rusvel-core/          Ports (14+ traits) + domain types + DepartmentApp trait + DepartmentManifest
+├── rusvel-core/          Ports (19 traits: 14 Port + 5 Store) + domain types + DepartmentApp trait + DepartmentManifest
 ├── rusvel-schema/        Database schema introspection (RusvelBase)
 ├── rusvel-db/            SQLite WAL + migrations
 ├── rusvel-llm/           4 providers: Ollama, OpenAI, Claude API, Claude CLI + multi-router + ModelTier routing
@@ -54,7 +54,7 @@ crates/
 ├── rusvel-event/         Event bus + persistence
 ├── rusvel-memory/        FTS5 session-namespaced search
 ├── rusvel-tool/          Tool registry + ScopedToolRegistry + JSON Schema validation
-├── rusvel-builtin-tools/ 9 built-in tools + tool_search meta-tool
+├── rusvel-builtin-tools/ 10 built-in tools (9 + tool_search meta-tool)
 ├── rusvel-engine-tools/  12 engine tools (harvest 5, content 5, code 2)
 ├── rusvel-mcp-client/    MCP client for external MCP servers
 ├── rusvel-jobs/          Central job queue + approval
@@ -91,7 +91,7 @@ crates/
 ├── dept-support/         Support department (DepartmentApp)
 ├── dept-infra/           Infra department (DepartmentApp)
 ├── rusvel-cli/           3-tier CLI: one-shot + REPL + TUI
-├── rusvel-api/           Axum HTTP: ~115 handler functions
+├── rusvel-api/           Axum HTTP: 124 handlers across 23 modules
 ├── rusvel-mcp/           MCP server (stdio JSON-RPC) — wired via --mcp flag
 ├── rusvel-tui/           TUI dashboard (ratatui) — wired via --tui flag
 └── rusvel-app/           Binary entry point + composition root + rust-embed frontend
@@ -107,7 +107,7 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 - **ModelTier routing** — Haiku/Sonnet/Opus + CostTracker in MetricStore
 - **ScopedToolRegistry** — Per-department tool filtering
 - **Deferred tool loading** — `tool_search` meta-tool (85% token savings)
-- **21+ registered tools** — 9 built-in (read_file, write_file, edit_file, glob, grep, bash, git_status, git_diff, git_log) + 12 engine tools (harvest 5, content 5, code 2) + tool_search meta-tool
+- **22+ registered tools** — 10 built-in (read_file, write_file, edit_file, glob, grep, bash, git_status, git_diff, git_log + tool_search) + 12 engine tools (harvest 5, content 5, code 2)
 - **MCP dispatch** — `--mcp` flag connects to `RusvelMcp::new()` in main.rs
 - **Department Registry** — 12 departments, parameterized API routes, dynamic frontend route
 - **Chat** — SSE streaming per department + God Agent chat
@@ -182,7 +182,7 @@ pnpm test:analyze              # AI-powered visual diff analysis (Claude Vision)
 ## Testing
 
 ```bash
-cargo test                     # All tests (98 suites, 0 failures)
+cargo test                     # All 222 tests in 30 binaries
 cargo test -p rusvel-core      # Single crate
 cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
 cargo test -p content-engine   # Content engine (7 tests)
@@ -206,11 +206,11 @@ curl -X POST http://localhost:3000/api/system/visual-report/self-correct  # Auto
 
 MCP tool: `visual_inspect` — run visual tests from Claude sessions.
 
-## API Modules (rusvel-api, ~115 handlers)
+## API Modules (rusvel-api, 124 handlers across 23 modules)
 
 agents, analytics, approvals, build_cmd, capability, chat, config, db_routes,
 department, engine_routes, flow_routes, help, hook_dispatch, hooks, knowledge,
-mcp_servers, routes, rules, skills, system, visual_report, workflows
+mcp_servers, routes, rules, skills, system, terminal, visual_report, workflows
 
 ## Python Scripts (uv)
 
@@ -225,7 +225,7 @@ uv run --with anthropic ...    # One-off with extra deps
 
 ## Stack
 
-- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~43k lines Rust, 185 source files)
+- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~43,670 lines Rust, 185 source files)
 - SvelteKit 5, Tailwind CSS 4, **pnpm** package manager
 - Python scripts: **uv** (pyproject.toml at workspace root)
 - LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented
