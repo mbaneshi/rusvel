@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { checkHealth, getPendingApprovals, approveJob, rejectJob, type Job } from '$lib/api';
+	import { refreshPendingApprovalCount } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	let health = $state('checking...');
 	let version = $state('0.1.0');
@@ -35,6 +36,7 @@
 		try {
 			await approveJob(id);
 			pendingJobs = pendingJobs.filter((j) => j.id !== id);
+			await refreshPendingApprovalCount();
 			toast.success('Job approved');
 		} catch (e) {
 			approvalsError = e instanceof Error ? e.message : 'Failed to approve job';
@@ -49,6 +51,7 @@
 		try {
 			await rejectJob(id);
 			pendingJobs = pendingJobs.filter((j) => j.id !== id);
+			await refreshPendingApprovalCount();
 			toast.success('Job rejected');
 		} catch (e) {
 			approvalsError = e instanceof Error ? e.message : 'Failed to reject job';
@@ -58,12 +61,13 @@
 		}
 	}
 
-	function formatKind(kind: string): string {
+	function formatKind(kind: Job['kind']): string {
+		if (typeof kind === 'string') return kind;
 		if (typeof kind === 'object' && kind !== null) {
 			const key = Object.keys(kind)[0];
 			return key ?? JSON.stringify(kind);
 		}
-		return kind;
+		return String(kind);
 	}
 
 	check();
