@@ -18,8 +18,11 @@ use rusvel_core::id::*;
 use rusvel_core::ports::*;
 use std::sync::Arc;
 
-pub use mission::{DailyPlan, Review};
-pub use personas::PersonaManager;
+pub use mission::{
+    forge_route_contributions_for_manifest, mission_tool_contributions_for_manifest, DailyPlan,
+    Review,
+};
+pub use personas::{persona_contributions_for_manifest, PersonaManager};
 pub use safety::SafetyGuard;
 
 /// The Forge Engine — agent orchestration + Mission planning.

@@ -3,6 +3,7 @@
 //! Provides a [`PersonaManager`] that ships with 10 default agent personas
 //! and supports adding custom ones at runtime.
 
+use rusvel_core::department::PersonaContribution;
 use rusvel_core::domain::*;
 use rusvel_core::id::AgentProfileId;
 
@@ -80,6 +81,33 @@ fn profile(
         budget_limit: Some(budget),
         metadata: serde_json::json!({}),
     }
+}
+
+fn provider_slug(p: &ModelProvider) -> &'static str {
+    match p {
+        ModelProvider::Claude => "claude",
+        ModelProvider::OpenAI => "openai",
+        ModelProvider::Gemini => "gemini",
+        ModelProvider::Ollama => "ollama",
+        ModelProvider::Other(_) => "other",
+    }
+}
+
+/// Maps the engine persona catalog to [`PersonaContribution`] for ADR-014 manifests.
+pub fn persona_contributions_for_manifest() -> Vec<PersonaContribution> {
+    default_personas()
+        .into_iter()
+        .map(|p| PersonaContribution {
+            name: p.name,
+            role: p.role,
+            default_model: format!(
+                "{}:{}",
+                provider_slug(&p.default_model.provider),
+                p.default_model.model
+            ),
+            allowed_tools: p.allowed_tools,
+        })
+        .collect()
 }
 
 /// The 10 built-in agent personas.
@@ -191,6 +219,14 @@ mod tests {
     fn default_personas_count() {
         let mgr = PersonaManager::new();
         assert_eq!(mgr.list().len(), 10);
+    }
+
+    #[test]
+    fn manifest_personas_match_catalog() {
+        let m = persona_contributions_for_manifest();
+        assert_eq!(m.len(), 10);
+        assert!(m.iter().any(|p| p.name == "CodeWriter"));
+        assert!(m.iter().any(|p| p.default_model.contains("llama3.2")));
     }
 
     #[test]

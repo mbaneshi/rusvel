@@ -1,5 +1,9 @@
 //! Static manifest for the Forge Department.
 
+use forge_engine::{
+    forge_route_contributions_for_manifest, mission_tool_contributions_for_manifest,
+    persona_contributions_for_manifest,
+};
 use rusvel_core::config::LayeredConfig;
 use rusvel_core::department::*;
 
@@ -43,63 +47,38 @@ pub fn forge_manifest() -> DepartmentManifest {
             },
         ],
 
-        routes: vec![],
+        routes: forge_route_contributions_for_manifest(),
 
         commands: vec![
             CommandContribution {
                 name: "mission".into(),
-                description: "Generate today's mission plan".into(),
-                args: vec![ArgDef {
-                    name: "subcommand".into(),
-                    description: "today | goals | review".into(),
-                    required: true,
-                    default: Some("today".into()),
-                }],
+                description: "Mission planning: today, goals, goal add, review".into(),
+                args: vec![
+                    ArgDef {
+                        name: "subcommand".into(),
+                        description: "today | goals | goal | review".into(),
+                        required: true,
+                        default: Some("today".into()),
+                    },
+                    ArgDef {
+                        name: "title".into(),
+                        description: "Goal title (for `goal add`)".into(),
+                        required: false,
+                        default: None,
+                    },
+                    ArgDef {
+                        name: "period".into(),
+                        description: "Review period: day | week | month | quarter".into(),
+                        required: false,
+                        default: Some("week".into()),
+                    },
+                ],
             },
         ],
 
-        tools: vec![],
+        tools: mission_tool_contributions_for_manifest(),
 
-        personas: vec![
-            PersonaContribution {
-                name: "code_writer".into(),
-                role: "Senior software engineer".into(),
-                default_model: "sonnet".into(),
-                allowed_tools: vec![
-                    "file_write".into(),
-                    "file_read".into(),
-                    "shell".into(),
-                ],
-            },
-            PersonaContribution {
-                name: "code_reviewer".into(),
-                role: "Expert code reviewer".into(),
-                default_model: "sonnet".into(),
-                allowed_tools: vec!["file_read".into(), "search".into()],
-            },
-            PersonaContribution {
-                name: "test_engineer".into(),
-                role: "QA and test engineer".into(),
-                default_model: "sonnet".into(),
-                allowed_tools: vec![
-                    "file_write".into(),
-                    "file_read".into(),
-                    "shell".into(),
-                ],
-            },
-            PersonaContribution {
-                name: "architect".into(),
-                role: "Systems architect".into(),
-                default_model: "opus".into(),
-                allowed_tools: vec!["file_read".into(), "search".into()],
-            },
-            PersonaContribution {
-                name: "researcher".into(),
-                role: "Technical researcher".into(),
-                default_model: "sonnet".into(),
-                allowed_tools: vec!["web_search".into(), "web_fetch".into()],
-            },
-        ],
+        personas: persona_contributions_for_manifest(),
 
         skills: vec![SkillContribution {
             name: "Daily Standup".into(),
@@ -113,13 +92,35 @@ pub fn forge_manifest() -> DepartmentManifest {
             .into(),
         }],
 
-        rules: vec![],
+        rules: vec![
+            RuleContribution {
+                name: "Forge safety — budget".into(),
+                content: concat!(
+                    "Mission and review flows use ForgeEngine safety: enforce aggregate spend ",
+                    "against the configured cost limit before starting LLM work. ",
+                    "If the budget would be exceeded, stop and surface a clear error."
+                )
+                .into(),
+                enabled: true,
+            },
+            RuleContribution {
+                name: "Forge safety — concurrency and circuit breaker".into(),
+                content: concat!(
+                    "Mission LLM runs acquire a concurrency slot and respect the circuit breaker. ",
+                    "After repeated failures the circuit opens; no further mission agent runs until reset. ",
+                    "When the circuit opens, the engine emits forge.safety.circuit_open."
+                )
+                .into(),
+                enabled: true,
+            },
+        ],
 
         jobs: vec![],
 
         ui: UiContribution {
             tabs: vec![
                 "actions".into(),
+                "engine".into(),
                 "agents".into(),
                 "workflows".into(),
                 "skills".into(),
@@ -136,11 +137,17 @@ pub fn forge_manifest() -> DepartmentManifest {
         },
 
         events_produced: vec![
-            "forge.mission_planned".into(),
-            "forge.goal_created".into(),
-            "forge.goal_updated".into(),
-            "forge.review_completed".into(),
-            "forge.agent_hired".into(),
+            "forge.agent.created".into(),
+            "forge.agent.started".into(),
+            "forge.agent.completed".into(),
+            "forge.agent.failed".into(),
+            "forge.mission.plan_generated".into(),
+            "forge.mission.goal_created".into(),
+            "forge.mission.goal_updated".into(),
+            "forge.mission.review_completed".into(),
+            "forge.persona.hired".into(),
+            "forge.safety.budget_warning".into(),
+            "forge.safety.circuit_open".into(),
         ],
         events_consumed: vec![],
 
@@ -156,7 +163,15 @@ pub fn forge_manifest() -> DepartmentManifest {
 
         depends_on: vec![],
 
-        config_schema: serde_json::json!({}),
+        config_schema: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "mission_budget_ceiling": {
+                    "type": "number",
+                    "description": "Soft cap for mission LLM spend (safety guard default is separate)"
+                }
+            }
+        }),
         default_config: LayeredConfig::default(),
     }
 }
@@ -176,8 +191,10 @@ mod tests {
     #[test]
     fn manifest_declares_personas() {
         let m = forge_manifest();
-        assert_eq!(m.personas.len(), 5);
-        assert!(m.personas.iter().any(|p| p.name == "architect"));
+        assert_eq!(m.personas.len(), 10);
+        assert!(m.personas.iter().any(|p| p.name == "CodeWriter"));
+        assert!(m.tools.len() >= 5);
+        assert!(!m.routes.is_empty());
     }
 
     #[test]
@@ -191,5 +208,14 @@ mod tests {
     fn manifest_has_no_deps() {
         let m = forge_manifest();
         assert!(m.depends_on.is_empty());
+    }
+
+    #[test]
+    fn manifest_rules_cover_safety() {
+        let m = forge_manifest();
+        assert!(m
+            .rules
+            .iter()
+            .any(|r| r.name.contains("circuit") && r.enabled));
     }
 }
