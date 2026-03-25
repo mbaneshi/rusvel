@@ -410,7 +410,13 @@ impl AgentPort for AgentRuntime {
         let mut total_usage = LlmUsage::default();
         let mut tool_calls: u32 = 0;
 
-        let tool_defs: Vec<ToolDefinition> = self.tools.list();
+        // Deferred tool loading: only non-searchable tools in the initial prompt.
+        let mut tool_defs: Vec<ToolDefinition> = self
+            .tools
+            .list()
+            .into_iter()
+            .filter(|t| !t.searchable)
+            .collect();
 
         // ── Agent loop ───────────────────────────────────────────────
         for iteration in 0..MAX_ITERATIONS {
@@ -475,6 +481,27 @@ impl AgentPort for AgentRuntime {
                     // Execute the tool.
                     let tool_result = self.tools.call(&tool_name, tool_args.clone()).await;
                     tool_calls += 1;
+
+                    // Deferred tool loading: inject discovered tools.
+                    if tool_name == "tool_search" {
+                        if let Ok(ref r) = tool_result {
+                            if let Some(names) = r.metadata.get("discovered_tools") {
+                                if let Some(arr) = names.as_array() {
+                                    let query = tool_args
+                                        .get("query")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("");
+                                    let discovered = self.tools.search(query, arr.len().max(10));
+                                    for tool in discovered {
+                                        if !tool_defs.iter().any(|t| t.name == tool.name) {
+                                            debug!(%run_id, tool_name = %tool.name, "discovered tool via search");
+                                            tool_defs.push(tool);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Build a ToolResult part with the proper tool_call_id.
                     let (result_text, is_error) = match &tool_result {

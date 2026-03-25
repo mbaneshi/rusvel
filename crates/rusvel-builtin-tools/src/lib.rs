@@ -6,6 +6,7 @@
 mod file_ops;
 mod git;
 mod shell;
+pub mod tool_search;
 
 use rusvel_tool::ToolRegistry;
 

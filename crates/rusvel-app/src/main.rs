@@ -861,6 +861,7 @@ async fn main() -> Result<()> {
     let tool_registry = Arc::new(ToolRegistry::new());
     rusvel_builtin_tools::register_all(&tool_registry).await;
     let tools: Arc<dyn rusvel_core::ports::ToolPort> = tool_registry.clone();
+    rusvel_builtin_tools::tool_search::register(&tool_registry, tools.clone()).await;
     // Single SQLite-backed queue: worker, ContentCalendar, ForgeEngine, and
     // GET/POST /api/approvals all use this same `Database` as `JobPort` (ADR-003, ADR-008).
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;

@@ -11,7 +11,6 @@ use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use rusvel_core::domain::{VectorEntry, VectorSearchResult};
-use rusvel_core::ports::{EmbeddingPort, VectorStorePort};
 
 use crate::AppState;
 
