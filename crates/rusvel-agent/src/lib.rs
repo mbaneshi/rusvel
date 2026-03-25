@@ -206,7 +206,14 @@ async fn run_streaming_loop(
 
     let mut total_usage = LlmUsage::default();
     let mut tool_calls: u32 = 0;
-    let tool_defs = tools.list();
+
+    // Deferred tool loading: only non-searchable tools go into the initial prompt.
+    // Searchable tools are discovered via `tool_search` and added dynamically.
+    let mut tool_defs: Vec<ToolDefinition> = tools
+        .list()
+        .into_iter()
+        .filter(|t| !t.searchable)
+        .collect();
 
     for iteration in 0..MAX_ITERATIONS {
         debug!(%run_id, iteration, "streaming agent loop iteration");
@@ -274,8 +281,30 @@ async fn run_streaming_loop(
                     content: response.content,
                 });
 
-                let tool_result = tools.call(&tool_name, tool_args).await;
+                let tool_result = tools.call(&tool_name, tool_args.clone()).await;
                 tool_calls += 1;
+
+                // Deferred tool loading: when tool_search is called,
+                // inject discovered tools into subsequent LLM requests.
+                if tool_name == "tool_search" {
+                    if let Ok(ref r) = tool_result {
+                        if let Some(names) = r.metadata.get("discovered_tools") {
+                            if let Some(arr) = names.as_array() {
+                                let query = tool_args
+                                    .get("query")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("");
+                                let discovered = tools.search(query, arr.len().max(10));
+                                for tool in discovered {
+                                    if !tool_defs.iter().any(|t| t.name == tool.name) {
+                                        debug!(%run_id, tool_name = %tool.name, "discovered tool via search");
+                                        tool_defs.push(tool);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 let (result_text, is_error) = match &tool_result {
                     Ok(r) => {
@@ -381,8 +410,7 @@ impl AgentPort for AgentRuntime {
         let mut total_usage = LlmUsage::default();
         let mut tool_calls: u32 = 0;
 
-        // Resolve available tool definitions once before the loop.
-        let tool_defs = self.tools.list();
+        let tool_defs: Vec<ToolDefinition> = self.tools.list();
 
         // ── Agent loop ───────────────────────────────────────────────
         for iteration in 0..MAX_ITERATIONS {
@@ -445,7 +473,7 @@ impl AgentPort for AgentRuntime {
                     });
 
                     // Execute the tool.
-                    let tool_result = self.tools.call(&tool_name, tool_args).await;
+                    let tool_result = self.tools.call(&tool_name, tool_args.clone()).await;
                     tool_calls += 1;
 
                     // Build a ToolResult part with the proper tool_call_id.
@@ -582,6 +610,10 @@ mod tests {
         }
 
         fn list(&self) -> Vec<ToolDefinition> {
+            vec![]
+        }
+
+        fn search(&self, _query: &str, _limit: usize) -> Vec<ToolDefinition> {
             vec![]
         }
 

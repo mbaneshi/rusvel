@@ -112,6 +112,11 @@ pub trait ToolPort: Send + Sync {
     /// List all registered tools.
     fn list(&self) -> Vec<ToolDefinition>;
 
+    /// Search tools by query. Default returns empty (P1: deferred tool loading).
+    fn search(&self, _query: &str, _limit: usize) -> Vec<ToolDefinition> {
+        vec![]
+    }
+
     /// Get the JSON Schema for a tool's parameters.
     fn schema(&self, name: &str) -> Option<serde_json::Value>;
 }

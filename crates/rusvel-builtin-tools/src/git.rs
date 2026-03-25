@@ -23,6 +23,7 @@ pub async fn register(registry: &ToolRegistry) {
                         }
                     }
                 }),
+                searchable: false,
                 metadata: json!({"category": "git", "read_only": true}),
             },
             Arc::new(|args| {
@@ -75,6 +76,7 @@ pub async fn register(registry: &ToolRegistry) {
                         }
                     }
                 }),
+                searchable: false,
                 metadata: json!({"category": "git", "read_only": true}),
             },
             Arc::new(|args| {
@@ -129,6 +131,7 @@ pub async fn register(registry: &ToolRegistry) {
                         }
                     }
                 }),
+                searchable: false,
                 metadata: json!({"category": "git", "read_only": true}),
             },
             Arc::new(|args| {

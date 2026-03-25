@@ -165,9 +165,44 @@ impl ToolPort for ToolRegistry {
 
     /// Return definitions for all registered tools.
     fn list(&self) -> Vec<ToolDefinition> {
-        // Use blocking read — `list` is a sync method on the trait.
         let map = self.tools.read().unwrap();
         map.values().map(|r| r.definition.clone()).collect()
+    }
+
+    /// Search tools by query. Matches query words against name and description.
+    /// Only returns tools marked `searchable: true`.
+    fn search(&self, query: &str, limit: usize) -> Vec<ToolDefinition> {
+        let query_lower = query.to_lowercase();
+        let query_words: Vec<&str> = query_lower.split_whitespace().collect();
+        if query_words.is_empty() {
+            return vec![];
+        }
+
+        let map = self.tools.read().unwrap();
+        let mut scored: Vec<(f64, &ToolDefinition)> = map
+            .values()
+            .filter(|r| r.definition.searchable)
+            .filter_map(|r| {
+                let name = r.definition.name.to_lowercase();
+                let desc = r.definition.description.to_lowercase();
+                let haystack = format!("{name} {desc}");
+
+                let matches = query_words
+                    .iter()
+                    .filter(|w| haystack.contains(**w))
+                    .count();
+
+                if matches > 0 {
+                    let score = matches as f64 / query_words.len() as f64;
+                    Some((score, &r.definition))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        scored.into_iter().take(limit).map(|(_, d)| d.clone()).collect()
     }
 
     /// Return the JSON Schema for a specific tool's parameters.
@@ -231,6 +266,14 @@ impl ToolPort for ScopedToolRegistry {
             .collect()
     }
 
+    fn search(&self, query: &str, limit: usize) -> Vec<ToolDefinition> {
+        self.inner
+            .search(query, limit)
+            .into_iter()
+            .filter(|t| self.is_allowed(&t.name))
+            .collect()
+    }
+
     fn schema(&self, name: &str) -> Option<serde_json::Value> {
         if self.is_allowed(name) {
             self.inner.schema(name)
@@ -261,6 +304,7 @@ mod tests {
                 },
                 "required": ["message"]
             }),
+            searchable: false,
             metadata: json!({}),
         }
     }

@@ -73,7 +73,6 @@ mod tests {
     use super::*;
 
     use chrono::Utc;
-    use rusvel_core::domain::EngineKind;
     use std::sync::Mutex;
 
     /// Minimal in-memory EventStore for testing.
@@ -127,7 +126,7 @@ mod tests {
             id: EventId::new(),
             session_id: None,
             run_id: None,
-            source: EngineKind::Forge,
+            source: "forge".into(),
             kind: kind.into(),
             payload: serde_json::json!({}),
             created_at: Utc::now(),

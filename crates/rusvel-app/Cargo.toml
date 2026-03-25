@@ -38,6 +38,21 @@ support-engine = { workspace = true }
 infra-engine   = { workspace = true }
 flow-engine    = { workspace = true }
 
+# ─── Department Apps (ADR-014) ───
+dept-forge     = { path = "../dept-forge" }
+dept-content   = { path = "../dept-content" }
+dept-code      = { path = "../dept-code" }
+dept-harvest   = { path = "../dept-harvest" }
+dept-flow      = { path = "../dept-flow" }
+dept-gtm       = { path = "../dept-gtm" }
+dept-finance   = { path = "../dept-finance" }
+dept-product   = { path = "../dept-product" }
+dept-growth    = { path = "../dept-growth" }
+dept-distro    = { path = "../dept-distro" }
+dept-legal     = { path = "../dept-legal" }
+dept-support   = { path = "../dept-support" }
+dept-infra     = { path = "../dept-infra" }
+
 # ─── RAG ───
 rusvel-embed  = { workspace = true }
 rusvel-vector = { workspace = true }

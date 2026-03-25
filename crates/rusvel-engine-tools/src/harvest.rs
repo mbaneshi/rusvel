@@ -23,7 +23,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         },
                         "required": ["session_id"]
                     }),
-                    metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    searchable: false,
+                metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -57,7 +58,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         },
                         "required": ["session_id", "opportunity_id"]
                     }),
-                    metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    searchable: false,
+                metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -92,7 +94,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         },
                         "required": ["session_id", "opportunity_id", "profile"]
                     }),
-                    metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    searchable: false,
+                metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -131,7 +134,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         },
                         "required": ["session_id"]
                     }),
-                    metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    searchable: false,
+                metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -164,7 +168,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         },
                         "required": ["session_id"]
                     }),
-                    metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    searchable: false,
+                metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();

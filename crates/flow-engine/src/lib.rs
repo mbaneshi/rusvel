@@ -126,7 +126,7 @@ impl FlowEngine {
                 id: rusvel_core::id::EventId::new(),
                 session_id: None,
                 run_id: None,
-                source: EngineKind::Forge,
+                source: "flow".into(),
                 kind: "flow.execution.completed".into(),
                 payload: serde_json::json!({
                     "flow_id": id.to_string(),

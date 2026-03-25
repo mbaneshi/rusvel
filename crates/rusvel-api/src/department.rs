@@ -327,8 +327,9 @@ pub async fn dept_chat(
     }
 
     // Inject engine-specific capabilities into system prompt
-    match engine_kind {
-        rusvel_core::domain::EngineKind::Code => {
+    let engine_id = engine_kind.as_department_id();
+    match engine_id {
+        "code" => {
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
                  This department has a wired Code Engine with real capabilities:\n\
@@ -337,7 +338,7 @@ pub async fn dept_chat(
                  You can direct users to these endpoints or describe the analysis results.",
             );
         }
-        rusvel_core::domain::EngineKind::Content => {
+        "content" => {
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
                  This department has a wired Content Engine with real capabilities:\n\
@@ -348,7 +349,7 @@ pub async fn dept_chat(
                  Platforms: DevTo, Twitter, LinkedIn, Mastodon, Bluesky, Medium",
             );
         }
-        rusvel_core::domain::EngineKind::Harvest => {
+        "harvest" => {
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
                  This department has a wired Harvest Engine with real capabilities:\n\
@@ -471,7 +472,7 @@ pub async fn dept_chat(
                     let conv_id_inner = conv_id.clone();
                     let ns_inner = ns.clone();
                     let text = full_text.clone();
-                    let eng = engine_kind;
+                    let eng = engine_kind.as_department_id().to_string();
                     tokio::spawn(async move {
                         let msg = ChatMessage {
                             id: uuid::Uuid::now_v7().to_string(),
@@ -486,7 +487,7 @@ pub async fn dept_chat(
                                 id: EventId::new(),
                                 session_id: None,
                                 run_id: None,
-                                source: eng,
+                                source: eng.clone(),
                                 kind: format!("{eng}.chat.completed"),
                                 payload: serde_json::json!({
                                     "conversation_id": conv_id_inner,
@@ -601,7 +602,7 @@ pub async fn dept_events(
     state
         .events
         .query(EventFilter {
-            source: Some(dept_def.engine_kind),
+            source: Some(dept_def.engine_kind.as_department_id().into()),
             limit: Some(50),
             ..Default::default()
         })

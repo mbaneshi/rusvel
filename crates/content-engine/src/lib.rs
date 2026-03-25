@@ -270,7 +270,7 @@ impl ContentEngine {
             id: EventId::new(),
             session_id,
             run_id: None,
-            source: EngineKind::Content,
+            source: "content".into(),
             kind: kind.into(),
             payload: serde_json::json!({ "content_id": content_id.to_string() }),
             created_at: Utc::now(),
@@ -283,8 +283,8 @@ impl ContentEngine {
 
 #[async_trait]
 impl Engine for ContentEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Content
+    fn kind(&self) -> &str {
+        "content"
     }
     fn name(&self) -> &'static str {
         "Content Engine"

@@ -31,6 +31,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["command"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "shell", "destructive": true}),
             },
             Arc::new(|args| {

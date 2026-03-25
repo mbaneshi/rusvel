@@ -1,0 +1,22 @@
+[package]
+name = "dept-gtm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "GoToMarket Department — DepartmentApp wrapper for gtm-engine"
+
+[dependencies]
+rusvel-core = { workspace = true }
+gtm-engine = { path = "../gtm-engine" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

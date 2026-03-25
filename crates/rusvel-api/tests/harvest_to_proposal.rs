@@ -117,6 +117,9 @@ impl ToolPort for StubTool {
     fn list(&self) -> Vec<ToolDefinition> {
         vec![]
     }
+    fn search(&self, _: &str, _: usize) -> Vec<ToolDefinition> {
+        vec![]
+    }
     fn schema(&self, _: &str) -> Option<Value> {
         None
     }

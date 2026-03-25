@@ -30,7 +30,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         },
                         "required": ["session_id", "topic"]
                     }),
-                    metadata: json!({"category": "content", "engine": "content"}),
+                    searchable: false,
+                metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -74,7 +75,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         },
                         "required": ["session_id", "content_id", "platform"]
                     }),
-                    metadata: json!({"category": "content", "engine": "content"}),
+                    searchable: false,
+                metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -114,7 +116,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         },
                         "required": ["session_id", "content_id", "platform"]
                     }),
-                    metadata: json!({"category": "content", "engine": "content"}),
+                    searchable: false,
+                metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -153,7 +156,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         },
                         "required": ["session_id"]
                     }),
-                    metadata: json!({"category": "content", "engine": "content"}),
+                    searchable: false,
+                metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -186,7 +190,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         },
                         "required": ["content_id"]
                     }),
-                    metadata: json!({"category": "content", "engine": "content"}),
+                    searchable: false,
+                metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();

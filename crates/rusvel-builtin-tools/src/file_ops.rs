@@ -31,6 +31,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["path"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "file", "read_only": true}),
             },
             Arc::new(|args| {
@@ -88,6 +89,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["path", "content"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "file", "destructive": true}),
             },
             Arc::new(|args| {
@@ -139,6 +141,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["path", "old_string", "new_string"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "file", "destructive": true}),
             },
             Arc::new(|args| {
@@ -199,6 +202,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["pattern"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "file", "read_only": true}),
             },
             Arc::new(|args| {
@@ -259,6 +263,7 @@ pub async fn register(registry: &ToolRegistry) {
                     },
                     "required": ["pattern"]
                 }),
+                searchable: false,
                 metadata: json!({"category": "file", "read_only": true}),
             },
             Arc::new(|args| {

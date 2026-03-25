@@ -84,7 +84,7 @@ pub async fn store_report(
         id: rusvel_core::id::EventId::new(),
         session_id: None,
         run_id: None,
-        source: rusvel_core::domain::EngineKind::Code,
+        source: "code".into(),
         kind: "visual.regression.detected".into(),
         payload: serde_json::json!({
             "run_id": report.run_id,

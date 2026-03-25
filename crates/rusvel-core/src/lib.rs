@@ -26,6 +26,7 @@
 // ── Modules ────────────────────────────────────────────────────────
 
 pub mod config;
+pub mod department;
 pub mod domain;
 pub mod engine;
 pub mod error;
@@ -38,6 +39,7 @@ pub mod registry;
 // So consumers can write `use rusvel_core::*;` for the most common
 // types, or `use rusvel_core::ports::LlmPort;` for specific traits.
 
+pub use department::DepartmentApp;
 pub use domain::*;
 pub use engine::Engine;
 pub use error::{Result, RusvelError};

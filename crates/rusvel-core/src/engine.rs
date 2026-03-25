@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{Capability, EngineKind, HealthStatus};
+use crate::domain::{Capability, HealthStatus};
 use crate::error::Result;
 
 /// Contract that every RUSVEL domain engine must satisfy.
@@ -25,8 +25,8 @@ use crate::error::Result;
 /// `Arc<dyn SomePort>`, injected by the composition root.
 #[async_trait]
 pub trait Engine: Send + Sync {
-    /// Which engine this is.
-    fn kind(&self) -> EngineKind;
+    /// Department string ID for this engine (e.g. `"forge"`, `"code"`).
+    fn kind(&self) -> &str;
 
     /// Human-readable name (e.g. `"Forge Engine"`).
     fn name(&self) -> &str;

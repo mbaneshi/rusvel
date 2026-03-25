@@ -273,7 +273,7 @@ pub struct SessionSummary {
 pub struct Run {
     pub id: RunId,
     pub session_id: SessionId,
-    pub engine: EngineKind,
+    pub engine: String,
     pub input_summary: String,
     pub status: RunStatus,
     pub llm_budget_used: f64,
@@ -342,19 +342,50 @@ pub enum EngineKind {
 
 impl std::fmt::Display for EngineKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_department_id())
+    }
+}
+
+impl EngineKind {
+    /// Map a department string ID to an `EngineKind` variant.
+    ///
+    /// Transitional bridge for ADR-014: once all code uses string-based
+    /// department IDs, this method and the `EngineKind` enum will be removed.
+    pub fn from_department_id(id: &str) -> Self {
+        match id {
+            "forge" => Self::Forge,
+            "code" => Self::Code,
+            "harvest" => Self::Harvest,
+            "content" => Self::Content,
+            "gtm" => Self::GoToMarket,
+            "finance" => Self::Finance,
+            "product" => Self::Product,
+            "growth" => Self::Growth,
+            "distro" => Self::Distribution,
+            "legal" => Self::Legal,
+            "support" => Self::Support,
+            "infra" => Self::Infra,
+            _ => Self::Forge, // fallback for unknown departments
+        }
+    }
+
+    /// Convert to the canonical department string ID.
+    ///
+    /// Transitional bridge for ADR-014.
+    pub fn as_department_id(&self) -> &'static str {
         match self {
-            Self::Forge => write!(f, "forge"),
-            Self::Code => write!(f, "code"),
-            Self::Harvest => write!(f, "harvest"),
-            Self::Content => write!(f, "content"),
-            Self::GoToMarket => write!(f, "gtm"),
-            Self::Finance => write!(f, "finance"),
-            Self::Product => write!(f, "product"),
-            Self::Growth => write!(f, "growth"),
-            Self::Distribution => write!(f, "distro"),
-            Self::Legal => write!(f, "legal"),
-            Self::Support => write!(f, "support"),
-            Self::Infra => write!(f, "infra"),
+            Self::Forge => "forge",
+            Self::Code => "code",
+            Self::Harvest => "harvest",
+            Self::Content => "content",
+            Self::GoToMarket => "gtm",
+            Self::Finance => "finance",
+            Self::Product => "product",
+            Self::Growth => "growth",
+            Self::Distribution => "distro",
+            Self::Legal => "legal",
+            Self::Support => "support",
+            Self::Infra => "infra",
         }
     }
 }
@@ -628,7 +659,7 @@ pub struct Event {
     pub id: EventId,
     pub session_id: Option<SessionId>,
     pub run_id: Option<RunId>,
-    pub source: EngineKind,
+    pub source: String,
     pub kind: String,
     pub payload: serde_json::Value,
     pub created_at: DateTime<Utc>,
@@ -640,7 +671,7 @@ pub struct Event {
 pub struct EventFilter {
     pub session_id: Option<SessionId>,
     pub run_id: Option<RunId>,
-    pub source: Option<EngineKind>,
+    pub source: Option<String>,
     pub kind: Option<String>,
     pub since: Option<DateTime<Utc>>,
     pub limit: Option<u32>,
@@ -708,7 +739,8 @@ pub enum ApprovalStatus {
 /// Policy that controls whether an action requires human approval.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApprovalPolicy {
-    pub engine: EngineKind,
+    /// Department ID string (e.g. `"content"`, `"gtm"`).
+    pub engine: String,
     /// Action key, e.g. `"publish"`, `"send_outreach"`, `"spend > $1"`.
     pub action: String,
     pub requires_approval: bool,
@@ -727,6 +759,10 @@ pub struct ToolDefinition {
     pub description: String,
     /// JSON Schema for the tool's parameters.
     pub parameters: serde_json::Value,
+    /// When true, this tool is discovered via `tool_search` instead of
+    /// being included in every LLM prompt. Saves tokens. (P1)
+    #[serde(default)]
+    pub searchable: bool,
     pub metadata: serde_json::Value,
 }
 
@@ -1078,7 +1114,7 @@ mod tests {
             id: EventId::new(),
             session_id: None,
             run_id: None,
-            source: EngineKind::Forge,
+            source: "forge".into(),
             kind: "agent.created".into(),
             payload: serde_json::json!({}),
             created_at: Utc::now(),

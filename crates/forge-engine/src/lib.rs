@@ -95,8 +95,8 @@ impl ForgeEngine {
 
 #[async_trait]
 impl Engine for ForgeEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Forge
+    fn kind(&self) -> &str {
+        "forge"
     }
     fn name(&self) -> &'static str {
         "Forge Engine"
@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn engine_metadata() {
         let (engine, _, _) = build_engine();
-        assert_eq!(engine.kind(), EngineKind::Forge);
+        assert_eq!(engine.kind(), "forge");
         assert_eq!(engine.name(), "Forge Engine");
         assert_eq!(engine.capabilities().len(), 6);
         assert!(engine.capabilities().contains(&Capability::Planning));

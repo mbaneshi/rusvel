@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rusvel_core::domain::{Capability, EngineKind, Event, HealthStatus};
+use rusvel_core::domain::{Capability, Event, HealthStatus};
 use rusvel_core::error::Result;
 use rusvel_core::id::EventId;
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
@@ -72,7 +72,7 @@ impl GrowthEngine {
             id: EventId::new(),
             session_id: None,
             run_id: None,
-            source: EngineKind::Growth,
+            source: "growth".into(),
             kind: kind.into(),
             payload,
             created_at: chrono::Utc::now(),
@@ -84,8 +84,8 @@ impl GrowthEngine {
 
 #[async_trait]
 impl rusvel_core::engine::Engine for GrowthEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Growth
+    fn kind(&self) -> &str {
+        "growth"
     }
     fn name(&self) -> &'static str {
         "Growth Engine"

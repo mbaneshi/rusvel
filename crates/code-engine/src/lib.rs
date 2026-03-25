@@ -7,7 +7,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 
-use rusvel_core::domain::{Capability, CodeSnapshotRef, EngineKind, Event, HealthStatus, RepoRef};
+use rusvel_core::domain::{Capability, CodeSnapshotRef, Event, HealthStatus, RepoRef};
 use rusvel_core::engine::Engine;
 use rusvel_core::id::{EventId, SnapshotId};
 use rusvel_core::ports::{EventPort, StoragePort};
@@ -136,7 +136,7 @@ impl CodeEngine {
             id: EventId::new(),
             session_id: None,
             run_id: None,
-            source: EngineKind::Code,
+            source: "code".into(),
             kind: events::CODE_ANALYZED.into(),
             payload: serde_json::json!({
                 "snapshot_id": snapshot.id.to_string(),
@@ -169,8 +169,8 @@ impl CodeEngine {
 
 #[async_trait]
 impl Engine for CodeEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Code
+    fn kind(&self) -> &str {
+        "code"
     }
     fn name(&self) -> &'static str {
         "Code Engine"

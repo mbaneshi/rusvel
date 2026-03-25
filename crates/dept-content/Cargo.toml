@@ -1,0 +1,23 @@
+[package]
+name = "dept-content"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Content Department — DepartmentApp wrapper for content-engine"
+
+[dependencies]
+rusvel-core = { workspace = true }
+content-engine = { path = "../content-engine" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

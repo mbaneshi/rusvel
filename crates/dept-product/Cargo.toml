@@ -1,0 +1,22 @@
+[package]
+name = "dept-product"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Product Department — DepartmentApp wrapper for product-engine"
+
+[dependencies]
+rusvel-core = { workspace = true }
+product-engine = { path = "../product-engine" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

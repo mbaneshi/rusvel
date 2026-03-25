@@ -1,0 +1,22 @@
+[package]
+name = "dept-infra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Infra Department — DepartmentApp wrapper for infra-engine"
+
+[dependencies]
+rusvel-core = { workspace = true }
+infra-engine = { path = "../infra-engine" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[lints]
+workspace = true

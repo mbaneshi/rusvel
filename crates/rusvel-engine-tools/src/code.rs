@@ -26,7 +26,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngi
                         },
                         "required": ["path"]
                     }),
-                    metadata: json!({"category": "code", "engine": "code"}),
+                    searchable: false,
+                metadata: json!({"category": "code", "engine": "code"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -69,7 +70,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngi
                         },
                         "required": ["query"]
                     }),
-                    metadata: json!({"category": "code", "engine": "code"}),
+                    searchable: false,
+                metadata: json!({"category": "code", "engine": "code"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();

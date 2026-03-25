@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rusvel_core::domain::{Capability, EngineKind, Event, HealthStatus};
+use rusvel_core::domain::{Capability, Event, HealthStatus};
 use rusvel_core::error::Result;
 use rusvel_core::id::EventId;
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
@@ -73,7 +73,7 @@ impl LegalEngine {
             id: EventId::new(),
             session_id: None,
             run_id: None,
-            source: EngineKind::Legal,
+            source: "legal".into(),
             kind: kind.into(),
             payload,
             created_at: chrono::Utc::now(),
@@ -85,8 +85,8 @@ impl LegalEngine {
 
 #[async_trait]
 impl rusvel_core::engine::Engine for LegalEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Legal
+    fn kind(&self) -> &str {
+        "legal"
     }
     fn name(&self) -> &'static str {
         "Legal Engine"

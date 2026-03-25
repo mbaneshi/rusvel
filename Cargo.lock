@@ -2161,6 +2161,176 @@ dependencies = [
 ]
 
 [[package]]
+name = "dept-code"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "code-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-content"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "content-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-distro"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "distro-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-finance"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "finance-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-flow"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "flow-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-forge"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "forge-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-growth"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "growth-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-gtm"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "gtm-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-harvest"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "harvest-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-infra"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "infra-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-legal"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "legal-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-product"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "product-engine",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "dept-support"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "support-engine",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5942,6 +6112,19 @@ dependencies = [
  "cliclack",
  "code-engine",
  "content-engine",
+ "dept-code",
+ "dept-content",
+ "dept-distro",
+ "dept-finance",
+ "dept-flow",
+ "dept-forge",
+ "dept-growth",
+ "dept-gtm",
+ "dept-harvest",
+ "dept-infra",
+ "dept-legal",
+ "dept-product",
+ "dept-support",
  "distro-engine",
  "finance-engine",
  "flow-engine",

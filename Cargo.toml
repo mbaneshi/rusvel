@@ -35,6 +35,21 @@ members = [
     "crates/infra-engine",
     "crates/flow-engine",
 
+    # ─── Department Apps (ADR-014) ───
+    "crates/dept-forge",
+    "crates/dept-content",
+    "crates/dept-code",
+    "crates/dept-harvest",
+    "crates/dept-flow",
+    "crates/dept-gtm",
+    "crates/dept-finance",
+    "crates/dept-product",
+    "crates/dept-growth",
+    "crates/dept-distro",
+    "crates/dept-legal",
+    "crates/dept-support",
+    "crates/dept-infra",
+
     # ─── Surfaces ───
     "crates/rusvel-api",
     "crates/rusvel-cli",

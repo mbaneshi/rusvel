@@ -193,7 +193,8 @@ pub async fn register_mcp_tools(client: &Arc<McpClient>, registry: &ToolRegistry
             name: namespaced_name.clone(),
             description,
             parameters: tool.input_schema.clone(),
-            metadata: serde_json::json!({
+            searchable: false,
+                metadata: serde_json::json!({
                 "mcp_server": client.name(),
                 "mcp_tool": tool.name,
             }),

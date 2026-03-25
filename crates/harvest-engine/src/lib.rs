@@ -7,7 +7,7 @@ use chrono::Utc;
 use rusvel_core::engine::Engine;
 use rusvel_core::ports::{AgentPort, EventPort, StoragePort};
 use rusvel_core::{
-    Capability, EngineKind, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
+    Capability, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
     OpportunityId, OpportunityStage, Result, RusvelError, SessionId,
 };
 
@@ -91,7 +91,7 @@ impl HarvestEngine {
                 id: EventId::new(),
                 session_id: Some(*session_id),
                 run_id: None,
-                source: EngineKind::Harvest,
+                source: "harvest".into(),
                 kind: kind.into(),
                 payload,
                 created_at: Utc::now(),
@@ -333,8 +333,8 @@ fn parse_budget(budget: &Option<String>) -> Option<f64> {
 
 #[async_trait]
 impl Engine for HarvestEngine {
-    fn kind(&self) -> EngineKind {
-        EngineKind::Harvest
+    fn kind(&self) -> &str {
+        "harvest"
     }
 
     fn name(&self) -> &'static str {

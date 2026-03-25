@@ -1568,7 +1568,7 @@ mod tests {
             id: EventId::new(),
             session_id: Some(SessionId::new()),
             run_id: None,
-            source: EngineKind::Forge,
+            source: "forge".into(),
             kind: "test.event".into(),
             payload: serde_json::json!({"key": "value"}),
             created_at: Utc::now(),
@@ -1591,7 +1591,7 @@ mod tests {
                 id: EventId::new(),
                 session_id: Some(sid),
                 run_id: None,
-                source: EngineKind::Forge,
+                source: "forge".into(),
                 kind: if i < 2 {
                     "test.a".into()
                 } else {
@@ -1753,7 +1753,7 @@ mod tests {
         let run = Run {
             id: RunId::new(),
             session_id: session.id,
-            engine: EngineKind::Code,
+            engine: "code".into(),
             input_summary: "analyze repo".into(),
             status: RunStatus::Running,
             llm_budget_used: 0.0,
