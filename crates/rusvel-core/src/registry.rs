@@ -5,7 +5,6 @@
 //! Adding a department = adding a TOML block. Zero code changes.
 
 use crate::config::LayeredConfig;
-use crate::domain::EngineKind;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -22,7 +21,6 @@ pub struct DepartmentDef {
     pub id: String,
     pub name: String,
     pub title: String,
-    pub engine_kind: EngineKind,
     pub icon: String,
     pub color: String,
     pub system_prompt: String,
@@ -62,11 +60,6 @@ impl DepartmentRegistry {
         &self.departments
     }
 
-    /// Resolve `EngineKind` from department id string.
-    pub fn engine_kind(&self, id: &str) -> Option<EngineKind> {
-        self.get(id).map(|d| d.engine_kind)
-    }
-
     /// Built-in defaults for all 12 departments.
     pub fn defaults() -> Self {
         Self {
@@ -75,7 +68,6 @@ impl DepartmentRegistry {
                     id: "forge".into(),
                     name: "Forge".into(),
                     title: "Forge Department".into(),
-                    engine_kind: EngineKind::Forge,
                     icon: "=".into(),
                     color: "indigo".into(),
                     system_prompt: "You are the Forge department of RUSVEL.\n\nFocus: agent orchestration, goal planning, mission management, daily plans, reviews.".into(),
@@ -92,7 +84,6 @@ impl DepartmentRegistry {
                     id: "code".into(),
                     name: "Code".into(),
                     title: "Code Department".into(),
-                    engine_kind: EngineKind::Code,
                     icon: "#".into(),
                     color: "emerald".into(),
                     system_prompt: "You are the Code department of RUSVEL.\n\nYou have full access to Claude Code tools:\n- Read, Write, Edit files across all project directories\n- Run shell commands (build, test, git, pnpm, cargo, etc.)\n- Search codebases with grep and glob\n- Fetch web content and search the web\n- Spawn sub-agents for parallel work\n- Manage background tasks\n\nFocus: code intelligence, implementation, debugging, testing, refactoring.\nWhen writing code, follow existing patterns. Be thorough.".into(),
@@ -116,7 +107,6 @@ impl DepartmentRegistry {
                     id: "harvest".into(),
                     name: "Harvest".into(),
                     title: "Harvest Department".into(),
-                    engine_kind: EngineKind::Harvest,
                     icon: "$".into(),
                     color: "amber".into(),
                     system_prompt: "You are the Harvest department of RUSVEL.\n\nFocus: finding opportunities, scoring gigs, drafting proposals.\nSources: Upwork, LinkedIn, GitHub.".into(),
@@ -133,7 +123,6 @@ impl DepartmentRegistry {
                     id: "content".into(),
                     name: "Content".into(),
                     title: "Content Department".into(),
-                    engine_kind: EngineKind::Content,
                     icon: "*".into(),
                     color: "purple".into(),
                     system_prompt: "You are the Content department of RUSVEL.\n\nFocus: content creation, platform adaptation, publishing strategy.\nDraft in Markdown. Adapt for LinkedIn, Twitter/X, DEV.to, Substack.".into(),
@@ -150,7 +139,6 @@ impl DepartmentRegistry {
                     id: "gtm".into(),
                     name: "GTM".into(),
                     title: "GoToMarket Department".into(),
-                    engine_kind: EngineKind::GoToMarket,
                     icon: "^".into(),
                     color: "cyan".into(),
                     system_prompt: "You are the GoToMarket department of RUSVEL.\n\nFocus: CRM, outreach sequences, deal management, invoicing.".into(),
@@ -168,7 +156,6 @@ impl DepartmentRegistry {
                     id: "finance".into(),
                     name: "Finance".into(),
                     title: "Finance Department".into(),
-                    engine_kind: EngineKind::Finance,
                     icon: "%".into(),
                     color: "green".into(),
                     system_prompt: "You are the Finance department of RUSVEL.\n\nFocus: revenue tracking, expense management, tax optimization, runway forecasting, P&L reports, unit economics.".into(),
@@ -186,7 +173,6 @@ impl DepartmentRegistry {
                     id: "product".into(),
                     name: "Product".into(),
                     title: "Product Department".into(),
-                    engine_kind: EngineKind::Product,
                     icon: "@".into(),
                     color: "rose".into(),
                     system_prompt: "You are the Product department of RUSVEL.\n\nFocus: product roadmaps, feature prioritization, pricing strategy, user feedback analysis, A/B testing.".into(),
@@ -203,7 +189,6 @@ impl DepartmentRegistry {
                     id: "growth".into(),
                     name: "Growth".into(),
                     title: "Growth Department".into(),
-                    engine_kind: EngineKind::Growth,
                     icon: "&".into(),
                     color: "orange".into(),
                     system_prompt: "You are the Growth department of RUSVEL.\n\nFocus: funnel optimization, conversion tracking, cohort analysis, churn prediction, retention strategies, KPI dashboards.".into(),
@@ -220,7 +205,6 @@ impl DepartmentRegistry {
                     id: "distro".into(),
                     name: "Distro".into(),
                     title: "Distribution Department".into(),
-                    engine_kind: EngineKind::Distribution,
                     icon: "!".into(),
                     color: "teal".into(),
                     system_prompt: "You are the Distribution department of RUSVEL.\n\nFocus: marketplace listings, SEO optimization, affiliate programs, partnerships, API distribution channels.".into(),
@@ -237,7 +221,6 @@ impl DepartmentRegistry {
                     id: "legal".into(),
                     name: "Legal".into(),
                     title: "Legal Department".into(),
-                    engine_kind: EngineKind::Legal,
                     icon: "\u{00a7}".into(), // §
                     color: "slate".into(),
                     system_prompt: "You are the Legal department of RUSVEL.\n\nFocus: contracts, IP protection, terms of service, GDPR compliance, licensing, privacy policies.".into(),
@@ -254,7 +237,6 @@ impl DepartmentRegistry {
                     id: "support".into(),
                     name: "Support".into(),
                     title: "Support Department".into(),
-                    engine_kind: EngineKind::Support,
                     icon: "?".into(),
                     color: "yellow".into(),
                     system_prompt: "You are the Support department of RUSVEL.\n\nFocus: customer support tickets, knowledge base, NPS tracking, auto-triage, customer success.".into(),
@@ -271,7 +253,6 @@ impl DepartmentRegistry {
                     id: "infra".into(),
                     name: "Infra".into(),
                     title: "Infra Department".into(),
-                    engine_kind: EngineKind::Infra,
                     icon: ">".into(),
                     color: "red".into(),
                     system_prompt: "You are the Infrastructure department of RUSVEL.\n\nFocus: CI/CD pipelines, deployments, monitoring, incident response, performance, cost analysis.".into(),
@@ -303,7 +284,7 @@ mod tests {
     fn lookup_by_id() {
         let reg = DepartmentRegistry::defaults();
         let code = reg.get("code").unwrap();
-        assert_eq!(code.engine_kind, EngineKind::Code);
+        assert_eq!(code.id, "code");
         assert_eq!(code.color, "emerald");
     }
 
@@ -314,11 +295,11 @@ mod tests {
     }
 
     #[test]
-    fn engine_kind_mapping() {
+    fn lookup_by_id_string_ids() {
         let reg = DepartmentRegistry::defaults();
-        assert_eq!(reg.engine_kind("finance"), Some(EngineKind::Finance));
-        assert_eq!(reg.engine_kind("gtm"), Some(EngineKind::GoToMarket));
-        assert_eq!(reg.engine_kind("nope"), None);
+        assert_eq!(reg.get("finance").map(|d| d.id.as_str()), Some("finance"));
+        assert_eq!(reg.get("gtm").map(|d| d.id.as_str()), Some("gtm"));
+        assert!(reg.get("nope").is_none());
     }
 
     #[test]
