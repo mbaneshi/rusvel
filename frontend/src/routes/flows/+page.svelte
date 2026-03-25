@@ -1,0 +1,216 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import {
+		getFlows,
+		createFlow,
+		deleteFlow,
+		runFlow,
+		getFlowNodeTypes,
+		type FlowDef,
+		type FlowExecution
+	} from '$lib/api';
+	import { toast } from 'svelte-sonner';
+	import Button from '$lib/components/ui/Button.svelte';
+
+	let flows: FlowDef[] = $state([]);
+	let nodeTypes: string[] = $state([]);
+	let loading = $state(true);
+	let showCreate = $state(false);
+	let newFlowJson = $state('');
+	let selectedExecution: FlowExecution | null = $state(null);
+	let runningFlowId = $state('');
+
+	onMount(async () => {
+		try {
+			[flows, nodeTypes] = await Promise.all([getFlows(), getFlowNodeTypes()]);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to load flows');
+		} finally {
+			loading = false;
+		}
+	});
+
+	async function handleCreate() {
+		try {
+			const parsed = JSON.parse(newFlowJson);
+			await createFlow(parsed);
+			flows = await getFlows();
+			showCreate = false;
+			newFlowJson = '';
+			toast.success('Flow created');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to create flow');
+		}
+	}
+
+	async function handleDelete(id: string) {
+		if (!confirm('Delete this flow?')) return;
+		try {
+			await deleteFlow(id);
+			flows = flows.filter((f) => f.id !== id);
+			toast.success('Flow deleted');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to delete flow');
+		}
+	}
+
+	async function handleRun(id: string) {
+		runningFlowId = id;
+		selectedExecution = null;
+		try {
+			const exec = await runFlow(id);
+			selectedExecution = exec;
+			toast.success(`Flow executed: ${exec.status}`);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Flow execution failed');
+		} finally {
+			runningFlowId = '';
+		}
+	}
+
+	function statusColor(status: string): string {
+		switch (status) {
+			case 'Succeeded':
+				return 'text-green-500';
+			case 'Failed':
+				return 'text-red-500';
+			case 'Running':
+				return 'text-yellow-500';
+			case 'Skipped':
+				return 'text-gray-400';
+			default:
+				return 'text-muted-foreground';
+		}
+	}
+</script>
+
+<svelte:head>
+	<title>Flows | RUSVEL</title>
+</svelte:head>
+
+<div class="mx-auto max-w-5xl space-y-6 p-6">
+	<div class="flex items-center justify-between">
+		<div>
+			<h1 class="text-2xl font-bold">Flows</h1>
+			<p class="text-sm text-muted-foreground">
+				DAG workflows that chain department actions.
+				{#if nodeTypes.length > 0}
+					Node types: {nodeTypes.join(', ')}
+				{/if}
+			</p>
+		</div>
+		<Button onclick={() => (showCreate = !showCreate)}>
+			{showCreate ? 'Cancel' : 'New Flow'}
+		</Button>
+	</div>
+
+	{#if showCreate}
+		<div class="rounded-lg border border-border bg-card p-4 space-y-3">
+			<p class="text-sm font-medium">Create Flow (JSON)</p>
+			<textarea
+				bind:value={newFlowJson}
+				rows="12"
+				class="w-full rounded-md border border-border bg-background p-3 font-mono text-xs"
+				placeholder={`{\n  "name": "my-flow",\n  "description": "...",\n  "nodes": [...],\n  "connections": [...]\n}`}
+			></textarea>
+			<Button onclick={handleCreate}>Create</Button>
+		</div>
+	{/if}
+
+	{#if loading}
+		<p class="text-muted-foreground">Loading flows...</p>
+	{:else if flows.length === 0}
+		<div class="rounded-lg border border-dashed border-border p-8 text-center text-muted-foreground">
+			<p>No flows yet. Create one to get started.</p>
+		</div>
+	{:else}
+		<div class="space-y-3">
+			{#each flows as flow}
+				<div class="rounded-lg border border-border bg-card p-4">
+					<div class="flex items-center justify-between">
+						<div>
+							<p class="font-medium">{flow.name}</p>
+							<p class="text-xs text-muted-foreground">
+								{flow.description || 'No description'}
+								&mdash; {flow.nodes.length} nodes, {flow.connections.length} connections
+							</p>
+						</div>
+						<div class="flex gap-2">
+							<Button
+								onclick={() => handleRun(flow.id)}
+								disabled={runningFlowId === flow.id}
+							>
+								{runningFlowId === flow.id ? 'Running...' : 'Run'}
+							</Button>
+							<button
+								type="button"
+								onclick={() => handleDelete(flow.id)}
+								class="rounded-md border border-border px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+
+					<!-- Node list -->
+					<div class="mt-3 flex flex-wrap gap-1.5">
+						{#each flow.nodes as node}
+							<span
+								class="rounded-full bg-muted px-2 py-0.5 text-[10px] font-mono"
+								title={`Type: ${node.node_type}`}
+							>
+								{node.name}
+								<span class="text-muted-foreground">({node.node_type})</span>
+							</span>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	{#if selectedExecution}
+		<div class="rounded-lg border border-border bg-card p-4 space-y-3">
+			<div class="flex items-center justify-between">
+				<h2 class="font-medium">
+					Execution
+					<span class={statusColor(selectedExecution.status)}>
+						{selectedExecution.status}
+					</span>
+				</h2>
+				<button
+					type="button"
+					onclick={() => (selectedExecution = null)}
+					class="text-xs text-muted-foreground hover:text-foreground"
+				>
+					Close
+				</button>
+			</div>
+
+			{#if selectedExecution.error}
+				<p class="text-sm text-red-500">{selectedExecution.error}</p>
+			{/if}
+
+			<div class="space-y-2">
+				{#each Object.entries(selectedExecution.node_results) as [nodeId, result]}
+					<div
+						class="rounded border border-border p-2 text-xs {result.status === 'Succeeded' ? 'border-green-500/30' : result.status === 'Failed' ? 'border-red-500/30' : result.status === 'Skipped' ? 'border-gray-500/20' : ''}"
+					>
+						<div class="flex justify-between">
+							<span class="font-mono">{nodeId.slice(0, 8)}...</span>
+							<span class={statusColor(result.status)}>{result.status}</span>
+						</div>
+						{#if result.output}
+							<pre
+								class="mt-1 max-h-32 overflow-auto rounded bg-muted/30 p-1 text-[9px] whitespace-pre-wrap"
+							>{JSON.stringify(result.output, null, 2)}</pre>
+						{/if}
+						{#if result.error}
+							<p class="mt-1 text-red-400">{result.error}</p>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+</div>

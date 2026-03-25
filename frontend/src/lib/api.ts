@@ -808,6 +808,85 @@ export async function getKnowledgeStats(): Promise<KnowledgeStats> {
 	return request('/api/knowledge/stats');
 }
 
+// ── Flow Engine (DAG) ─────────────────────────────────────────
+
+export interface FlowConnectionDef {
+	source_node: string;
+	source_output?: string;
+	target_node: string;
+	target_input?: string;
+}
+
+export interface FlowNodeDef {
+	id: string;
+	node_type: string;
+	name: string;
+	parameters?: Record<string, unknown>;
+	position?: [number, number];
+	metadata?: Record<string, unknown>;
+}
+
+export interface FlowDef {
+	id: string;
+	name: string;
+	description: string;
+	nodes: FlowNodeDef[];
+	connections: FlowConnectionDef[];
+	variables?: Record<string, string>;
+	metadata?: Record<string, unknown>;
+}
+
+export type FlowNodeStatus = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Skipped';
+
+export interface FlowNodeResult {
+	status: FlowNodeStatus;
+	output?: unknown;
+	error?: string;
+	started_at?: string | null;
+	finished_at?: string | null;
+}
+
+export type FlowExecutionStatus = 'Queued' | 'Running' | 'Succeeded' | 'Failed' | 'Cancelled';
+
+export interface FlowExecution {
+	id: string;
+	flow_id: string;
+	status: FlowExecutionStatus;
+	trigger_data: unknown;
+	node_results: Record<string, FlowNodeResult>;
+	started_at: string;
+	finished_at?: string | null;
+	error?: string | null;
+	metadata?: Record<string, unknown>;
+}
+
+export async function getFlows(): Promise<FlowDef[]> {
+	return request('/api/flows');
+}
+
+export async function createFlow(flow: Partial<FlowDef>): Promise<{ id: string }> {
+	return request('/api/flows', { method: 'POST', body: JSON.stringify(flow) });
+}
+
+export async function deleteFlow(id: string): Promise<void> {
+	const res = await fetch(`${BASE}/api/flows/${id}`, { method: 'DELETE' });
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`API error ${res.status}: ${text}`);
+	}
+}
+
+export async function runFlow(id: string): Promise<FlowExecution> {
+	return request(`/api/flows/${id}/run`, {
+		method: 'POST',
+		body: JSON.stringify({ trigger_data: {} })
+	});
+}
+
+export async function getFlowNodeTypes(): Promise<string[]> {
+	return request('/api/flows/node-types');
+}
+
 // ── Visual Testing ────────────────────────────────────────────
 
 export interface VisualIssue {
