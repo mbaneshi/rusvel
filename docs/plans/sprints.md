@@ -231,6 +231,7 @@ Backlog: 10 items, ~45 additional days if all scheduled.
 
 | Doc | What It Contains | Relevant Sprints |
 |-----|-----------------|-----------------|
+| `plans/agent-delegation-handbook.md` | Parallel agent briefs, GLOBAL RULES (G), deps, waves, one-line commands, report template | Sprints 2–5 (execution) |
 | `design/department-as-app.md` | DepartmentApp trait, manifest types, migration steps | ✅ Sprint 1 (done) |
 | `plans/native-terminal-multiplexer.md` | TerminalPort, PTY, xterm.js, pane sources | Sprints 2-5 |
 | `plans/agent-sdk-features.md` | 9 features from Anthropic SDK + cross-references | Sprints 2-3 |
