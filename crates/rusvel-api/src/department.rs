@@ -208,7 +208,6 @@ pub async fn dept_chat(
     (StatusCode, String),
 > {
     let dept_def = validate_dept(&state, &dept)?;
-    let engine_kind = dept_def.engine_kind;
     let stored = load_dept_config(&dept, &state).await;
     let mut resolved = resolve_dept_config(dept_def, &stored, state.profile.as_ref());
     let namespace = msg_namespace(&dept);
@@ -327,8 +326,7 @@ pub async fn dept_chat(
     }
 
     // Inject engine-specific capabilities into system prompt
-    let engine_id = engine_kind.as_department_id();
-    match engine_id {
+    match dept.as_str() {
         "code" => {
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
@@ -472,7 +470,7 @@ pub async fn dept_chat(
                     let conv_id_inner = conv_id.clone();
                     let ns_inner = ns.clone();
                     let text = full_text.clone();
-                    let eng = engine_kind.as_department_id().to_string();
+                    let eng = dept.clone();
                     tokio::spawn(async move {
                         let msg = ChatMessage {
                             id: uuid::Uuid::now_v7().to_string(),
@@ -602,7 +600,7 @@ pub async fn dept_events(
     state
         .events
         .query(EventFilter {
-            source: Some(dept_def.engine_kind.as_department_id().into()),
+            source: Some(dept_def.id.clone()),
             limit: Some(50),
             ..Default::default()
         })

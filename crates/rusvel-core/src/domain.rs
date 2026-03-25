@@ -405,77 +405,6 @@ pub struct ThreadMessage {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Engine kind
-// ════════════════════════════════════════════════════════════════════
-
-/// Domain engines.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum EngineKind {
-    Forge,
-    Code,
-    Harvest,
-    Content,
-    GoToMarket,
-    Finance,
-    Product,
-    Growth,
-    Distribution,
-    Legal,
-    Support,
-    Infra,
-}
-
-impl std::fmt::Display for EngineKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_department_id())
-    }
-}
-
-impl EngineKind {
-    /// Map a department string ID to an `EngineKind` variant.
-    ///
-    /// Transitional bridge for ADR-014: once all code uses string-based
-    /// department IDs, this method and the `EngineKind` enum will be removed.
-    pub fn from_department_id(id: &str) -> Self {
-        match id {
-            "forge" => Self::Forge,
-            "code" => Self::Code,
-            "harvest" => Self::Harvest,
-            "content" => Self::Content,
-            "gtm" => Self::GoToMarket,
-            "finance" => Self::Finance,
-            "product" => Self::Product,
-            "growth" => Self::Growth,
-            "distro" => Self::Distribution,
-            "legal" => Self::Legal,
-            "support" => Self::Support,
-            "infra" => Self::Infra,
-            _ => Self::Forge, // fallback for unknown departments
-        }
-    }
-
-    /// Convert to the canonical department string ID.
-    ///
-    /// Transitional bridge for ADR-014.
-    pub fn as_department_id(&self) -> &'static str {
-        match self {
-            Self::Forge => "forge",
-            Self::Code => "code",
-            Self::Harvest => "harvest",
-            Self::Content => "content",
-            Self::GoToMarket => "gtm",
-            Self::Finance => "finance",
-            Self::Product => "product",
-            Self::Growth => "growth",
-            Self::Distribution => "distro",
-            Self::Legal => "legal",
-            Self::Support => "support",
-            Self::Infra => "infra",
-        }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════
 //  Central Job Queue  (ADR-003)
 // ════════════════════════════════════════════════════════════════════
 
@@ -1225,12 +1154,6 @@ mod tests {
         let json = serde_json::to_string(&opp).unwrap();
         let back: Opportunity = serde_json::from_str(&json).unwrap();
         assert_eq!(back.title, "Rust CLI tool");
-    }
-
-    #[test]
-    fn engine_kind_display() {
-        assert_eq!(EngineKind::GoToMarket.to_string(), "gtm");
-        assert_eq!(EngineKind::Forge.to_string(), "forge");
     }
 
     #[test]

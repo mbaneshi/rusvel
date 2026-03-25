@@ -315,15 +315,10 @@ impl DepartmentRegistry {
         let departments = manifests
             .iter()
             .map(|m| {
-                // Map string department ID to EngineKind for backward compat.
-                // Once EngineKind is removed, this mapping goes away.
-                let engine_kind = crate::domain::EngineKind::from_department_id(&m.id);
-
                 DepartmentDef {
                     id: m.id.clone(),
                     name: m.name.clone(),
                     title: m.name.clone(),
-                    engine_kind,
                     icon: m.icon.clone(),
                     color: m.color.clone(),
                     system_prompt: m.system_prompt.clone(),

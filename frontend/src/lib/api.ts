@@ -625,7 +625,6 @@ export interface DepartmentDef {
 	id: string;
 	name: string;
 	title: string;
-	engine_kind: string;
 	icon: string;
 	color: string;
 	system_prompt: string;

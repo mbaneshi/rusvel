@@ -16,8 +16,7 @@ use crate::config::LayeredConfig;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DepartmentManifest {
     // ── Identity ─────────────────────────────────────────────────
-    /// Unique department identifier (e.g. "content", "forge").
-    /// Replaces `EngineKind` enum variants.
+    /// Unique department identifier (e.g. `"content"`, `"forge"`).
     pub id: String,
 
     /// Human-readable name (e.g. "Content Department").
