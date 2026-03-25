@@ -67,6 +67,13 @@ impl LlmPort for MultiProvider {
         self.get(&request.model.provider)?.generate(request).await
     }
 
+    async fn stream(
+        &self,
+        request: LlmRequest,
+    ) -> rusvel_core::error::Result<tokio::sync::mpsc::Receiver<LlmStreamEvent>> {
+        self.get(&request.model.provider)?.stream(request).await
+    }
+
     async fn embed(&self, model: &ModelRef, text: &str) -> rusvel_core::error::Result<Vec<f32>> {
         self.get(&model.provider)?.embed(model, text).await
     }

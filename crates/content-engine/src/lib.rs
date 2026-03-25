@@ -23,6 +23,7 @@ pub mod writer;
 pub use analytics::ContentAnalytics;
 pub use calendar::{ContentCalendar, ScheduledPost};
 pub use platform::{MockPlatformAdapter, PlatformAdapter, PostMetrics, PublishResult};
+pub use adapters::devto::DevToAdapter;
 pub use writer::{build_code_prompt, ContentReview, ContentWriter};
 
 // ════════════════════════════════════════════════════════════════════

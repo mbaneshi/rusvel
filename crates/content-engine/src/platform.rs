@@ -43,64 +43,8 @@ pub trait PlatformAdapter: Send + Sync {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  DEV.to adapter
+// DEV.to adapter — real implementation lives in `adapters::devto::DevToAdapter`.
 // ════════════════════════════════════════════════════════════════════
-
-/// Adapter for publishing articles to DEV.to via their REST API.
-///
-/// Uses `POST /api/articles` with an `api-key` header.
-/// Body: `{ article: { title, body_markdown, published, tags } }`.
-pub struct DevToAdapter {
-    pub api_key: String,
-    pub base_url: String,
-}
-
-impl DevToAdapter {
-    pub fn new(api_key: String) -> Self {
-        Self {
-            api_key,
-            base_url: "https://dev.to/api".into(),
-        }
-    }
-}
-
-#[async_trait]
-impl PlatformAdapter for DevToAdapter {
-    fn platform(&self) -> Platform {
-        Platform::DevTo
-    }
-
-    async fn publish(&self, content: &ContentItem) -> Result<PublishResult> {
-        // In a real implementation this would use reqwest to POST to DEV.to.
-        // For now we return a structured error indicating external calls are
-        // not wired up yet; the real HTTP call shape is documented above.
-        let _body = serde_json::json!({
-            "article": {
-                "title": content.title,
-                "body_markdown": content.body_markdown,
-                "published": true,
-                "tags": [],
-            }
-        });
-        Err(rusvel_core::error::RusvelError::Internal(
-            "DevTo HTTP publishing not yet wired (needs reqwest)".into(),
-        ))
-    }
-
-    async fn metrics(&self, _post_id: &str) -> Result<PostMetrics> {
-        Err(rusvel_core::error::RusvelError::Internal(
-            "DevTo metrics fetch not yet wired".into(),
-        ))
-    }
-
-    fn max_length(&self) -> Option<usize> {
-        None // DEV.to has no practical length limit
-    }
-
-    fn format_content(&self, markdown: &str) -> String {
-        markdown.to_string() // DEV.to accepts markdown natively
-    }
-}
 
 // ════════════════════════════════════════════════════════════════════
 //  Mock adapter (for testing)

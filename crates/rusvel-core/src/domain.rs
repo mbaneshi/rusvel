@@ -58,6 +58,32 @@ pub enum Part {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  LLM streaming types
+// ════════════════════════════════════════════════════════════════════
+
+/// An event emitted during incremental LLM streaming.
+///
+/// Providers that support real streaming emit `Delta` events as text arrives,
+/// followed by a final `Done` with the aggregated response. Providers without
+/// native streaming use the default `LlmPort::stream()` implementation which
+/// emits a single `Done`.
+#[derive(Debug, Clone)]
+pub enum LlmStreamEvent {
+    /// Incremental text chunk from the model.
+    Delta(String),
+    /// A tool call the model wants to make.
+    ToolUse {
+        id: String,
+        name: String,
+        args: serde_json::Value,
+    },
+    /// Stream finished — contains the aggregated response.
+    Done(LlmResponse),
+    /// Stream error.
+    Error(String),
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  LLM types
 // ════════════════════════════════════════════════════════════════════
 

@@ -8,7 +8,9 @@
 
 use async_trait::async_trait;
 use serde::Deserialize;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tracing::debug;
 
 use rusvel_core::domain::*;
@@ -142,6 +144,149 @@ fn parse_cli_output(stdout: &str) -> std::result::Result<CliResult, String> {
 
 #[async_trait]
 impl LlmPort for ClaudeCliProvider {
+    async fn stream(
+        &self,
+        request: LlmRequest,
+    ) -> Result<mpsc::Receiver<LlmStreamEvent>> {
+        let prompt = Self::build_prompt(&request);
+        let (tx, rx) = mpsc::channel(64);
+
+        let mut cmd = Command::new(&self.command);
+        cmd.arg("-p")
+            .arg(&prompt)
+            .arg("--output-format")
+            .arg("stream-json")
+            .arg("--verbose")
+            .arg("--no-session-persistence");
+
+        if !request.model.model.is_empty() {
+            cmd.arg("--model").arg(&request.model.model);
+        }
+        if let Some(max) = request.max_tokens {
+            cmd.arg("--max-turns").arg(max.to_string());
+        }
+
+        if self.use_subscription {
+            cmd.env_remove("ANTHROPIC_API_KEY");
+            cmd.env_remove("CLAUDECODE");
+            cmd.env("CLAUDE_CODE_ENTRYPOINT", "sdk-max");
+            cmd.env("CLAUDE_USE_SUBSCRIPTION", "true");
+            cmd.env("CLAUDE_BYPASS_BALANCE_CHECK", "true");
+        } else if let Some(ref key) = self.api_key {
+            cmd.env("ANTHROPIC_API_KEY", key);
+        }
+
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::null());
+
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| RusvelError::Llm(format!("failed to spawn claude: {e}")))?;
+
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| RusvelError::Llm("failed to capture stdout".into()))?;
+
+        let timeout_secs = self.timeout_secs;
+
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            let mut full_text = String::new();
+
+            let stream_result = tokio::time::timeout(
+                std::time::Duration::from_secs(timeout_secs),
+                async {
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        if line.trim().is_empty() {
+                            continue;
+                        }
+                        let parsed: serde_json::Value = match serde_json::from_str(&line) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        let event_type = parsed.get("type").and_then(|t| t.as_str()).unwrap_or("");
+
+                        match event_type {
+                            "assistant" => {
+                                if let Some(content) = parsed
+                                    .pointer("/message/content")
+                                    .and_then(|c| c.as_array())
+                                {
+                                    for block in content {
+                                        let block_type = block.get("type").and_then(|t| t.as_str());
+                                        if block_type == Some("text") {
+                                            if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                                                if !text.is_empty() {
+                                                    full_text.push_str(text);
+                                                    let _ = tx.send(LlmStreamEvent::Delta(text.to_string())).await;
+                                                }
+                                            }
+                                        } else if block_type == Some("tool_use") {
+                                            let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                            let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                            let args = block.get("input").cloned().unwrap_or(serde_json::json!({}));
+                                            let _ = tx.send(LlmStreamEvent::ToolUse { id, name, args }).await;
+                                        }
+                                    }
+                                }
+                            }
+                            "result" => {
+                                let is_error = parsed
+                                    .get("is_error")
+                                    .and_then(serde_json::Value::as_bool)
+                                    .unwrap_or(false);
+
+                                if is_error {
+                                    let msg = parsed.get("result").and_then(|r| r.as_str()).unwrap_or("unknown error").to_string();
+                                    let _ = tx.send(LlmStreamEvent::Error(msg)).await;
+                                } else {
+                                    let result_text = parsed.get("result").and_then(|r| r.as_str()).unwrap_or("").to_string();
+                                    let cost_usd = parsed.get("total_cost_usd").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+                                    let num_turns = parsed.get("num_turns").and_then(serde_json::Value::as_u64).unwrap_or(0) as u32;
+                                    let duration_ms = parsed.get("duration_ms").and_then(serde_json::Value::as_u64).unwrap_or(0);
+                                    let duration_api_ms = parsed.get("duration_api_ms").and_then(serde_json::Value::as_u64).unwrap_or(0);
+                                    let session_id = parsed.get("session_id").and_then(|s| s.as_str()).unwrap_or("").to_string();
+
+                                    // Determine finish reason from content
+                                    let finish_reason = if parsed.pointer("/result").is_some() {
+                                        FinishReason::Stop
+                                    } else {
+                                        FinishReason::Stop
+                                    };
+
+                                    let _ = tx.send(LlmStreamEvent::Done(LlmResponse {
+                                        content: Content::text(result_text),
+                                        finish_reason,
+                                        usage: LlmUsage { input_tokens: 0, output_tokens: 0 },
+                                        metadata: serde_json::json!({
+                                            "source": "claude-cli-stream",
+                                            "cost_usd": cost_usd,
+                                            "num_turns": num_turns,
+                                            "duration_ms": duration_ms,
+                                            "duration_api_ms": duration_api_ms,
+                                            "session_id": session_id,
+                                        }),
+                                    })).await;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                },
+            )
+            .await;
+
+            let _ = child.kill().await;
+
+            if stream_result.is_err() {
+                let _ = tx.send(LlmStreamEvent::Error("claude CLI stream timed out".into())).await;
+            }
+        });
+
+        Ok(rx)
+    }
+
     async fn generate(&self, request: LlmRequest) -> Result<LlmResponse> {
         let prompt = Self::build_prompt(&request);
 

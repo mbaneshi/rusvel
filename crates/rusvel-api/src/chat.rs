@@ -128,13 +128,12 @@ pub async fn chat_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Stream via AgentRuntime
-    let (tx, rx) = tokio::sync::mpsc::channel::<AgentEvent>(32);
-    let runtime = state.agent_runtime.clone();
-    let run_id_owned = run_id;
     let input = Content::text(&user_input);
-    tokio::spawn(async move {
-        let _ = runtime.run_streaming(&run_id_owned, input, tx).await;
-    });
+    let rx = state
+        .agent_runtime
+        .run_streaming(&run_id, input)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let storage = state.storage.clone();
     let conv_id = conversation_id.clone();
@@ -147,10 +146,9 @@ pub async fn chat_handler(
                     .data(
                         serde_json::json!({"text": text, "conversation_id": conv_id}).to_string(),
                     ),
-                AgentEvent::ToolCallStart { id, name, args } => {
+                AgentEvent::ToolCall { name, args } => {
                     Event::default().event("tool_call").data(
                         serde_json::json!({
-                            "id": id,
                             "name": name,
                             "args": args,
                             "conversation_id": conv_id,
@@ -158,16 +156,14 @@ pub async fn chat_handler(
                         .to_string(),
                     )
                 }
-                AgentEvent::ToolCallEnd {
-                    id,
+                AgentEvent::ToolResult {
                     name,
-                    result,
+                    output,
                     is_error,
                 } => Event::default().event("tool_result").data(
                     serde_json::json!({
-                        "id": id,
                         "name": name,
-                        "result": result,
+                        "result": output,
                         "is_error": is_error,
                         "conversation_id": conv_id,
                     })

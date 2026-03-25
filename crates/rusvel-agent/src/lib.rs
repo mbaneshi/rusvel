@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use rusvel_core::domain::*;
@@ -33,14 +33,18 @@ use rusvel_core::ports::{AgentPort, LlmPort, MemoryPort, ToolPort};
 /// Maximum iterations in the agent loop to prevent runaways.
 const MAX_ITERATIONS: u32 = 10;
 
-/// Streaming events emitted by [`AgentRuntime::run_streaming`].
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+/// Events emitted during a streaming agent run.
+#[derive(Debug, Clone)]
 pub enum AgentEvent {
+    /// Incremental text chunk from the LLM.
     TextDelta { text: String },
-    ToolCallStart { id: String, name: String, args: serde_json::Value },
-    ToolCallEnd { id: String, name: String, result: String, is_error: bool },
+    /// A tool is being called.
+    ToolCall { name: String, args: serde_json::Value },
+    /// Tool execution completed.
+    ToolResult { name: String, output: String, is_error: bool },
+    /// The agent run completed successfully.
     Done { output: AgentOutput },
+    /// An error occurred.
     Error { message: String },
 }
 
@@ -125,31 +129,23 @@ impl AgentRuntime {
         None
     }
 
-    /// Extract text from LLM response content parts.
-    fn extract_text(content: &Content) -> String {
-        content
-            .parts
-            .iter()
-            .filter_map(|p| match p {
-                Part::Text(t) => Some(t.as_str()),
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join("")
-    }
-
-    /// Run the agent loop, streaming [`AgentEvent`]s to the provided channel.
+    /// Execute a streaming agent run.
     ///
-    /// This mirrors [`AgentPort::run`] but emits incremental events so the
-    /// caller can forward them as SSE to a frontend.
+    /// Unlike [`AgentPort::run()`] which returns a complete `AgentOutput`,
+    /// this emits incremental [`AgentEvent`]s via an `mpsc::Receiver`:
+    /// - `TextDelta` for each LLM text chunk
+    /// - `ToolCall` / `ToolResult` for tool interactions
+    /// - `Done` with the final `AgentOutput`
+    /// - `Error` on failure
+    ///
+    /// The `run_id` must have been created via [`AgentPort::create()`] first.
     pub async fn run_streaming(
         &self,
         run_id: &RunId,
         input: Content,
-        tx: mpsc::Sender<AgentEvent>,
-    ) -> Result<AgentOutput> {
-        // Transition to Running.
-        {
+    ) -> Result<tokio::sync::mpsc::Receiver<AgentEvent>> {
+        // Transition to Running + snapshot config.
+        let config = {
             let mut runs = self.runs.write().await;
             let state = runs.get_mut(run_id).ok_or_else(|| RusvelError::NotFound {
                 kind: "AgentRun".into(),
@@ -159,166 +155,175 @@ impl AgentRuntime {
                 return Err(RusvelError::Agent("run has been stopped".into()));
             }
             state.status = AgentStatus::Running;
-        }
-
-        // Snapshot config.
-        let config = {
-            let runs = self.runs.read().await;
-            runs.get(run_id)
-                .ok_or_else(|| RusvelError::NotFound {
-                    kind: "AgentRun".into(),
-                    id: run_id.to_string(),
-                })?
-                .config
-                .clone()
+            state.config.clone()
         };
 
-        // Seed conversation.
-        let mut messages: Vec<LlmMessage> = Vec::new();
-        if let Some(ref instructions) = config.instructions {
-            messages.push(LlmMessage {
-                role: LlmRole::System,
-                content: Content::text(instructions),
-            });
-        }
-        messages.push(LlmMessage {
-            role: LlmRole::User,
-            content: input,
-        });
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+        let llm = self.llm.clone();
+        let tools = self.tools.clone();
+        let run_id = *run_id;
 
-        let mut total_usage = LlmUsage::default();
-        let mut tool_calls: u32 = 0;
-        let tool_defs = self.tools.list();
-
-        for iteration in 0..MAX_ITERATIONS {
-            debug!(%run_id, iteration, "agent streaming loop iteration");
-
-            // Check if stopped.
-            {
-                let runs = self.runs.read().await;
-                if let Some(state) = runs.get(run_id)
-                    && state.status == AgentStatus::Stopped
-                {
-                    let _ = tx.send(AgentEvent::Error { message: "run was stopped".into() }).await;
-                    return Err(RusvelError::Agent("run was stopped".into()));
+        tokio::spawn(async move {
+            let result = run_streaming_loop(&llm, &tools, &config, &run_id, input, &tx).await;
+            match result {
+                Ok(output) => {
+                    let _ = tx.send(AgentEvent::Done { output }).await;
                 }
-            }
-
-            let request = Self::build_request(&config, &messages, &tool_defs);
-            let response = match self.llm.generate(request).await {
-                Ok(r) => r,
                 Err(e) => {
-                    let _ = tx.send(AgentEvent::Error { message: e.to_string() }).await;
-                    return Err(e);
+                    let _ = tx
+                        .send(AgentEvent::Error {
+                            message: e.to_string(),
+                        })
+                        .await;
                 }
-            };
+            }
+        });
 
-            total_usage.input_tokens += response.usage.input_tokens;
-            total_usage.output_tokens += response.usage.output_tokens;
+        Ok(rx)
+    }
+}
 
-            match response.finish_reason {
-                FinishReason::Stop | FinishReason::Length | FinishReason::ContentFilter => {
-                    let text = Self::extract_text(&response.content);
-                    if !text.is_empty() {
-                        let _ = tx.send(AgentEvent::TextDelta { text }).await;
-                    }
+/// Inner streaming agent loop, factored out so it can be spawned as a task.
+async fn run_streaming_loop(
+    llm: &Arc<dyn LlmPort>,
+    tools: &Arc<dyn ToolPort>,
+    config: &AgentConfig,
+    run_id: &RunId,
+    input: Content,
+    tx: &tokio::sync::mpsc::Sender<AgentEvent>,
+) -> Result<AgentOutput> {
+    let mut messages: Vec<LlmMessage> = Vec::new();
+    if let Some(ref instructions) = config.instructions {
+        messages.push(LlmMessage {
+            role: LlmRole::System,
+            content: Content::text(instructions),
+        });
+    }
+    messages.push(LlmMessage {
+        role: LlmRole::User,
+        content: input,
+    });
 
-                    let output = AgentOutput {
-                        run_id: *run_id,
-                        content: response.content,
-                        tool_calls,
-                        usage: total_usage,
-                        cost_estimate: 0.0,
-                        metadata: serde_json::json!({}),
-                    };
+    let mut total_usage = LlmUsage::default();
+    let mut tool_calls: u32 = 0;
+    let tool_defs = tools.list();
 
-                    self.runs.write().await.entry(*run_id).and_modify(|s| {
-                        s.status = AgentStatus::Completed;
-                    });
+    for iteration in 0..MAX_ITERATIONS {
+        debug!(%run_id, iteration, "streaming agent loop iteration");
 
-                    let _ = tx.send(AgentEvent::Done { output: output.clone() }).await;
-                    info!(%run_id, tool_calls, "agent streaming run completed");
-                    return Ok(output);
+        let request = AgentRuntime::build_request(config, &messages, &tool_defs);
+
+        // Use stream() for incremental deltas
+        let mut stream_rx = llm.stream(request).await?;
+        let mut response: Option<LlmResponse> = None;
+
+        while let Some(event) = stream_rx.recv().await {
+            match event {
+                LlmStreamEvent::Delta(text) => {
+                    let _ = tx.send(AgentEvent::TextDelta { text }).await;
                 }
-                FinishReason::ToolUse => {
-                    // Emit any text before the tool call.
-                    let text = Self::extract_text(&response.content);
-                    if !text.is_empty() {
-                        let _ = tx.send(AgentEvent::TextDelta { text }).await;
-                    }
-
-                    self.runs.write().await.entry(*run_id).and_modify(|s| {
-                        s.status = AgentStatus::AwaitingTool;
-                    });
-
-                    let (tool_call_id, tool_name, tool_args) =
-                        Self::extract_tool_call(&response).ok_or_else(|| {
-                            RusvelError::Agent(
-                                "ToolUse finish_reason but no Part::ToolCall found".into(),
-                            )
-                        })?;
-
-                    let _ = tx.send(AgentEvent::ToolCallStart {
-                        id: tool_call_id.clone(),
-                        name: tool_name.clone(),
-                        args: tool_args.clone(),
-                    }).await;
-
-                    messages.push(LlmMessage {
-                        role: LlmRole::Assistant,
-                        content: response.content,
-                    });
-
-                    let tool_result = self.tools.call(&tool_name, tool_args).await;
-                    tool_calls += 1;
-
-                    let (result_text, is_error) = match &tool_result {
-                        Ok(r) => {
-                            let t = Self::extract_text(&r.output);
-                            (t, !r.success)
-                        }
-                        Err(e) => (format!("Tool error: {e}"), true),
-                    };
-
-                    let _ = tx.send(AgentEvent::ToolCallEnd {
-                        id: tool_call_id.clone(),
-                        name: tool_name.clone(),
-                        result: result_text.clone(),
-                        is_error,
-                    }).await;
-
-                    messages.push(LlmMessage {
-                        role: LlmRole::Tool,
-                        content: Content {
-                            parts: vec![Part::ToolResult {
-                                tool_call_id,
-                                content: result_text,
-                                is_error,
-                            }],
-                        },
-                    });
-
-                    self.runs.write().await.entry(*run_id).and_modify(|s| {
-                        s.status = AgentStatus::Running;
-                    });
+                LlmStreamEvent::ToolUse { id: _, name, args } => {
+                    // Tool use events from stream are informational;
+                    // we handle them via the Done response below.
+                    let _ = tx
+                        .send(AgentEvent::ToolCall {
+                            name: name.clone(),
+                            args: args.clone(),
+                        })
+                        .await;
                 }
-                FinishReason::Other(ref reason) => {
-                    let msg = format!("unexpected finish reason: {reason}");
-                    let _ = tx.send(AgentEvent::Error { message: msg.clone() }).await;
-                    warn!(%run_id, %reason, "unexpected finish reason");
-                    return Err(RusvelError::Agent(msg));
+                LlmStreamEvent::Done(resp) => {
+                    response = Some(resp);
+                    break;
+                }
+                LlmStreamEvent::Error(msg) => {
+                    return Err(RusvelError::Llm(msg));
                 }
             }
         }
 
-        // Exhausted iterations.
-        self.runs.write().await.entry(*run_id).and_modify(|s| {
-            s.status = AgentStatus::Failed;
-        });
-        let msg = format!("agent loop exceeded {MAX_ITERATIONS} iterations");
-        let _ = tx.send(AgentEvent::Error { message: msg.clone() }).await;
-        Err(RusvelError::Agent(msg))
+        let response = response
+            .ok_or_else(|| RusvelError::Llm("stream ended without Done event".into()))?;
+
+        total_usage.input_tokens += response.usage.input_tokens;
+        total_usage.output_tokens += response.usage.output_tokens;
+
+        match response.finish_reason {
+            FinishReason::Stop | FinishReason::Length | FinishReason::ContentFilter => {
+                return Ok(AgentOutput {
+                    run_id: *run_id,
+                    content: response.content,
+                    tool_calls,
+                    usage: total_usage,
+                    cost_estimate: 0.0,
+                    metadata: serde_json::json!({}),
+                });
+            }
+            FinishReason::ToolUse => {
+                let (tool_call_id, tool_name, tool_args) =
+                    AgentRuntime::extract_tool_call(&response).ok_or_else(|| {
+                        RusvelError::Agent(
+                            "ToolUse finish_reason but no Part::ToolCall found".into(),
+                        )
+                    })?;
+
+                debug!(%run_id, %tool_name, "streaming: calling tool");
+
+                messages.push(LlmMessage {
+                    role: LlmRole::Assistant,
+                    content: response.content,
+                });
+
+                let tool_result = tools.call(&tool_name, tool_args).await;
+                tool_calls += 1;
+
+                let (result_text, is_error) = match &tool_result {
+                    Ok(r) => {
+                        let text = r
+                            .output
+                            .parts
+                            .iter()
+                            .filter_map(|p| match p {
+                                Part::Text(t) => Some(t.as_str()),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                            .join("");
+                        (text, !r.success)
+                    }
+                    Err(e) => (format!("Tool error: {e}"), true),
+                };
+
+                let _ = tx
+                    .send(AgentEvent::ToolResult {
+                        name: tool_name,
+                        output: result_text.clone(),
+                        is_error,
+                    })
+                    .await;
+
+                messages.push(LlmMessage {
+                    role: LlmRole::Tool,
+                    content: Content {
+                        parts: vec![Part::ToolResult {
+                            tool_call_id,
+                            content: result_text,
+                            is_error,
+                        }],
+                    },
+                });
+            }
+            FinishReason::Other(ref reason) => {
+                return Err(RusvelError::Agent(format!(
+                    "unexpected finish reason: {reason}"
+                )));
+            }
+        }
     }
+
+    Err(RusvelError::Agent(format!(
+        "agent loop exceeded {MAX_ITERATIONS} iterations"
+    )))
 }
 
 #[async_trait]
@@ -731,5 +736,174 @@ mod tests {
         let err = rt.run(&run_id, Content::text("loop")).await.unwrap_err();
         assert!(err.to_string().contains("exceeded"));
         assert_eq!(rt.status(&run_id).await.unwrap(), AgentStatus::Failed);
+    }
+
+    // ── Streaming mock ─────────────────────────────────────────
+
+    /// Mock LLM that emits multiple Delta events before Done.
+    struct MockStreamingLlm {
+        responses: RwLock<Vec<LlmResponse>>,
+        /// Number of delta chunks to emit per response.
+        deltas_per_response: usize,
+    }
+
+    impl MockStreamingLlm {
+        fn new(responses: Vec<LlmResponse>, deltas_per_response: usize) -> Self {
+            Self {
+                responses: RwLock::new(responses),
+                deltas_per_response,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl LlmPort for MockStreamingLlm {
+        async fn generate(&self, _request: LlmRequest) -> Result<LlmResponse> {
+            let mut resps = self.responses.write().await;
+            if resps.is_empty() {
+                return Err(RusvelError::Llm("no more mock responses".into()));
+            }
+            Ok(resps.remove(0))
+        }
+
+        async fn stream(
+            &self,
+            _request: LlmRequest,
+        ) -> Result<tokio::sync::mpsc::Receiver<LlmStreamEvent>> {
+            let mut resps = self.responses.write().await;
+            if resps.is_empty() {
+                return Err(RusvelError::Llm("no more mock responses".into()));
+            }
+            let response = resps.remove(0);
+            let deltas = self.deltas_per_response;
+
+            let (tx, rx) = tokio::sync::mpsc::channel(64);
+            tokio::spawn(async move {
+                // Extract full text from response
+                let full_text: String = response
+                    .content
+                    .parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        Part::Text(t) => Some(t.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+
+                // Split into N delta chunks
+                if !full_text.is_empty() && deltas > 0 {
+                    let chunk_size = (full_text.len() + deltas - 1) / deltas;
+                    for chunk in full_text.as_bytes().chunks(chunk_size) {
+                        let text = String::from_utf8_lossy(chunk).to_string();
+                        let _ = tx.send(LlmStreamEvent::Delta(text)).await;
+                    }
+                }
+
+                let _ = tx.send(LlmStreamEvent::Done(response)).await;
+            });
+
+            Ok(rx)
+        }
+
+        async fn embed(&self, _model: &ModelRef, _text: &str) -> Result<Vec<f32>> {
+            Ok(vec![0.0; 128])
+        }
+
+        async fn list_models(&self) -> Result<Vec<ModelRef>> {
+            Ok(vec![])
+        }
+    }
+
+    fn make_streaming_runtime(
+        responses: Vec<LlmResponse>,
+        deltas: usize,
+    ) -> AgentRuntime {
+        AgentRuntime::new(
+            Arc::new(MockStreamingLlm::new(responses, deltas)),
+            Arc::new(MockTool),
+            Arc::new(MockMemory),
+        )
+    }
+
+    // ── Streaming tests ────────────────────────────────────────
+
+    #[tokio::test]
+    async fn streaming_emits_deltas_then_done() {
+        let rt = make_streaming_runtime(vec![stop_response("Hello world!")], 3);
+        let run_id = rt.create(make_config()).await.unwrap();
+        let mut rx = rt.run_streaming(&run_id, Content::text("Hi")).await.unwrap();
+
+        let mut deltas = Vec::new();
+        let mut done = false;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                AgentEvent::TextDelta { text } => deltas.push(text),
+                AgentEvent::Done { output } => {
+                    assert_eq!(output.run_id, run_id);
+                    assert_eq!(output.tool_calls, 0);
+                    done = true;
+                }
+                AgentEvent::Error { message } => panic!("unexpected error: {message}"),
+                _ => {}
+            }
+        }
+
+        assert!(done, "should receive Done event");
+        assert!(deltas.len() >= 2, "should receive multiple deltas, got {}", deltas.len());
+        let reassembled: String = deltas.into_iter().collect();
+        assert_eq!(reassembled, "Hello world!");
+    }
+
+    #[tokio::test]
+    async fn streaming_with_tool_use() {
+        let rt = make_streaming_runtime(
+            vec![tool_use_response("search"), stop_response("Answer found")],
+            2,
+        );
+        let run_id = rt.create(make_config()).await.unwrap();
+        let mut rx = rt.run_streaming(&run_id, Content::text("Search")).await.unwrap();
+
+        let mut got_tool_result = false;
+        let mut got_done = false;
+
+        while let Some(event) = rx.recv().await {
+            match event {
+                AgentEvent::ToolResult { name, .. } => {
+                    assert_eq!(name, "search");
+                    got_tool_result = true;
+                }
+                AgentEvent::Done { output } => {
+                    assert_eq!(output.tool_calls, 1);
+                    got_done = true;
+                }
+                AgentEvent::Error { message } => panic!("unexpected error: {message}"),
+                _ => {}
+            }
+        }
+
+        assert!(got_tool_result, "should receive ToolResult");
+        assert!(got_done, "should receive Done");
+    }
+
+    #[tokio::test]
+    async fn streaming_batch_fallback() {
+        // Using the non-streaming MockLlm (uses default stream() impl)
+        let rt = make_runtime(vec![stop_response("Batch response")]);
+        let run_id = rt.create(make_config()).await.unwrap();
+        let mut rx = rt.run_streaming(&run_id, Content::text("Hi")).await.unwrap();
+
+        let mut got_done = false;
+        while let Some(event) = rx.recv().await {
+            match event {
+                AgentEvent::Done { output } => {
+                    assert_eq!(output.run_id, run_id);
+                    got_done = true;
+                }
+                AgentEvent::Error { message } => panic!("unexpected error: {message}"),
+                _ => {}
+            }
+        }
+        assert!(got_done, "batch fallback should emit Done");
     }
 }

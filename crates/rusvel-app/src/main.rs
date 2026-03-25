@@ -899,6 +899,9 @@ async fn main() -> Result<()> {
     content_engine.register_platform(Arc::new(
         content_engine::adapters::twitter::TwitterAdapter::new(config.clone()),
     ));
+    content_engine.register_platform(Arc::new(
+        content_engine::adapters::devto::DevToAdapter::new(config.clone()),
+    ));
     let harvest_cfg = build_harvest_config(config.as_ref(), &data_dir.join("profile.toml"));
     let harvest_engine = Arc::new(
         harvest_engine::HarvestEngine::new(db.clone() as Arc<dyn StoragePort>)

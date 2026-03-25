@@ -47,6 +47,21 @@ pub trait LlmPort: Send + Sync {
     /// One-shot generation.
     async fn generate(&self, request: LlmRequest) -> Result<LlmResponse>;
 
+    /// Stream a response incrementally.
+    ///
+    /// Default implementation calls [`generate()`](Self::generate) and emits
+    /// a single [`LlmStreamEvent::Done`] — providers with native streaming
+    /// override this to emit incremental `Delta` events.
+    async fn stream(
+        &self,
+        request: LlmRequest,
+    ) -> Result<tokio::sync::mpsc::Receiver<LlmStreamEvent>> {
+        let response = self.generate(request).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let _ = tx.send(LlmStreamEvent::Done(response)).await;
+        Ok(rx)
+    }
+
     /// Generate text embeddings for semantic search.
     async fn embed(&self, model: &ModelRef, text: &str) -> Result<Vec<f32>>;
 
