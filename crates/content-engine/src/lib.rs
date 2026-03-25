@@ -17,6 +17,7 @@ use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
 pub mod adapters;
 pub mod analytics;
 pub mod calendar;
+pub mod code_bridge;
 pub mod platform;
 pub mod writer;
 
@@ -217,6 +218,59 @@ impl ContentEngine {
             )
             .await?;
         Ok(item)
+    }
+
+    /// Draft a blog post from a stored `code_analysis` snapshot (responds to `code.analyzed`).
+    pub async fn draft_blog_from_code_snapshot(
+        &self,
+        session_id: &SessionId,
+        snapshot_id: &str,
+    ) -> Result<ContentItem> {
+        let json = self
+            .storage
+            .objects()
+            .get("code_analysis", snapshot_id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "code_analysis".into(),
+                id: snapshot_id.into(),
+            })?;
+        let summary = code_bridge::summary_from_stored_code_analysis(&json)?;
+        let topic = crate::writer::build_code_prompt(&summary, &ContentKind::Blog);
+        self.draft(session_id, &topic, ContentKind::Blog).await
+    }
+
+    /// Execute a queued content publish job (payload: `content_id`, `platform`).
+    pub async fn execute_content_publish_job(&self, job: Job) -> Result<serde_json::Value> {
+        match &job.kind {
+            JobKind::ContentPublish => {}
+            JobKind::Custom(s) if s == "content.publish" => {}
+            _ => {
+                return Err(RusvelError::Validation(format!(
+                    "expected ContentPublish job, got {:?}",
+                    job.kind
+                )));
+            }
+        }
+        let sid = job.session_id;
+        let content_id_str = job
+            .payload
+            .get("content_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let platform_str = job
+            .payload
+            .get("platform")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let cid = content_id_str
+            .parse::<uuid::Uuid>()
+            .map(ContentId::from_uuid)
+            .map_err(|e| RusvelError::Validation(format!("content_id: {e}")))?;
+        let platform: Platform = serde_json::from_value(serde_json::json!(platform_str))
+            .map_err(|e| RusvelError::Validation(format!("platform: {e}")))?;
+        let result = self.publish(&sid, cid, platform).await?;
+        serde_json::to_value(&result).map_err(|e| RusvelError::Serialization(e.to_string()))
     }
 
     /// List content items, optionally filtered by status.

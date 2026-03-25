@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
 use rusvel_core::domain::*;
+use rusvel_core::id::JobId;
 use rusvel_core::error::Result;
 use rusvel_core::id::*;
 use rusvel_core::ports::*;
@@ -419,6 +420,84 @@ async fn calendar_schedules_and_lists_posts() {
         .unwrap();
     let updated: ContentItem = serde_json::from_value(json).unwrap();
     assert_eq!(updated.status, ContentStatus::Scheduled);
+}
+
+#[tokio::test]
+async fn draft_blog_from_code_snapshot_uses_stored_analysis() {
+    let (engine, events, storage, _) = test_engine();
+    let sid = SessionId::new();
+    let snapshot_id = uuid::Uuid::now_v7().to_string();
+    let analysis_json = serde_json::json!({
+        "snapshot": {
+            "id": snapshot_id,
+            "repo": { "local_path": "/proj", "remote_url": null },
+            "analyzed_at": "2025-01-01T00:00:00Z"
+        },
+        "symbols": [],
+        "metrics": { "total_files": 1, "total_symbols": 2, "largest_function": null },
+        "graph": { "nodes": [], "edges": [] }
+    });
+    storage
+        .objects()
+        .put("code_analysis", &snapshot_id, analysis_json)
+        .await
+        .unwrap();
+
+    let item = engine
+        .draft_blog_from_code_snapshot(&sid, &snapshot_id)
+        .await
+        .unwrap();
+    assert_eq!(item.kind, ContentKind::Blog);
+    assert!(
+        events
+            .emitted_kinds()
+            .contains(&events::CONTENT_DRAFTED.to_string())
+    );
+}
+
+#[tokio::test]
+async fn execute_content_publish_job_roundtrip() {
+    let (engine, _, storage, _) = test_engine();
+    let mock = Arc::new(MockPlatformAdapter::new(Platform::DevTo));
+    engine.register_platform(mock.clone());
+
+    let sid = SessionId::new();
+    let mut item = engine
+        .draft(&sid, "Job publish", ContentKind::Blog)
+        .await
+        .unwrap();
+    item.approval = ApprovalStatus::Approved;
+    storage
+        .objects()
+        .put(
+            "content",
+            &item.id.to_string(),
+            serde_json::to_value(&item).unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let job = Job {
+        id: JobId::new(),
+        session_id: sid,
+        kind: JobKind::ContentPublish,
+        payload: serde_json::json!({
+            "content_id": item.id.to_string(),
+            "platform": "DevTo"
+        }),
+        status: JobStatus::Queued,
+        scheduled_at: None,
+        started_at: None,
+        completed_at: None,
+        retries: 0,
+        max_retries: 0,
+        error: None,
+        metadata: serde_json::json!({}),
+    };
+
+    let out = engine.execute_content_publish_job(job).await.unwrap();
+    assert!(out.get("url").is_some());
+    assert_eq!(mock.published_items().len(), 1);
 }
 
 #[tokio::test]

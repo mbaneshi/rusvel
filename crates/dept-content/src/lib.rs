@@ -3,7 +3,10 @@
 //! Wraps `content-engine` (domain logic) with the ADR-014 department
 //! contract: manifest declaration, subsystem registration, and lifecycle.
 
+mod events;
+mod jobs;
 mod manifest;
+mod tools;
 
 use std::sync::{Arc, OnceLock};
 
@@ -70,53 +73,13 @@ impl DepartmentApp for ContentDepartment {
         let engine = Arc::new(engine);
         let _ = self.engine.set(engine.clone());
 
-        // ── Register tools ───────────────────────────────────────
-        let eng = engine.clone();
-        ctx.tools.add(
-            "content",
-            "content.draft",
-            "Draft a blog post or article on a given topic",
-            serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "session_id": { "type": "string" },
-                    "topic": { "type": "string" },
-                    "kind": { "type": "string", "enum": ["Blog", "Thread", "LinkedInPost", "Newsletter"] }
-                },
-                "required": ["session_id", "topic"]
-            }),
-            Arc::new(move |args| {
-                let eng = eng.clone();
-                Box::pin(async move {
-                    let session_id = args
-                        .get("session_id")
-                        .and_then(|v| v.as_str())
-                        .and_then(|s| s.parse().ok())
-                        .map(rusvel_core::id::SessionId::from_uuid)
-                        .ok_or_else(|| {
-                            rusvel_core::error::RusvelError::Validation(
-                                "session_id required".into(),
-                            )
-                        })?;
-                    let topic = args
-                        .get("topic")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("general");
-                    let kind = args
-                        .get("kind")
-                        .and_then(|v| v.as_str())
-                        .and_then(|s| serde_json::from_value(serde_json::json!(s)).ok())
-                        .unwrap_or(rusvel_core::domain::ContentKind::Blog);
-                    let item = eng.draft(&session_id, topic, kind).await?;
-                    Ok(ToolOutput {
-                        content: serde_json::to_string_pretty(&item)
-                            .unwrap_or_else(|_| "drafted".into()),
-                        is_error: false,
-                        metadata: serde_json::json!({"content_id": item.id.to_string()}),
-                    })
-                })
-            }),
-        );
+        tools::register_tools(&mut ctx.tools, engine.clone());
+
+        ctx.event_handlers
+            .on("content", "code.analyzed", events::on_code_analyzed(engine.clone()));
+
+        ctx.job_handlers
+            .handle("content", "content.publish", jobs::content_publish(engine.clone()));
 
         tracing::info!("Content department registered");
         Ok(())

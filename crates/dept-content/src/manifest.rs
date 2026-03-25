@@ -86,11 +86,15 @@ pub fn content_manifest() -> DepartmentManifest {
                 parameters_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
+                        "session_id": { "type": "string", "description": "Session UUID" },
                         "topic": { "type": "string", "description": "Topic to write about" },
-                        "audience": { "type": "string", "description": "Target audience" },
-                        "format": { "type": "string", "enum": ["blog", "thread", "article"] }
+                        "kind": {
+                            "type": "string",
+                            "description": "Content kind",
+                            "enum": ["LongForm", "Tweet", "Thread", "LinkedInPost", "Blog", "VideoScript", "Email", "Proposal"]
+                        }
                     },
-                    "required": ["topic"]
+                    "required": ["session_id", "topic"]
                 }),
             },
             ToolContribution {
@@ -99,10 +103,15 @@ pub fn content_manifest() -> DepartmentManifest {
                 parameters_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
+                        "session_id": { "type": "string", "description": "Session UUID" },
                         "content_id": { "type": "string", "description": "ID of content to adapt" },
-                        "platform": { "type": "string", "enum": ["twitter", "linkedin", "devto"] }
+                        "platform": {
+                            "type": "string",
+                            "description": "Target platform",
+                            "enum": ["twitter", "linkedin", "devto", "medium", "youtube", "substack", "email"]
+                        }
                     },
-                    "required": ["content_id", "platform"]
+                    "required": ["session_id", "content_id", "platform"]
                 }),
             },
         ],
