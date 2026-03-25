@@ -1,5 +1,18 @@
 import { writable } from 'svelte/store';
+import { getPendingApprovals } from './api';
 import type { SessionSummary, DepartmentDef } from './api';
+
+/** Count of jobs in `AwaitingApproval`; drives sidebar badge. */
+export const pendingApprovalCount = writable(0);
+
+export async function refreshPendingApprovalCount(): Promise<void> {
+	try {
+		const jobs = await getPendingApprovals();
+		pendingApprovalCount.set(jobs.length);
+	} catch {
+		pendingApprovalCount.set(0);
+	}
+}
 
 export const sessions = writable<SessionSummary[]>([]);
 export const activeSession = writable<SessionSummary | null>(null);

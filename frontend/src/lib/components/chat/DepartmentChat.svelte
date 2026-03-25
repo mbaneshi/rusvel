@@ -16,7 +16,7 @@
 		rejectJob
 	} from '$lib/api';
 	import type { Conversation, DepartmentConfig, ModelOption, ToolOption } from '$lib/api';
-	import { onboarding, pendingCommand } from '$lib/stores';
+	import { onboarding, pendingCommand, refreshPendingApprovalCount } from '$lib/stores';
 	import { cached } from '$lib/cache';
 	import ToolCallCard from './ToolCallCard.svelte';
 	import ApprovalCard from './ApprovalCard.svelte';
@@ -236,10 +236,14 @@
 	}
 
 	function handleApprove(jobId: string) {
-		approveJob(jobId).catch(() => {});
+		approveJob(jobId)
+			.then(() => refreshPendingApprovalCount())
+			.catch(() => {});
 	}
 	function handleReject(jobId: string) {
-		rejectJob(jobId).catch(() => {});
+		rejectJob(jobId)
+			.then(() => refreshPendingApprovalCount())
+			.catch(() => {});
 	}
 
 	function isApprovalResult(tc: ToolCallState): boolean {

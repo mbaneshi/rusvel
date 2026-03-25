@@ -3,6 +3,7 @@
 	import { Streamdown } from 'svelte-streamdown';
 	import { copy } from 'svelte-copy';
 	import { streamChat, getConversations, getChatHistory, approveJob, rejectJob } from '$lib/api';
+	import { refreshPendingApprovalCount } from '$lib/stores';
 	import type { Conversation } from '$lib/api';
 	import ChatTopBar from '$lib/components/chat/ChatTopBar.svelte';
 	import ToolCallCard from '$lib/components/chat/ToolCallCard.svelte';
@@ -150,10 +151,14 @@
 	}
 
 	function handleApprove(jobId: string) {
-		approveJob(jobId).catch(() => {});
+		approveJob(jobId)
+			.then(() => refreshPendingApprovalCount())
+			.catch(() => {});
 	}
 	function handleReject(jobId: string) {
-		rejectJob(jobId).catch(() => {});
+		rejectJob(jobId)
+			.then(() => refreshPendingApprovalCount())
+			.catch(() => {});
 	}
 	function isApprovalResult(tc: ToolCallState): boolean {
 		return tc.result !== null && !tc.isError && tc.result.includes('awaiting_approval');

@@ -471,7 +471,8 @@ export async function runWorkflow(
 export interface Job {
 	id: string;
 	session_id: string;
-	kind: string;
+	/** Serialized `JobKind`; may be a string or `{"Custom":"..."}` from the API. */
+	kind: string | Record<string, unknown>;
 	payload: unknown;
 	status: string;
 	scheduled_at: string | null;
@@ -487,12 +488,23 @@ export async function getPendingApprovals(): Promise<Job[]> {
 	return request('/api/approvals');
 }
 
+async function postApprovalAction(path: string): Promise<void> {
+	const res = await fetch(`${BASE}${path}`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' }
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`API error ${res.status}: ${text}`);
+	}
+}
+
 export async function approveJob(id: string): Promise<void> {
-	return request(`/api/approvals/${id}/approve`, { method: 'POST' });
+	return postApprovalAction(`/api/approvals/${id}/approve`);
 }
 
 export async function rejectJob(id: string): Promise<void> {
-	return request(`/api/approvals/${id}/reject`, { method: 'POST' });
+	return postApprovalAction(`/api/approvals/${id}/reject`);
 }
 
 // ── Chat (God Agent) ─────────────────────────────────────────

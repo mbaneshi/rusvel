@@ -4,7 +4,15 @@
 	import { page } from '$app/state';
 	import { getSessions, createSession, getDepartments } from '$lib/api';
 	import type { DepartmentDef } from '$lib/api';
-	import { sessions, activeSession, sidebarOpen, sidebarWidth, departments } from '$lib/stores';
+	import {
+		sessions,
+		activeSession,
+		sidebarOpen,
+		sidebarWidth,
+		departments,
+		pendingApprovalCount,
+		refreshPendingApprovalCount
+	} from '$lib/stores';
 	import OnboardingChecklist from '$lib/components/onboarding/OnboardingChecklist.svelte';
 	import ProductTour from '$lib/components/onboarding/ProductTour.svelte';
 	import CommandPalette from '$lib/components/onboarding/CommandPalette.svelte';
@@ -13,7 +21,7 @@
 	import {
 		MessageSquare, LayoutDashboard, Database, GitBranch, Settings,
 		Hammer, Code, Search, PenTool, Rocket, DollarSign, Package,
-		TrendingUp, Share2, Scale, HeadphonesIcon, Server
+		TrendingUp, Share2, Scale, HeadphonesIcon, Server, ClipboardCheck
 	} from 'lucide-svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -21,6 +29,7 @@
 	// Map icon keys to Lucide components
 	const iconMap: Record<string, typeof MessageSquare> = {
 		chat: MessageSquare,
+		approvals: ClipboardCheck,
 		dashboard: LayoutDashboard,
 		database: Database,
 		flows: GitBranch,
@@ -50,6 +59,7 @@
 	// Static nav items (non-department pages)
 	const staticNavBefore = [
 		{ href: '/chat', label: 'Chat', icon: 'chat', tour: 'nav-chat' },
+		{ href: '/approvals', label: 'Approvals', icon: 'approvals', tour: '' },
 		{ href: '/', label: 'Dashboard', icon: 'dashboard', tour: 'nav-dashboard' },
 		{ href: '/database/schema', label: 'Database', icon: 'database', tour: '' },
 		{ href: '/flows', label: 'Flows', icon: 'flows', tour: '' }
@@ -94,6 +104,21 @@
 		} finally {
 			loading = false;
 		}
+	});
+
+	onMount(() => {
+		void refreshPendingApprovalCount();
+		const interval = setInterval(() => refreshPendingApprovalCount(), 45_000);
+		const onFocus = () => refreshPendingApprovalCount();
+		if (typeof window !== 'undefined') {
+			window.addEventListener('focus', onFocus);
+		}
+		return () => {
+			clearInterval(interval);
+			if (typeof window !== 'undefined') {
+				window.removeEventListener('focus', onFocus);
+			}
+		};
 	});
 
 	async function handleCreateSession() {
@@ -254,7 +279,7 @@
 						<a
 							href={item.href}
 							data-tour={item.tour || undefined}
-							class="mb-0.5 flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors
+							class="mb-0.5 flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors
 								{isActive
 								? 'bg-sidebar-primary/15 text-sidebar-primary font-medium'
 								: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
@@ -272,7 +297,16 @@
 								{/if}
 							</span>
 							{#if width > 100}
-								{item.label}
+								<span class="flex min-w-0 flex-1 items-center justify-between gap-2">
+									<span class="truncate">{item.label}</span>
+									{#if item.href === '/approvals' && $pendingApprovalCount > 0}
+										<span
+											class="inline-flex min-h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums leading-none text-destructive-foreground"
+										>
+											{$pendingApprovalCount > 99 ? '99+' : $pendingApprovalCount}
+										</span>
+									{/if}
+								</span>
 							{/if}
 						</a>
 					{/each}
@@ -325,7 +359,7 @@
 				<a
 					href={item.href}
 					data-tour={item.tour || undefined}
-					class="flex h-8 w-8 items-center justify-center rounded-lg text-xs transition-colors
+					class="relative flex h-8 w-8 items-center justify-center rounded-lg text-xs transition-colors
 						{isActive
 						? 'bg-sidebar-primary/15 text-sidebar-primary'
 						: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
@@ -335,6 +369,13 @@
 						<svelte:component this={iconMap[item.icon]} size={16} strokeWidth={1.75} />
 					{:else}
 						<span class="font-mono text-xs">{item.icon}</span>
+					{/if}
+					{#if item.href === '/approvals' && $pendingApprovalCount > 0}
+						<span
+							class="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold tabular-nums leading-none text-destructive-foreground"
+						>
+							{$pendingApprovalCount > 9 ? '9+' : $pendingApprovalCount}
+						</span>
 					{/if}
 				</a>
 			{/each}
