@@ -157,6 +157,91 @@ pub struct LlmUsage {
     pub output_tokens: u32,
 }
 
+/// Cost tier for routing and spend accounting (Haiku / Sonnet / Opus style).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelTier {
+    Fast,
+    Balanced,
+    Premium,
+}
+
+impl std::fmt::Display for ModelTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModelTier::Fast => write!(f, "fast"),
+            ModelTier::Balanced => write!(f, "balanced"),
+            ModelTier::Premium => write!(f, "premium"),
+        }
+    }
+}
+
+impl std::str::FromStr for ModelTier {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "fast" | "haiku" => Ok(ModelTier::Fast),
+            "balanced" | "sonnet" | "standard" => Ok(ModelTier::Balanced),
+            "premium" | "opus" | "max" => Ok(ModelTier::Premium),
+            _ => Err(()),
+        }
+    }
+}
+
+impl ModelTier {
+    /// Reads [`RUSVEL_META_MODEL_TIER`] from [`LlmRequest::metadata`](LlmRequest::metadata).
+    pub fn from_request_metadata(meta: &serde_json::Value) -> Option<Self> {
+        let v = meta.get(RUSVEL_META_MODEL_TIER)?;
+        v.as_str()?.parse().ok()
+    }
+}
+
+/// `LlmRequest.metadata` key for [`ModelTier`] (e.g. `"fast"` / `"balanced"` / `"premium"`).
+pub const RUSVEL_META_MODEL_TIER: &str = "rusvel.model_tier";
+
+/// Optional session scope for cost metrics (`SessionId` as string).
+pub const RUSVEL_META_SESSION_ID: &str = "rusvel.session_id";
+
+/// Heuristic USD estimate from usage (approximate public list prices; Ollama/local = 0).
+pub fn estimate_llm_cost_usd(provider: &ModelProvider, model: &str, usage: &LlmUsage) -> f64 {
+    let in_m = usage.input_tokens as f64 / 1_000_000.0;
+    let out_m = usage.output_tokens as f64 / 1_000_000.0;
+    match provider {
+        ModelProvider::Claude => estimate_claude_usd(model, in_m, out_m),
+        ModelProvider::OpenAI => estimate_openai_usd(model, in_m, out_m),
+        ModelProvider::Ollama | ModelProvider::Gemini | ModelProvider::Other(_) => 0.0,
+    }
+}
+
+fn estimate_claude_usd(model: &str, in_m: f64, out_m: f64) -> f64 {
+    let m = model.to_ascii_lowercase();
+    let (inp, outp) = if m.contains("haiku") {
+        (1.0, 5.0)
+    } else if m.contains("opus") {
+        (15.0, 75.0)
+    } else if m.contains("sonnet") {
+        (3.0, 15.0)
+    } else {
+        (3.0, 15.0)
+    };
+    inp * in_m + outp * out_m
+}
+
+fn estimate_openai_usd(model: &str, in_m: f64, out_m: f64) -> f64 {
+    let m = model.to_ascii_lowercase();
+    let (inp, outp) = if m.contains("gpt-4o-mini") || m.contains("4o-mini") {
+        (0.15, 0.60)
+    } else if m.contains("gpt-4o") {
+        (2.50, 10.0)
+    } else if m.contains("o1") {
+        (15.0, 60.0)
+    } else {
+        (0.50, 1.50)
+    };
+    inp * in_m + outp * out_m
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  Agent types
 // ════════════════════════════════════════════════════════════════════
@@ -1153,5 +1238,34 @@ mod tests {
         assert!(Priority::Urgent > Priority::High);
         assert!(Priority::High > Priority::Medium);
         assert!(Priority::Medium > Priority::Low);
+    }
+
+    #[test]
+    fn model_tier_parses_from_metadata() {
+        let meta = serde_json::json!({ RUSVEL_META_MODEL_TIER: "fast" });
+        assert_eq!(
+            ModelTier::from_request_metadata(&meta),
+            Some(ModelTier::Fast)
+        );
+        let meta = serde_json::json!({ RUSVEL_META_MODEL_TIER: "opus" });
+        assert_eq!(
+            ModelTier::from_request_metadata(&meta),
+            Some(ModelTier::Premium)
+        );
+    }
+
+    #[test]
+    fn estimate_claude_haiku_nonzero() {
+        let u = LlmUsage {
+            input_tokens: 1_000_000,
+            output_tokens: 500_000,
+        };
+        let c = estimate_llm_cost_usd(
+            &ModelProvider::Claude,
+            "claude-haiku-4-20250414",
+            &u,
+        );
+        assert!(c > 0.0);
+        assert!((c - 3.5).abs() < 0.01);
     }
 }

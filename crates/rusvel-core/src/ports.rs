@@ -42,6 +42,11 @@ use crate::id::*;
 /// **ADR-009:** Engines never call this directly — they go through
 /// [`AgentPort`] which wraps LLM + Tool + Memory into a coherent
 /// orchestration layer.
+///
+/// **Cost / tier (Sprint 1):** Optional keys in [`LlmRequest::metadata`](crate::domain::LlmRequest):
+/// [`RUSVEL_META_MODEL_TIER`](crate::domain::RUSVEL_META_MODEL_TIER) and
+/// [`RUSVEL_META_SESSION_ID`](crate::domain::RUSVEL_META_SESSION_ID). Adapters such as
+/// `rusvel-llm`’s `CostTrackingLlm` apply tier routing and record spend via [`MetricStore`].
 #[async_trait]
 pub trait LlmPort: Send + Sync {
     /// One-shot generation.

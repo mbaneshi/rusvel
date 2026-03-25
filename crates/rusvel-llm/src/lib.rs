@@ -8,14 +8,18 @@
 
 mod claude;
 mod claude_cli;
+mod cost_tracking;
 mod multi;
 mod ollama;
 mod openai;
+mod tier_routing;
 pub mod stream;
 
 pub use claude::ClaudeProvider;
 pub use claude_cli::ClaudeCliProvider;
+pub use cost_tracking::CostTrackingLlm;
 pub use multi::MultiProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAiProvider;
 pub use stream::{ClaudeCliStreamer, StreamEvent};
+pub use tier_routing::apply_model_tier;

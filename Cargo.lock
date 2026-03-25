@@ -6324,6 +6324,7 @@ name = "rusvel-llm"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "reqwest",
  "rusvel-core",
  "serde",
