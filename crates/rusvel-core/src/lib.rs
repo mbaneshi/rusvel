@@ -33,6 +33,7 @@ pub mod error;
 pub mod id;
 pub mod ports;
 pub mod registry;
+pub mod terminal;
 
 // ── Convenience re-exports ─────────────────────────────────────────
 //
@@ -44,3 +45,6 @@ pub use domain::*;
 pub use engine::Engine;
 pub use error::{Result, RusvelError};
 pub use id::*;
+pub use terminal::{
+    Layout, Pane, PaneSize, PaneSource, PaneStatus, Window, WindowSource,
+};

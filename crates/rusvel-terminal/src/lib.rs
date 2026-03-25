@@ -1,1 +1,5 @@
-//! Terminal multiplexer crate (Sprint 1 #10). Stub library until PTY core lands.
+//! PTY-backed [`rusvel_core::ports::TerminalPort`] implementation.
+
+mod manager;
+
+pub use manager::TerminalManager;

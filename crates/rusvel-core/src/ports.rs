@@ -32,6 +32,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::domain::*;
 use crate::error::Result;
 use crate::id::*;
+use crate::terminal::{Layout, Pane, PaneSize, PaneSource, Window, WindowSource};
 
 // ════════════════════════════════════════════════════════════════════
 //  1. LlmPort — raw model access
@@ -447,4 +448,52 @@ pub trait DeployPort: Send + Sync {
     async fn deploy(&self, artifact_path: &Path, service_name: &str) -> Result<DeployedUrl>;
 
     async fn status(&self, deployment_id: &str) -> Result<DeployStatus>;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  15. TerminalPort — platform PTY multiplexer (native terminal)
+// ════════════════════════════════════════════════════════════════════
+
+/// Platform terminal multiplexer: windows, panes, PTY I/O, layout.
+///
+/// Implementations live in `rusvel-terminal`. Surfaces use this for
+/// observability without depending on PTY details.
+#[async_trait]
+pub trait TerminalPort: Send + Sync {
+    async fn create_window(
+        &self,
+        session_id: &SessionId,
+        name: &str,
+        source: WindowSource,
+    ) -> Result<WindowId>;
+
+    async fn list_windows(&self, session_id: &SessionId) -> Result<Vec<Window>>;
+
+    async fn close_window(&self, window_id: &WindowId) -> Result<()>;
+
+    async fn create_pane(
+        &self,
+        window_id: &WindowId,
+        cmd: &str,
+        cwd: &Path,
+        size: PaneSize,
+        source: PaneSource,
+    ) -> Result<PaneId>;
+
+    async fn write_pane(&self, pane_id: &PaneId, data: &[u8]) -> Result<()>;
+
+    async fn resize_pane(&self, pane_id: &PaneId, size: PaneSize) -> Result<()>;
+
+    async fn close_pane(&self, pane_id: &PaneId) -> Result<()>;
+
+    async fn subscribe_pane(&self, pane_id: &PaneId)
+        -> Result<tokio::sync::broadcast::Receiver<Vec<u8>>>;
+
+    async fn get_layout(&self, window_id: &WindowId) -> Result<Layout>;
+
+    async fn set_layout(&self, window_id: &WindowId, layout: Layout) -> Result<()>;
+
+    async fn panes_for_run(&self, run_id: &RunId) -> Result<Vec<Pane>>;
+
+    async fn panes_for_flow(&self, execution_id: &FlowExecutionId) -> Result<Vec<Pane>>;
 }

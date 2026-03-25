@@ -101,6 +101,10 @@ define_id!(
     FlowExecutionId,
     /// Identifies a node within a flow definition.
     FlowNodeId,
+    /// Identifies a terminal multiplexer window within a session.
+    WindowId,
+    /// Identifies a terminal pane (PTY-backed shell or command).
+    PaneId,
 );
 
 // ── Tests ──────────────────────────────────────────────────────────
