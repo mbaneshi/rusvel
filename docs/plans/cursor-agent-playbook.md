@@ -1,5 +1,6 @@
 # Cursor Agent Playbook — RUSVEL
 
+> **Parallel agents / lanes / conflicts:** `docs/plans/AGENT_COORDINATION.md` — read first.  
 > **Scheduling source of truth:** `docs/plans/sprints.md` (task numbers **#1–#33**, sprints 1–6).  
 > **Deep-dive prompts (B1, F1, …):** `docs/design/agent-workforce.md`  
 > **This file:** how to run agents in Cursor, what to paste, how they report, how you review.
