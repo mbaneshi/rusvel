@@ -78,7 +78,7 @@
 			href: `/dept/${d.id}`,
 			label: d.name,
 			icon: d.id,
-			tour: d.id === 'forge' ? 'nav-forge' : ''
+			tour: `nav-${d.id}`
 		})),
 		...staticNavAfter
 	]);

@@ -3,6 +3,7 @@
 	import { activeSession, onboarding, departments } from '$lib/stores';
 	import { getGoals, getEvents, getAnalytics, getVisualReports } from '$lib/api';
 	import type { Goal, Event, AnalyticsData, DepartmentDef, VisualReport } from '$lib/api';
+	import { deptHref, resolveDeptId } from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
 	let goals: Goal[] = $state([]);
@@ -76,6 +77,8 @@
 		const entries = eventsBySource();
 		return entries.length > 0 ? Math.max(...entries.map((e) => e[1])) : 1;
 	});
+
+	let planDeptHref = $derived(deptHref(resolveDeptId(deptList, 'forge', 'forge')));
 </script>
 
 <div class="h-full overflow-y-auto p-6">
@@ -225,7 +228,7 @@
 				</p>
 				<p class="mt-1 text-2xl font-bold text-primary">{deptList.length}</p>
 				<p class="text-xs text-muted-foreground">
-					<a href="/dept/forge" class="text-primary hover:text-primary/80">Generate plan &rarr;</a>
+					<a href={planDeptHref} class="text-primary hover:text-primary/80">Generate plan &rarr;</a>
 				</p>
 			</div>
 		</div>
@@ -252,7 +255,7 @@
 							Goals help you stay focused and track progress
 						</p>
 						<a
-							href="/dept/forge"
+							href={planDeptHref}
 							class="mt-3 rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
 						>
 							Add your first goal

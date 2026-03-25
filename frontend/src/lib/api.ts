@@ -1,6 +1,16 @@
 // In dev mode (vite), API is on :3000. In production, same origin.
 const BASE = import.meta.env.DEV ? 'http://localhost:3000' : '';
 
+import { normalizeDepartmentList, type DepartmentDef } from './departmentManifest';
+
+export type { QuickAction, DepartmentDef } from './departmentManifest';
+export {
+	normalizeDepartmentList,
+	tabsFromDepartment,
+	deptHref,
+	resolveDeptId
+} from './departmentManifest';
+
 export interface SessionSummary {
 	id: string;
 	name: string;
@@ -616,27 +626,10 @@ export async function streamChat(
 
 // ── Department Registry ──────────────────────────────────────
 
-export interface QuickAction {
-	label: string;
-	prompt: string;
-}
-
-export interface DepartmentDef {
-	id: string;
-	name: string;
-	title: string;
-	icon: string;
-	color: string;
-	system_prompt: string;
-	capabilities: string[];
-	tabs: string[];
-	quick_actions: QuickAction[];
-	default_config: Record<string, unknown>;
-}
-
 export async function getDepartments(): Promise<DepartmentDef[]> {
 	const res = await fetch(`${BASE}/api/departments`);
-	return res.json();
+	const raw: unknown = await res.json();
+	return normalizeDepartmentList(raw);
 }
 
 export interface DbTableSummary {

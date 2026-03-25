@@ -4,6 +4,7 @@
 	import DepartmentChat from '$lib/components/chat/DepartmentChat.svelte';
 	import DepartmentPanel from '$lib/components/department/DepartmentPanel.svelte';
 	import type { DepartmentDef } from '$lib/api';
+	import { tabsFromDepartment } from '$lib/api';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
 	activeSession.subscribe((v) => (currentSession = v));
@@ -31,7 +32,7 @@
 				icon={dept.icon}
 				color={dept.color}
 				quickActions={dept.quick_actions}
-				tabs={dept.tabs}
+				tabs={tabsFromDepartment(dept)}
 			/>
 		{/key}
 		<div class="flex-1">

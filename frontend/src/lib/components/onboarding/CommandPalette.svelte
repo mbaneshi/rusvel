@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { commandPaletteOpen, sessions, activeSession } from '$lib/stores';
-	import { createSession } from '$lib/api';
+	import { commandPaletteOpen, departments } from '$lib/stores';
+	import { createSession, deptHref, resolveDeptId } from '$lib/api';
+	import type { DepartmentDef } from '$lib/api';
 
 	let isOpen = $state(false);
 	let query = $state('');
@@ -18,6 +19,9 @@
 		}
 	});
 
+	let deptList: DepartmentDef[] = $state([]);
+	departments.subscribe((v) => (deptList = v));
+
 	interface Command {
 		id: string;
 		label: string;
@@ -26,136 +30,61 @@
 		action: () => void;
 	}
 
-	const commands: Command[] = [
-		// Navigation
-		{
-			id: 'nav-dashboard',
-			label: 'Dashboard',
+	let commands = $derived.by((): Command[] => {
+		const deptNav: Command[] = deptList.map((d) => ({
+			id: `nav-${d.id}`,
+			label: d.title,
 			group: 'Navigation',
-			icon: '~',
-			action: () => navigate('/')
-		},
-		{
-			id: 'nav-chat',
-			label: 'Chat (God Agent)',
-			group: 'Navigation',
-			icon: '>',
-			action: () => navigate('/chat')
-		},
-		{
-			id: 'nav-forge',
-			label: 'Forge Department',
-			group: 'Navigation',
-			icon: '=',
-			action: () => navigate('/dept/forge')
-		},
-		{
-			id: 'nav-code',
-			label: 'Code Department',
-			group: 'Navigation',
-			icon: '#',
-			action: () => navigate('/dept/code')
-		},
-		{
-			id: 'nav-harvest',
-			label: 'Harvest Department',
-			group: 'Navigation',
-			icon: '$',
-			action: () => navigate('/dept/harvest')
-		},
-		{
-			id: 'nav-content',
-			label: 'Content Department',
-			group: 'Navigation',
-			icon: '*',
-			action: () => navigate('/dept/content')
-		},
-		{
-			id: 'nav-gtm',
-			label: 'GTM Department',
-			group: 'Navigation',
-			icon: '^',
-			action: () => navigate('/dept/gtm')
-		},
-		{
-			id: 'nav-finance',
-			label: 'Finance Department',
-			group: 'Navigation',
-			icon: '%',
-			action: () => navigate('/dept/finance')
-		},
-		{
-			id: 'nav-product',
-			label: 'Product Department',
-			group: 'Navigation',
-			icon: '@',
-			action: () => navigate('/dept/product')
-		},
-		{
-			id: 'nav-growth',
-			label: 'Growth Department',
-			group: 'Navigation',
-			icon: '&',
-			action: () => navigate('/dept/growth')
-		},
-		{
-			id: 'nav-distro',
-			label: 'Distribution Department',
-			group: 'Navigation',
-			icon: '!',
-			action: () => navigate('/dept/distro')
-		},
-		{
-			id: 'nav-legal',
-			label: 'Legal Department',
-			group: 'Navigation',
-			icon: '\u00A7',
-			action: () => navigate('/dept/legal')
-		},
-		{
-			id: 'nav-support',
-			label: 'Support Department',
-			group: 'Navigation',
-			icon: '?',
-			action: () => navigate('/dept/support')
-		},
-		{
-			id: 'nav-infra',
-			label: 'Infra Department',
-			group: 'Navigation',
-			icon: '>',
-			action: () => navigate('/dept/infra')
-		},
-		{
-			id: 'nav-settings',
-			label: 'Settings',
-			group: 'Navigation',
-			icon: '%',
-			action: () => navigate('/settings')
-		},
-		// Actions
-		{
-			id: 'act-new-session',
-			label: 'Create New Session',
-			group: 'Actions',
-			icon: '+',
-			action: () => handleCreateSession()
-		},
-		{
-			id: 'act-plan',
-			label: 'Generate Daily Plan',
-			group: 'Actions',
-			icon: '=',
-			action: () => navigate('/dept/forge')
-		},
-		{
-			id: 'act-new-chat',
-			label: 'New Chat',
-			group: 'Actions',
-			icon: '>',
-			action: () => navigate('/chat')
-		}
-	];
+			icon: d.icon,
+			action: () => navigate(deptHref(d.id))
+		}));
+		const forgeId = resolveDeptId(deptList, 'forge', 'forge');
+		return [
+			{
+				id: 'nav-dashboard',
+				label: 'Dashboard',
+				group: 'Navigation',
+				icon: '~',
+				action: () => navigate('/')
+			},
+			{
+				id: 'nav-chat',
+				label: 'Chat (God Agent)',
+				group: 'Navigation',
+				icon: '>',
+				action: () => navigate('/chat')
+			},
+			...deptNav,
+			{
+				id: 'nav-settings',
+				label: 'Settings',
+				group: 'Navigation',
+				icon: '⚙',
+				action: () => navigate('/settings')
+			},
+			{
+				id: 'act-new-session',
+				label: 'Create New Session',
+				group: 'Actions',
+				icon: '+',
+				action: () => handleCreateSession()
+			},
+			{
+				id: 'act-plan',
+				label: 'Generate Daily Plan',
+				group: 'Actions',
+				icon: '=',
+				action: () => navigate(deptHref(forgeId))
+			},
+			{
+				id: 'act-new-chat',
+				label: 'New Chat',
+				group: 'Actions',
+				icon: '»',
+				action: () => navigate('/chat')
+			}
+		];
+	});
 
 	let filtered = $derived(
 		query.trim() === ''

@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { onboarding, sessions } from '$lib/stores';
+	import { onboarding, sessions, departments } from '$lib/stores';
 	import type { OnboardingState } from '$lib/stores';
 	import { goto } from '$app/navigation';
+	import { deptHref, resolveDeptId } from '$lib/api';
+	import type { DepartmentDef } from '$lib/api';
 
 	let ob: OnboardingState = $state({
 		sessionCreated: false,
@@ -23,19 +25,42 @@
 		}
 	});
 
-	const steps = [
-		{
-			key: 'sessionCreated' as const,
-			label: 'Create your first session',
-			action: () => {
-				/* sidebar handles this */
+	let deptList: DepartmentDef[] = $state([]);
+	departments.subscribe((v) => (deptList = v));
+
+	const steps = $derived.by(() => {
+		const forgeId = resolveDeptId(deptList, 'forge', 'forge');
+		const codeId = resolveDeptId(deptList, 'code', 'code');
+		return [
+			{
+				key: 'sessionCreated' as const,
+				label: 'Create your first session',
+				action: () => {
+					/* sidebar handles this */
+				}
+			},
+			{
+				key: 'goalAdded' as const,
+				label: 'Add a goal',
+				action: () => goto(deptHref(forgeId))
+			},
+			{
+				key: 'planGenerated' as const,
+				label: 'Generate a daily plan',
+				action: () => goto(deptHref(forgeId))
+			},
+			{
+				key: 'deptChatUsed' as const,
+				label: 'Chat with a department',
+				action: () => goto(deptHref(codeId))
+			},
+			{
+				key: 'agentCreated' as const,
+				label: 'Create an agent',
+				action: () => goto(deptHref(forgeId))
 			}
-		},
-		{ key: 'goalAdded' as const, label: 'Add a goal', action: () => goto('/dept/forge') },
-		{ key: 'planGenerated' as const, label: 'Generate a daily plan', action: () => goto('/dept/forge') },
-		{ key: 'deptChatUsed' as const, label: 'Chat with a department', action: () => goto('/dept/code') },
-		{ key: 'agentCreated' as const, label: 'Create an agent', action: () => goto('/dept/forge') }
-	];
+		];
+	});
 
 	let completedCount = $derived(steps.filter((s) => ob[s.key]).length);
 	let allDone = $derived(completedCount === steps.length);
