@@ -59,3 +59,23 @@ See full prompt: **[PASTE-06-engine-kind.md](./PASTE-06-engine-kind.md)** — co
 ---
 
 Parallel pack: **A + B + C + D** = four agents, minimal collision. See **[README.md](./README.md)**.
+
+---
+
+# Advance (Sprint 2–3) — after Sprint 1 on `main`
+
+**Three-way parallel (low collision):**
+
+| Chat | Copy entire file |
+|------|------------------|
+| J | [PASTE-13-batch-api.md](./PASTE-13-batch-api.md) |
+| K | [PASTE-14-hybrid-rag.md](./PASTE-14-hybrid-rag.md) |
+| L | [PASTE-15-frontend-manifest.md](./PASTE-15-frontend-manifest.md) |
+
+**Then** (serial agent work): [PASTE-11](./PASTE-11-context-compaction.md) → merge → [PASTE-12](./PASTE-12-memory-tools.md)
+
+**Terminal web:** [PASTE-16-terminal-web-bridge.md](./PASTE-16-terminal-web-bridge.md) (after #15 if layout conflicts)
+
+**Orchestration:** [PASTE-18-delegate-agent.md](./PASTE-18-delegate-agent.md), [PASTE-19-invoke-flow.md](./PASTE-19-invoke-flow.md)
+
+Full order: **[ADVANCE-BATCH.md](./ADVANCE-BATCH.md)**.

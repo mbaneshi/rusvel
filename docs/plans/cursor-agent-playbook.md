@@ -1,6 +1,6 @@
 # Cursor Agent Playbook — RUSVEL
 
-> **Ready-made agent prompts (no fill-ins):** `docs/agents/` — one `PASTE-*.md` file per task; copy entire file into Composer.  
+> **Ready-made agent prompts (no fill-ins):** `docs/agents/` — one `PASTE-*.md` file per task; copy entire file into Composer. **Next sprint:** `docs/agents/ADVANCE-BATCH.md`.  
 > **Parallel agents / lanes / conflicts:** `docs/plans/AGENT_COORDINATION.md` — read first.  
 > **Scheduling source of truth:** `docs/plans/sprints.md` (task numbers **#1–#33**, sprints 1–6).  
 > **Deep-dive prompts (B1, F1, …):** `docs/design/agent-workforce.md`  
