@@ -10,7 +10,7 @@ A single Rust binary that replaces an entire agency. AI agents handle code, cont
 ## Quick Start
 
 ```bash
-cargo build                    # Build all 34 crates
+cargo build                    # Build all 49 crates
 cargo run                      # Start web server on http://localhost:3000
 ```
 
@@ -25,7 +25,7 @@ rusvel growth list                  # List department items
 rusvel harvest events               # Recent department events
 ```
 
-All 11 departments available: `finance`, `growth`, `distro`, `legal`, `support`, `infra`, `product`, `code`, `harvest`, `content`, `gtm`.
+All 12 departments available: `forge`, `finance`, `growth`, `distro`, `legal`, `support`, `infra`, `product`, `code`, `harvest`, `content`, `gtm`.
 
 ### Interactive REPL shell
 ```bash
@@ -55,15 +55,19 @@ rusvel --mcp            # MCP server (stdio JSON-RPC) for Claude Code
 
 ## Architecture
 
-Hexagonal (ports & adapters). 34 crates, 13 engines (12 departments + Flow), single binary.
+Hexagonal (ports & adapters). 49 crates (~43k lines Rust), 13 engines (12 departments + Flow), single binary. All departments migrated to DepartmentApp pattern (ADR-014) with dedicated `dept-*` wrapper crates.
 
 ```
 SURFACES: CLI (Clap) | REPL (reedline) | TUI (Ratatui) | Web (Svelte) | MCP
     |
-ENGINES:  Forge | Code | Harvest | Content | GTM | Finance | Product
-          Growth | Distro | Legal | Support | Infra
+DEPARTMENTS: 12 dept-* crates (DepartmentApp pattern)
     |
-FOUNDATION: rusvel-core (19 traits) + 16 adapter crates (DB, LLM, Agent, Events, Vector, ...)
+ENGINES:  Forge | Code | Harvest | Content | GTM | Finance | Product
+          Growth | Distro | Legal | Support | Infra | Flow
+    |
+FOUNDATION: rusvel-core (14+ traits) + adapter crates (DB, LLM, Agent, Events, Vector, Terminal, ...)
+    |
+TOOLS:    21+ tools (9 built-in + 12 engine + tool_search meta-tool)
 ```
 
 See [docs/design/architecture-v2.md](docs/design/architecture-v2.md) for full details.
@@ -72,7 +76,8 @@ See [docs/design/architecture-v2.md](docs/design/architecture-v2.md) for full de
 
 - **Backend:** Rust 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio
 - **Frontend:** SvelteKit 5, Tailwind CSS 4
-- **AI:** Ollama (local), Claude API, Claude CLI, OpenAI
+- **AI:** Ollama (local), Claude API, Claude CLI, OpenAI — ModelTier routing (Haiku/Sonnet/Opus)
+- **Agent:** AgentRuntime with streaming, ScopedToolRegistry, deferred tool loading
 
 ## Testing
 

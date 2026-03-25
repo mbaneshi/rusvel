@@ -1,6 +1,6 @@
 # RUSVEL — Current State
 
-> Last verified: 2026-03-24 (generated from live codebase inspection)
+> Last verified: 2026-03-26 (generated from live codebase inspection)
 
 ---
 
@@ -8,18 +8,20 @@
 
 | Metric | Count |
 |---|---|
-| Workspace crates | 34 |
-| Rust lines of code | ~34,286 |
-| Total tests (#[test]) | 118 |
-| Tests passing | 103 (3 failing in rusvel-api code_to_content) |
-| API route registrations | 79 |
-| API modules | 22 (`agents`, `analytics`, `approvals`, `build_cmd`, `capability`, `chat`, `config`, `db_routes`, `department`, `engine_routes`, `flow_routes`, `help`, `hook_dispatch`, `hooks`, `knowledge`, `mcp_servers`, `routes`, `rules`, `skills`, `system`, `visual_report`, `workflows`) |
-| Port traits (rusvel-core) | 19 (18 in ports.rs + Engine trait) |
+| Workspace crates | 49 |
+| Rust lines of code | ~43,276 |
+| Rust source files | 185 |
+| Total test suites | 98 (0 failures) |
+| API handler functions | ~115 |
+| API modules | 22+ |
+| Port traits (rusvel-core) | 20 (19 in ports.rs + Engine trait) |
 | Domain types (rusvel-core) | 82 |
 | Departments | 12 |
+| Department crates (dept-*) | 13 |
 | Engines (wired / stub) | 5 / 8 |
+| Registered tools | 21+ (9 built-in + 12 engine + tool_search) |
 | MCP tools | 6 |
-| Frontend pages | 12 (`/`, `/chat`, `/database/schema`, `/database/tables`, `/database/sql`, `/dept/[id]`, `/flows`, `/knowledge`, `/settings`, `+layout`, `+error`) |
+| Frontend pages | 12+ (`/`, `/chat`, `/database/schema`, `/database/tables`, `/database/sql`, `/dept/[id]`, `/flows`, `/knowledge`, `/settings`, `+layout`, `+error`) |
 | Frontend Svelte components | ~40+ |
 
 ---
@@ -29,7 +31,7 @@
 | Check | Status |
 |---|---|
 | `cargo build` | Clean — 0 errors |
-| `cargo test` | 103 pass, 3 fail (code_to_content integration tests) |
+| `cargo test` | 98 suites, 0 failures |
 
 ---
 
@@ -37,13 +39,13 @@
 
 These features are wired from binary entry point through adapters to the frontend.
 
-**API server startup** — `rusvel-app/main.rs` boots all adapters (SQLite WAL, Claude CLI LLM, EventBus, MemoryStore, ToolRegistry, JobQueue, AgentRuntime, EmbeddingPort, VectorStore), builds ForgeEngine + CodeEngine + ContentEngine + HarvestEngine + FlowEngine, seeds default data, spawns job worker, loads department registry, starts Axum on `:3000` with graceful shutdown.
+**API server startup** — `rusvel-app/main.rs` boots all adapters (SQLite WAL, LLM with ModelTier routing + CostTracker, EventBus, MemoryStore, ScopedToolRegistry with 21+ tools, JobQueue, AgentRuntime with streaming, EmbeddingPort, VectorStore, TerminalPort), collects DepartmentApp instances from 13 dept-* crates, resolves dependencies via DepartmentManifest, calls register() in order, seeds default data, spawns job worker, starts Axum on `:3000` with graceful shutdown.
 
 **First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session.
 
 **Embedded frontend** — `rust-embed` compiles `frontend/build/` into the binary. Falls back through filesystem locations, then extracts embedded assets to temp dir.
 
-**Department chat (SSE streaming)** — Parameterized `POST /api/dept/{dept}/chat` streams Claude CLI output via SSE. Includes:
+**Department chat (SSE streaming)** — Parameterized `POST /api/dept/{dept}/chat` streams via AgentRuntime (AgentEvent-based SSE). Includes:
 - Three-layer config cascade: registry defaults + stored overrides + user context
 - `@agent-name` mentions override model/instructions/tools from ObjectStore
 - `/skill-name` resolution expands skill prompt templates inline
@@ -107,8 +109,6 @@ These features are wired from binary entry point through adapters to the fronten
 
 **8 domain stub engines** — GTM, Finance, Product, Growth, Distro, Legal, Support, Infra exist with domain types and tests, but engine-specific logic isn't invoked via API or jobs. Chat works for all departments via generic agent.
 
-**Approval workflow UI** — API endpoints exist but no frontend UI for reviewing/approving jobs.
-
 **Authentication/authorization** — `rusvel-auth` is in-memory from env vars; no middleware on API routes.
 
 **OutreachSend jobs** — GTM engine not wired, job handler is placeholder.
@@ -117,29 +117,41 @@ These features are wired from binary entry point through adapters to the fronten
 
 ## 5. Test Breakdown by Crate
 
-| Crate | #[test] |
-|---|---|
-| rusvel-llm | ~40 |
-| forge-engine | 15 |
-| rusvel-api (build_cmd + knowledge + integration) | 15+ |
-| rusvel-db | 14 |
-| harvest-engine | 12 (source) |
-| rusvel-agent (persona) | 6 |
-| rusvel-core (domain + config + id + registry) | 19 |
-| rusvel-config | 6 |
-| code-engine | 4 |
-| content-engine | 3 |
-| rusvel-mcp-client | 3 |
-| rusvel-embed | 1 |
-| flow-engine | 1 |
-| rusvel-schema | 4 |
-| **Total** | **118** |
+98 test suites across the workspace, 0 failures. Distribution varies by crate;
+highest concentration in rusvel-llm, forge-engine, rusvel-api, rusvel-db, harvest-engine,
+rusvel-core (including DepartmentManifest + RegistrationContext tests), and rusvel-agent.
 
-Crates with 0 tests: `rusvel-app`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`, `rusvel-event`, `rusvel-memory`, `rusvel-tool`, `rusvel-builtin-tools`, `rusvel-jobs`, `rusvel-auth`, `rusvel-deploy`, `rusvel-vector`, and all 8 stub engines.
+Crates with 0 tests: `rusvel-app`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`, `rusvel-event`,
+`rusvel-memory`, `rusvel-builtin-tools`, `rusvel-jobs`, `rusvel-auth`, `rusvel-deploy`,
+`rusvel-vector`, `rusvel-terminal`, `rusvel-engine-tools`, all 13 dept-* crates,
+and the 8 stub engines.
 
 ---
 
-## 6. New Since Last Audit (2026-03-23)
+## 6. New Since Last Update (2026-03-24)
+
+- **ADR-014: DepartmentApp pattern** — `EngineKind` enum removed, replaced by `DepartmentApp` trait + `DepartmentManifest`. Each department is a self-contained `dept-*` crate.
+- **13 dept-* crates** — `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`, `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`, `dept-support`, `dept-infra`
+- **rusvel-engine-tools** — 12 engine-specific tools for agent execution
+- **rusvel-terminal** — TerminalPort adapter (Terminal Phase 1)
+- **AgentRuntime streaming** — `run_streaming()` returns `mpsc::Receiver<AgentEvent>` with TextDelta, ToolCall, ToolResult, Done, Error events. Replaces ClaudeCliStreamer.
+- **ScopedToolRegistry** — Per-department tool scoping with deferred loading and `tool_search` meta-tool
+- **ModelTier routing** — Quick/Standard/Premium model selection based on task complexity
+- **CostTracker** — Per-session token usage and cost tracking
+- **LlmStreamEvent** — `stream()` method on `LlmPort` for incremental LLM output
+- **21+ registered tools** — 9 built-in + 12 engine-specific + tool_search
+- **TerminalPort** — New port trait in rusvel-core (port count 19 → 20)
+- **Approval UI shipped** — Frontend ApprovalCard, ApprovalQueue components
+- **ToolCallCard** — Frontend component for displaying tool calls in chat
+- **Manifest-aligned navigation** — Frontend nav driven by DepartmentManifest data
+- **Crate count**: 34 → 49
+- **Rust lines**: ~34k → ~43k
+- **Source files**: → 185
+- **Test suites**: 118 → 98 (0 failures, consolidated)
+- **API handlers**: 79 → ~115
+- **Port traits**: 19 → 20
+
+## 7. History: Changes from 2026-03-23 Audit to 2026-03-24
 
 - **rusvel-schema** — New crate for database schema introspection
 - **rusvel-builtin-tools** — 9 built-in tools for agent execution

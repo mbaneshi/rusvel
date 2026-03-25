@@ -38,7 +38,7 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 └──────────────────────────┬────────────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│              DOMAIN ENGINES (13)                │
+│       DOMAIN ENGINES (13) + dept-* crates       │
 │                                                 │
 │  Core: Forge │ Code │ Harvest │ Content │ GTM   │
 │  Extended: Finance│Product│Growth│Distro│Legal  │
@@ -48,7 +48,7 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 ┌──────────────────────┴─────────────────────────┐
 │              FOUNDATION (Ports + Adapters)       │
 │                                                 │
-│  rusvel-core   (19 traits, zero deps)           │
+│  rusvel-core   (20 traits, zero deps)           │
 │  rusvel-llm    (Claude/OpenAI/Ollama)           │
 │  rusvel-agent  (agent runtime + workflows)      │
 │  rusvel-db     (SQLite WAL + migrations)        │
@@ -67,13 +67,13 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 └─────────────────────────────────────────────────┘
 ```
 
-## The 19 Core Ports (in rusvel-core)
+## The 20 Core Ports (in rusvel-core)
 
 | Port | Responsibility |
 |------|---------------|
-| `LlmPort` | Raw model access: generate, stream |
+| `LlmPort` | Raw model access: generate, stream (LlmStreamEvent) |
 | `AgentPort` | Agent orchestration: create, run, stop, status |
-| `ToolPort` | Tool registry + execution |
+| `ToolPort` | Tool registry + execution (ScopedToolRegistry) |
 | `EventPort` | System-wide typed event bus |
 | `StoragePort` | 5 canonical sub-stores (see architecture-v2) |
 | `EventStore` | Append-only event log |
@@ -89,6 +89,7 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 | `EmbeddingPort` | Text → dense vectors |
 | `VectorStorePort` | Similarity search |
 | `DeployPort` | Deployment operations |
+| `TerminalPort` | Terminal interaction, shell commands |
 | `Engine` | Engine trait: name, capabilities, health |
 
 > **Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (see ADR-003, ADR-006).
@@ -210,18 +211,22 @@ $ rusvel --tui                   # Full-screen terminal dashboard
 - Loads live data from storage
 - Press `q` or `Esc` to exit
 
-## Current State (as of 2026-03-24)
+## Current State (as of 2026-03-26)
 
 The vertical slice is proven and significantly expanded:
 
-- **34 crates** (16 foundation + 13 engines + 5 surfaces)
-- **19 port traits** in rusvel-core with 82 domain types
-- **79 API routes** across 22 modules
-- **118 tests** across 26 crates
-- **~34,286 lines** of Rust
-- **12 frontend routes** (home, chat, database browser, dept/[id], flows, knowledge, settings)
+- **49 crates** (18 foundation + 13 engines + 13 dept-* crates + 5 surfaces)
+- **20 port traits** in rusvel-core with 82 domain types
+- **~115 API handler functions** across 22+ modules
+- **98 test suites**, 0 failures
+- **~43,276 lines** of Rust across 185 source files
+- **12+ frontend routes** (home, chat, database browser, dept/[id], flows, knowledge, settings)
 - **5 wired engines** (Forge, Code, Content, Harvest, Flow) with real domain logic
 - **8 stub engines** with department chat via generic agent
+- **13 dept-* crates** implementing `DepartmentApp` trait (ADR-014, EngineKind removed)
+- **21+ registered tools** (9 built-in + 12 engine + tool_search)
+- **AgentRuntime streaming** with multi-turn tool loop
+- **ModelTier routing** + CostTracker for smart model selection
 - **6 MCP tools** for Claude Code integration
 - **3-tier CLI** (one-shot + REPL + TUI) fully wired
 

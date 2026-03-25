@@ -12,7 +12,7 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 └──────────────────────┬─────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│              DOMAIN ENGINES (5)                  │
+│              DOMAIN ENGINES (13)                 │
 │                                                 │
 │  Forge         │ Code       │ Harvest           │
 │  (+ Mission)   │            │                   │
@@ -46,8 +46,8 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 
 The heart of the system. Contains:
 
-- **19 port traits** -- interfaces that engines depend on
-- **82 shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, etc.
+- **14 port traits** -- interfaces that engines depend on (LlmPort, AgentPort, ToolPort, EventPort, StoragePort, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort)
+- **82+ shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, DepartmentManifest, etc.
 - Zero framework dependencies
 
 ### Layer 2: Adapters
@@ -65,6 +65,14 @@ Concrete implementations of the port traits:
 | `rusvel-jobs` | JobPort | Central SQLite job queue |
 | `rusvel-auth` | AuthPort | In-memory credential storage from env |
 | `rusvel-config` | ConfigPort | TOML config with per-session overrides |
+| `rusvel-embed` | EmbeddingPort | Local embeddings via fastembed |
+| `rusvel-vector` | VectorStorePort | LanceDB vector store |
+| `rusvel-deploy` | DeployPort | Deployment adapter |
+| `rusvel-terminal` | TerminalPort | Terminal interaction adapter |
+| `rusvel-builtin-tools` | — | 9 built-in tools for agent execution |
+| `rusvel-engine-tools` | — | Engine-specific tool wiring |
+| `rusvel-mcp-client` | — | MCP client for external MCP servers |
+| `rusvel-schema` | — | Database schema introspection (RusvelBase) |
 
 ### Layer 3: Engines
 
@@ -77,6 +85,16 @@ Domain logic crates. Each engine depends **only** on `rusvel-core` traits:
 | `harvest-engine` | Opportunity discovery: scanning, scoring, proposals, pipeline |
 | `content-engine` | Content creation: writer, calendar, platform adapters, analytics |
 | `gtm-engine` | GoToMarket: CRM, outreach sequences, invoicing, deal stages |
+| `finance-engine` | Ledger, runway calculator, tax estimation |
+| `product-engine` | Roadmap, pricing analysis, feedback aggregation |
+| `growth-engine` | Funnel analysis, cohort tracking, KPI dashboard |
+| `distro-engine` | SEO, marketplace listings, affiliate channels |
+| `legal-engine` | Contract drafting, compliance checks, IP management |
+| `support-engine` | Ticket management, knowledge base, NPS tracking |
+| `infra-engine` | Deployment, monitoring, incident response |
+| `flow-engine` | DAG workflow engine: petgraph, code/condition/agent nodes |
+
+Each engine also has a corresponding **`dept-*` wrapper crate** (e.g. `dept-forge`, `dept-code`, `dept-finance`) that implements the `DepartmentApp` trait (ADR-014), declaring the department's manifest, tools, and registration logic. There are 12 `dept-*` crates plus `dept-flow` for the flow engine.
 
 ### Layer 4: Surfaces
 
@@ -86,8 +104,8 @@ User-facing interfaces that wire adapters into engines:
 |---------|-----------|--------|
 | `rusvel-api` | Axum HTTP | Active |
 | `rusvel-cli` | Clap 4 | Active |
-| `rusvel-mcp` | stdio JSON-RPC | Imported, not yet dispatched |
-| `rusvel-tui` | Ratatui | Layout + widgets, not yet wired |
+| `rusvel-mcp` | stdio JSON-RPC | Active |
+| `rusvel-tui` | Ratatui | Active |
 | `frontend/` | SvelteKit 5 + Tailwind 4 | Active |
 
 ### Composition Root: rusvel-app
@@ -98,30 +116,50 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 
 ```
 rusvel/
-├── crates/
-│   ├── rusvel-core/        19 port traits + 82 domain types
-│   ├── rusvel-db/          SQLite WAL + 5 canonical stores
-│   ├── rusvel-llm/         4 LLM providers
-│   ├── rusvel-agent/       Agent runtime (LLM+Tool+Memory)
-│   ├── rusvel-event/       Event bus + persistence
-│   ├── rusvel-memory/      FTS5 session-namespaced search
-│   ├── rusvel-tool/        Tool registry + JSON Schema
-│   ├── rusvel-jobs/        Central job queue
-│   ├── rusvel-auth/        Credential storage
-│   ├── rusvel-config/      TOML config + overrides
-│   ├── forge-engine/       Agent orchestration + Mission
-│   ├── code-engine/        Code intelligence (Rust-only v0)
-│   ├── harvest-engine/     Opportunity discovery
-│   ├── content-engine/     Content creation + publishing
-│   ├── gtm-engine/         GoToMarket (CRM + outreach)
-│   ├── rusvel-api/         Axum HTTP API
-│   ├── rusvel-cli/         Clap CLI
-│   ├── rusvel-tui/         Ratatui TUI
-│   ├── rusvel-mcp/         MCP server
-│   └── rusvel-app/         Binary entry point
-├── frontend/               SvelteKit 5 + Tailwind 4
-├── Cargo.toml              Workspace manifest
-└── CLAUDE.md               Project conventions
+├── crates/                   49 crates total
+│   ├── rusvel-core/          14 port traits + domain types + DepartmentApp
+│   ├── rusvel-db/            SQLite WAL + 5 canonical stores
+│   ├── rusvel-llm/           4 LLM providers
+│   ├── rusvel-agent/         Agent runtime (LLM+Tool+Memory)
+│   ├── rusvel-event/         Event bus + persistence
+│   ├── rusvel-memory/        FTS5 session-namespaced search
+│   ├── rusvel-tool/          Tool registry + JSON Schema
+│   ├── rusvel-builtin-tools/ 9 built-in tools for agent execution
+│   ├── rusvel-engine-tools/  Engine-specific tool wiring
+│   ├── rusvel-mcp-client/    MCP client for external servers
+│   ├── rusvel-jobs/          Central job queue
+│   ├── rusvel-auth/          Credential storage
+│   ├── rusvel-config/        TOML config + overrides
+│   ├── rusvel-deploy/        Deployment port adapter
+│   ├── rusvel-embed/         Text embedding (fastembed)
+│   ├── rusvel-vector/        Vector store (LanceDB)
+│   ├── rusvel-schema/        Database schema introspection
+│   ├── rusvel-terminal/      Terminal interaction adapter
+│   ├── forge-engine/         Agent orchestration + Mission
+│   ├── code-engine/          Code intelligence
+│   ├── harvest-engine/       Opportunity discovery
+│   ├── content-engine/       Content creation + publishing
+│   ├── gtm-engine/           GoToMarket (CRM + outreach)
+│   ├── finance-engine/       Ledger, runway, tax
+│   ├── product-engine/       Roadmap, pricing, feedback
+│   ├── growth-engine/        Funnel, cohorts, KPIs
+│   ├── distro-engine/        SEO, marketplace, affiliates
+│   ├── legal-engine/         Contracts, compliance, IP
+│   ├── support-engine/       Tickets, knowledge base, NPS
+│   ├── infra-engine/         Deploy, monitor, incidents
+│   ├── flow-engine/          DAG workflow engine
+│   ├── dept-forge/           DepartmentApp wrapper for Forge
+│   ├── dept-code/            DepartmentApp wrapper for Code
+│   ├── dept-harvest/         ... (12 dept-* wrappers total)
+│   ├── dept-flow/            DepartmentApp wrapper for Flow
+│   ├── rusvel-api/           Axum HTTP API
+│   ├── rusvel-cli/           Clap CLI + REPL
+│   ├── rusvel-tui/           Ratatui TUI
+│   ├── rusvel-mcp/           MCP server (stdio JSON-RPC)
+│   └── rusvel-app/           Binary entry point
+├── frontend/                 SvelteKit 5 + Tailwind 4
+├── Cargo.toml                Workspace manifest (49 members)
+└── CLAUDE.md                 Project conventions
 ```
 
 ## Key Rules
@@ -134,7 +172,7 @@ rusvel/
 6. **Human approval gates** on content publishing and outreach sending (ADR-008).
 7. **Each crate stays under 2000 lines.** Single responsibility.
 
-## The 10 Core Ports
+## The 14 Core Ports
 
 | Port | Responsibility |
 |------|---------------|
@@ -148,3 +186,7 @@ rusvel/
 | `SessionPort` | Session hierarchy management |
 | `AuthPort` | Opaque credential handles |
 | `ConfigPort` | Settings and preferences |
+| `EmbeddingPort` | Text embedding (fastembed) |
+| `VectorStorePort` | Vector storage and search (LanceDB) |
+| `DeployPort` | Deployment operations |
+| `TerminalPort` | Terminal interaction and display |

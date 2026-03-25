@@ -37,7 +37,7 @@ The **solo founder / indie builder**: one human operating one workspace, not a m
 │  SPA: rust-embed or ServeDir  │     │(reedline)│(ratatui)│       │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
-                    DepartmentRegistry (12 departments → EngineKind)
+                    DepartmentRegistry (12 departments → string IDs)
                                 │
 ┌───────────────────────────────┴─────────────────────────────────┐
 │  DOMAIN ENGINES (crates)                                          │
@@ -57,7 +57,7 @@ The **solo founder / indie builder**: one human operating one workspace, not a m
 
 | Area | Path | Role |
 |------|------|------|
-| Workspace root | `Cargo.toml`, `Cargo.lock` | Defines **30** workspace members (crates). |
+| Workspace root | `Cargo.toml`, `Cargo.lock` | Defines **49** workspace members (crates). |
 | Crates | `crates/*` | Foundation adapters, engines, API/CLI/MCP/TUI, app binary. |
 | Frontend | `frontend/` | SvelteKit 5 + Vite + Tailwind 4; build output `frontend/build/`. |
 | Design / plans | `docs/design/`, `docs/plans/` | Architecture v2, ADRs, roadmap, phase plans, flow-engine plan. |
@@ -70,7 +70,8 @@ The **solo founder / indie builder**: one human operating one workspace, not a m
 - **Engines** (`*-engine`, `flow-engine`): implement `Engine` and domain logic; depend **only** on `rusvel-core`.
 - **Adapters** (`rusvel-db`, `rusvel-llm`, …): implement `rusvel-core` ports; may use `rusqlite`, `reqwest`, `fastembed`, `lancedb`, etc.
 - **Surfaces** (`rusvel-api`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`): take `Arc<dyn …Port>` and engines; no business rules duplicated in engines.
-- **`rusvel-app`**: **composition root** — constructs `Database`, `EventBus`, `AgentRuntime`, `JobQueue`, selected engines, `AppState`, starts Axum or dispatches CLI/MCP/TUI.
+- **`dept-*` wrappers** (`dept-forge`, `dept-code`, etc.): implement `DepartmentApp` trait (ADR-014), declaring `DepartmentManifest` and registration logic. Departments use **string IDs** (EngineKind enum was removed).
+- **`rusvel-app`**: **composition root** — constructs `Database`, `EventBus`, `AgentRuntime`, `JobQueue`, registers `DepartmentApp` crates, builds `AppState`, starts Axum or dispatches CLI/MCP/TUI.
 
 ### Frontend, backend, Python
 
@@ -88,7 +89,7 @@ Below: each workspace member under `crates/`, with purpose, notable dependencies
 
 | Crate | Purpose | Key dependencies | Public API / exposes | State |
 |-------|---------|------------------|----------------------|--------|
-| **rusvel-core** | Port traits, shared domain model, registry, errors | `serde`, `async-trait`, `thiserror`, `uuid`, `chrono`, `toml` | `ports` (**12** traits: `LlmPort`, `AgentPort`, `ToolPort`, `EventPort`, `StoragePort`, `MemoryPort`, `JobPort`, `SessionPort`, `AuthPort`, `ConfigPort`, `EmbeddingPort`, `VectorStorePort`), `domain`, `registry`, `id`, `Engine` | **Stable** (contract crate) |
+| **rusvel-core** | Port traits, shared domain model, registry, errors, `DepartmentApp` trait | `serde`, `async-trait`, `thiserror`, `uuid`, `chrono`, `toml` | `ports` (**14** traits: `LlmPort`, `AgentPort`, `ToolPort`, `EventPort`, `StoragePort`, `MemoryPort`, `JobPort`, `SessionPort`, `AuthPort`, `ConfigPort`, `EmbeddingPort`, `VectorStorePort`, `DeployPort`, `TerminalPort`), `domain`, `department` (`DepartmentApp`, `DepartmentManifest`), `registry`, `id` | **Stable** (contract crate) |
 | **rusvel-db** | `StoragePort` → SQLite WAL, migrations, five sub-stores | `rusqlite`, `tokio` | `Database` and store implementations | **Stable**, heavily tested |
 | **rusvel-llm** | `LlmPort` for Ollama, Claude API, OpenAI, Claude CLI + router | `reqwest` | `OllamaProvider`, `ClaudeProvider`, `OpenAiProvider`, `ClaudeCliProvider`, `MultiProvider`, streaming helpers | **Stable** |
 | **rusvel-agent** | `AgentPort`: agent loop (LLM + tools + memory), workflows | `tokio`, `serde` | `AgentRuntime` and workflow types | **Stable** / evolving |
@@ -100,6 +101,12 @@ Below: each workspace member under `crates/`, with purpose, notable dependencies
 | **rusvel-config** | `ConfigPort` TOML layers | `toml`, `serde` | `TomlConfig` | **Stable** |
 | **rusvel-embed** | `EmbeddingPort` via **fastembed** | `fastembed` 4, `tokio` | `FastEmbedAdapter` (default **all-MiniLM-L6-v2**, 384-dim) | **Stable** |
 | **rusvel-vector** | `VectorStorePort` via **LanceDB** | `lancedb`, `arrow-*` | `LanceVectorStore` | **Stable** |
+| **rusvel-deploy** | `DeployPort` adapter | `tokio`, `serde` | Deployment adapter | **Stable** |
+| **rusvel-terminal** | `TerminalPort` adapter | `tokio` | Terminal interaction adapter | **Stable** |
+| **rusvel-builtin-tools** | 9 built-in tools for agent execution | `serde`, `tokio` | Tool implementations | **Stable** |
+| **rusvel-engine-tools** | Engine-specific tool wiring | `serde`, `tokio` | Engine tool bridge | **Stable** |
+| **rusvel-mcp-client** | MCP client for external MCP servers | `tokio`, `serde` | MCP client adapter | **Stable** |
+| **rusvel-schema** | Database schema introspection (RusvelBase) | `rusqlite` | Schema introspection | **Stable** |
 
 ### Domain engines
 
@@ -117,7 +124,27 @@ Below: each workspace member under `crates/`, with purpose, notable dependencies
 | **legal-engine** | Legal ops (stubs) | core only | Engine impl | **Stub / WIP** |
 | **support-engine** | Support/tickets (stubs) | core only | Engine impl | **Stub / WIP** |
 | **infra-engine** | Infra/incident (stubs) | core only | Engine impl | **Stub / WIP** |
-| **flow-engine** | DAG execution: **code** (Rhai), **condition**, **agent** nodes; `FlowDef` in core | `petgraph`, `rhai`, `tokio`, `serde` | `FlowEngine`, `executor`, `NodeRegistry` | **Experimental / WIP** — in workspace; **not** referenced from `rusvel-app` yet |
+| **flow-engine** | DAG execution: **code** (Rhai), **condition**, **agent** nodes; `FlowDef` in core | `petgraph`, `rhai`, `tokio`, `serde` | `FlowEngine`, `executor`, `NodeRegistry` | **Wired** in `rusvel-app` |
+
+### Department wrapper crates (DepartmentApp pattern, ADR-014)
+
+Each department has a `dept-*` crate implementing the `DepartmentApp` trait. These declare a `DepartmentManifest` (tools, routes, metadata) and handle registration. Departments are identified by **string IDs** (not an enum).
+
+| Crate | Department |
+|-------|-----------|
+| **dept-forge** | Forge |
+| **dept-code** | Code |
+| **dept-harvest** | Harvest |
+| **dept-content** | Content |
+| **dept-gtm** | GTM |
+| **dept-finance** | Finance |
+| **dept-product** | Product |
+| **dept-growth** | Growth |
+| **dept-distro** | Distribution |
+| **dept-legal** | Legal |
+| **dept-support** | Support |
+| **dept-infra** | Infra |
+| **dept-flow** | Flow |
 
 ### Surfaces
 
@@ -274,7 +301,7 @@ See **`docs/plans/roadmap-v2.md`**: phases for deeper agent graphs, revenue engi
 - **Approval workflow:** types exist; end-to-end **API/UI** not fully productized (per project docs).
 - **GTM / OutreachSend:** some job paths still placeholders relative to full vision.
 - **Older docs** (e.g. `docs/design/vision.md` port list) may still describe pre-v2 ports; **source of truth** for ports is `crates/rusvel-core/src/ports.rs`.
-- **Roadmap crate-count table** updated to 34 crates (2026-03-24).
+- **Roadmap crate-count table** updated to 49 crates (2026-03-26).
 
 ---
 
@@ -316,7 +343,7 @@ uv sync && uv run <script.py>
 
 ### Tests
 
-- **Rust:** unit/integration tests per crate under `src` / `tests`; largest suites often **`rusvel-db`**, **`rusvel-api`**, **`forge-engine`**. Project docs cite on the order of **~197** workspace tests (exact number changes with commits).
+- **Rust:** unit/integration tests per crate under `src` / `tests`; largest suites often **`rusvel-db`**, **`rusvel-api`**, **`forge-engine`**. Currently **98 test suites**, 0 failures (exact number changes with commits).
 - **Frontend:** Playwright E2E and **visual** projects; `pnpm test:analyze` for optional AI-assisted diff analysis.
 
 ### CI/CD
@@ -333,7 +360,7 @@ uv sync && uv run <script.py>
 - **Extended engines:** Order of instantiation for finance/product/growth/distro/legal/support/infra vs keeping generic-agent-only behavior.
 - **Approval UX:** How approvals surface in API and frontend for content and outreach (ADR-008 intent vs implementation gap).
 - **Vector + memory productization:** UX and defaults for hybrid FTS5 + Lance retrieval across departments.
-- **Optional:** Consolidate README/CLAUDE crate counts (**27** mentioned) with actual workspace size (**30**).
+- **Optional:** Ensure all docs consistently reference **49** workspace crates.
 
 ### TODOs in code worth flagging
 

@@ -31,14 +31,16 @@
                        │
 ┌──────────────────────┴─────────────────────────┐
 │         DEPARTMENT REGISTRY (12 depts)           │
-│  DepartmentDef → EngineKind routing              │
+│  DepartmentApp + DepartmentManifest (ADR-014)    │
+│  String IDs everywhere (EngineKind removed)       │
 │  6 parameterized /api/dept/{dept}/* routes        │
 │  + 15 engine-specific routes                      │
 │  + 7 flow routes + 5 knowledge routes            │
 └──────────────────────┬─────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│          DOMAIN ENGINES (13: 5 core + 8 ext)     │
+│          DOMAIN ENGINES (13: 5 core + 8 ext)    │
+│          + 13 dept-* DepartmentApp crates        │
 │                                                  │
 │  Core:     Forge  │ Code  │ Harvest │ Content    │
 │            GoToMarket                            │
@@ -51,19 +53,20 @@
 │              FOUNDATION                          │
 │                                                 │
 │  ┌──────────── rusvel-core ──────────────┐      │
-│  │  19 Port Traits + 82 Domain Types     │      │
-│  │  DepartmentRegistry + DepartmentDef   │      │
+│  │  20 Port Traits + 82 Domain Types     │      │
+│  │  DepartmentApp + DepartmentManifest   │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
-│  ┌──────────── Adapters (16 crates) ────┐      │
+│  ┌──────────── Adapters (18 crates) ────┐      │
 │  │  rusvel-llm     (model providers)     │      │
-│  │  rusvel-agent   (agent runtime)       │      │
+│  │  rusvel-agent   (AgentRuntime)        │      │
 │  │  rusvel-db      (SQLite + 5 stores)   │      │
 │  │  rusvel-schema  (DB introspection)    │      │
 │  │  rusvel-event   (event bus + persist)  │      │
 │  │  rusvel-memory  (context + search)    │      │
-│  │  rusvel-tool    (tool registry)       │      │
+│  │  rusvel-tool    (ScopedToolRegistry)  │      │
 │  │  rusvel-builtin-tools (9 agent tools) │      │
+│  │  rusvel-engine-tools (12 engine tools)│      │
 │  │  rusvel-mcp-client (external MCP)     │      │
 │  │  rusvel-jobs    (central job queue)   │      │
 │  │  rusvel-embed   (text embeddings)     │      │
@@ -71,6 +74,7 @@
 │  │  rusvel-deploy  (deployment ops)      │      │
 │  │  rusvel-auth    (credentials)         │      │
 │  │  rusvel-config  (settings)            │      │
+│  │  rusvel-terminal (TerminalPort)       │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
 │  ┌──────────── Cross-cutting ────────────┐      │
@@ -83,8 +87,9 @@
 
 ## The 12 Departments (was 5 engines)
 
-Each department maps to an `EngineKind` variant and a `DepartmentDef` in the registry.
-The registry defines name, icon, color, system prompt, capabilities, tabs, and quick actions.
+Each department implements the `DepartmentApp` trait (ADR-014) and declares a `DepartmentManifest`.
+String IDs (e.g. `"forge"`, `"code"`) replace the former `EngineKind` enum, which has been removed.
+The manifest declares name, icon, color, system prompt, capabilities, routes, tools, and quick actions.
 
 ### Core (5 — original engines, each has its own crate)
 
@@ -104,26 +109,37 @@ The registry defines name, icon, color, system prompt, capabilities, tabs, and q
 11. **Support** (`support-engine`) — Customer support tickets, knowledge base, NPS tracking, auto-triage.
 12. **Infra** (`infra-engine`) — CI/CD pipelines, deployments, monitoring, incident response.
 
-### Department Registry
+### DepartmentApp Trait + dept-* Crates (ADR-014)
 
-`DepartmentRegistry` in `rusvel-core::registry` holds all 12 `DepartmentDef` structs.
-Loaded from TOML file or falls back to built-in defaults. Each definition includes:
+Each department lives in its own `dept-*` crate and implements the `DepartmentApp` trait.
+The host collects manifests, resolves dependencies, and calls `register()` in order.
 
 ```rust
-pub struct DepartmentDef {
-    pub id: String,           // URL slug: "forge", "code", "gtm", etc.
-    pub name: String,         // Display name
-    pub title: String,        // Full title
-    pub engine_kind: EngineKind,
+pub trait DepartmentApp: Send + Sync {
+    fn manifest(&self) -> DepartmentManifest;
+    async fn register(&self, ctx: &mut RegistrationContext) -> Result<()>;
+    async fn shutdown(&self) -> Result<()> { Ok(()) }
+}
+
+pub struct DepartmentManifest {
+    pub id: String,              // URL slug: "forge", "code", "gtm", etc.
+    pub name: String,            // Display name
+    pub description: String,
     pub icon: String,
-    pub color: String,        // oklch color token
+    pub color: String,           // oklch color token
     pub system_prompt: String,
     pub capabilities: Vec<String>,
-    pub tabs: Vec<String>,    // UI tabs shown for this department
     pub quick_actions: Vec<QuickAction>,
-    pub default_config: LayeredConfig,
+    pub routes: Vec<RouteContribution>,
+    pub tools: Vec<ToolContribution>,
+    pub dependencies: Vec<String>,
 }
 ```
+
+13 dept-* crates: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`,
+`dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`,
+`dept-support`, `dept-infra`. Each wraps its engine crate and wires it into the host
+via `DepartmentApp::register()`.
 
 ### Parameterized Department Routing
 
@@ -161,9 +177,9 @@ Also available in department chat via `!build <description>` prefix.
 
 ---
 
-## The 19 Core Ports (was 13 in v1, 10 in early v2)
+## The 20 Core Ports (was 13 in v1, 10 in early v2)
 
-Evolved from 10 to 19 as the system grew — added sub-store traits, embedding/vector ports, and deploy:
+Evolved from 10 to 20 as the system grew — added sub-store traits, embedding/vector ports, deploy, and terminal:
 
 | Port | Responsibility | Notes |
 |------|---------------|-------|
@@ -185,6 +201,7 @@ Evolved from 10 to 19 as the system grew — added sub-store traits, embedding/v
 | `EmbeddingPort` | Text → dense vectors | Used by knowledge/RAG |
 | `VectorStorePort` | Similarity search | LanceDB adapter |
 | `DeployPort` | Deployment operations | CI/CD, hosting |
+| `TerminalPort` | Terminal interaction | Shell commands, output capture |
 | `Engine` | Engine trait: name, capabilities, health | All 13 engines implement |
 
 **Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (ADR-003, ADR-006).
@@ -287,7 +304,7 @@ pub enum SessionKind {
 pub struct Run {
     pub id: RunId,
     pub session_id: SessionId,
-    pub engine: EngineKind,
+    pub engine: String,           // Department ID string (EngineKind removed)
     pub input_summary: String,
     pub status: RunStatus,
     pub llm_budget_used: f64,
@@ -304,10 +321,7 @@ pub struct Thread {
 }
 
 pub enum ThreadChannel { User, Agent, System, Event }
-pub enum EngineKind {
-    Forge, Code, Harvest, Content, GoToMarket,
-    Finance, Product, Growth, Distribution, Legal, Support, Infra,
-}
+// Note: EngineKind enum was REMOVED (ADR-014). String department IDs used everywhere.
 ```
 
 ---
@@ -326,7 +340,7 @@ pub enum ApprovalStatus {
 }
 
 pub struct ApprovalPolicy {
-    pub engine: EngineKind,
+    pub engine: String,          // Department ID string (EngineKind removed)
     pub action: String,          // "publish", "send_outreach", "spend > $1"
     pub requires_approval: bool,
     pub auto_approve_below: Option<f64>,  // Auto-approve if cost < threshold
@@ -454,7 +468,7 @@ pub struct Event {
     pub id: EventId,
     pub session_id: Option<SessionId>,
     pub run_id: Option<RunId>,
-    pub source: EngineKind,
+    pub source: String,          // Department ID string (EngineKind removed)
     pub kind: String,           // Flexible string, not giant enum
     pub payload: serde_json::Value,
     pub created_at: DateTime<Utc>,
@@ -465,14 +479,28 @@ pub struct Event {
 
 ---
 
-## Dependency Graph (updated 2026-03-24)
+## Dependency Graph (updated 2026-03-26)
 
 ```
 rusvel-app (binary, composition root)
 ├── rusvel-cli
-├── rusvel-api (Axum, 79 routes) ── serves SPA via fallback
+├── rusvel-api (Axum, ~115 handlers) ── serves SPA via fallback
 ├── rusvel-tui (Ratatui)
 ├── rusvel-mcp (rmcp, 6 tools)
+│
+├── dept-forge ───────┐
+├── dept-code ────────┤
+├── dept-content ─────┤
+├── dept-harvest ─────┤
+├── dept-flow ────────┤── implement DepartmentApp trait
+├── dept-gtm ─────────┤   (each wraps its engine crate)
+├── dept-finance ─────┤
+├── dept-product ─────┤
+├── dept-growth ──────┤
+├── dept-distro ──────┤
+├── dept-legal ───────┤
+├── dept-support ─────┤
+├── dept-infra ───────┘
 │
 ├── forge-engine ─────┐
 ├── code-engine ──────┤
@@ -489,70 +517,114 @@ rusvel-app (binary, composition root)
 ├── infra-engine ─────┘
 │
 ├── rusvel-llm ───────┐
-├── rusvel-agent ─────┤
+├── rusvel-agent ─────┤  (AgentRuntime + run_streaming)
 ├── rusvel-db ────────┤
 ├── rusvel-schema ────┤
 ├── rusvel-event ─────┤
 ├── rusvel-memory ────┤── implement rusvel-core traits
-├── rusvel-tool ──────┤
+├── rusvel-tool ──────┤  (ScopedToolRegistry + deferred loading)
 ├── rusvel-builtin-tools ┤
+├── rusvel-engine-tools ┤  (12 engine-specific tools)
 ├── rusvel-mcp-client ┤
 ├── rusvel-jobs ──────┤
 ├── rusvel-embed ─────┤
 ├── rusvel-vector ────┤
 ├── rusvel-deploy ────┤
 ├── rusvel-auth ──────┤
+├── rusvel-terminal ──┤  (TerminalPort adapter)
 └── rusvel-config ────┘
 ```
 
-## Workspace (updated 2026-03-24)
+## Workspace (updated 2026-03-26)
 
 ```
 rusvel/
 ├── crates/
-│   ├── rusvel-core/        ← 19 port traits + 82 domain types + DepartmentRegistry
-│   ├── rusvel-schema/      ← DB schema introspection (RusvelBase)
-│   ├── rusvel-db/          ← SQLite WAL + 5 canonical stores
-│   ├── rusvel-llm/         ← LlmPort adapters (Ollama, OpenAI, Claude API, Claude CLI)
-│   ├── rusvel-agent/       ← AgentPort runtime (wraps LLM+Tool+Memory)
-│   ├── rusvel-event/       ← EventPort bus + persistence
-│   ├── rusvel-memory/      ← MemoryPort + session-namespaced search
-│   ├── rusvel-tool/        ← ToolPort registry + JSON Schema
+│   ├── rusvel-core/          ← 20 port traits + 82 domain types + DepartmentApp/Manifest
+│   ├── rusvel-schema/        ← DB schema introspection (RusvelBase)
+│   ├── rusvel-db/            ← SQLite WAL + 5 canonical stores
+│   ├── rusvel-llm/           ← LlmPort: Ollama, OpenAI, Claude API, CLI + ModelTier + CostTracker
+│   ├── rusvel-agent/         ← AgentRuntime: run_streaming(), AgentEvent, tool loop
+│   ├── rusvel-event/         ← EventPort bus + persistence
+│   ├── rusvel-memory/        ← MemoryPort + session-namespaced search
+│   ├── rusvel-tool/          ← ScopedToolRegistry + deferred loading + JSON Schema
 │   ├── rusvel-builtin-tools/ ← 9 built-in tools for agent execution
-│   ├── rusvel-mcp-client/  ← MCP client for external MCP server connections
-│   ├── rusvel-jobs/        ← Central job queue
-│   ├── rusvel-embed/       ← EmbeddingPort adapter
-│   ├── rusvel-vector/      ← VectorStorePort (LanceDB + Arrow)
-│   ├── rusvel-deploy/      ← DeployPort adapter
-│   ├── rusvel-auth/        ← AuthPort (opaque credential handles)
-│   ├── rusvel-config/      ← ConfigPort (TOML + per-session overrides)
+│   ├── rusvel-engine-tools/  ← 12 engine-specific tools (code, content, harvest, etc.)
+│   ├── rusvel-mcp-client/    ← MCP client for external MCP server connections
+│   ├── rusvel-jobs/          ← Central job queue
+│   ├── rusvel-embed/         ← EmbeddingPort adapter
+│   ├── rusvel-vector/        ← VectorStorePort (LanceDB + Arrow)
+│   ├── rusvel-deploy/        ← DeployPort adapter
+│   ├── rusvel-auth/          ← AuthPort (opaque credential handles)
+│   ├── rusvel-config/        ← ConfigPort (TOML + per-session overrides)
+│   ├── rusvel-terminal/      ← TerminalPort adapter
 │   │
-│   ├── forge-engine/       ← Agent orchestration + Mission (goals/planning) [WIRED]
-│   ├── code-engine/        ← Code intelligence: parser, graph, BM25 [WIRED]
-│   ├── harvest-engine/     ← Opportunity discovery + scoring [WIRED]
-│   ├── content-engine/     ← Content creation + publishing [WIRED]
-│   ├── flow-engine/        ← DAG workflow engine (petgraph) [WIRED]
-│   ├── gtm-engine/         ← GoToMarket (CRM + outreach + ops) [STUB]
-│   ├── finance-engine/     ← Revenue, expenses, tax, runway, P&L [STUB]
-│   ├── product-engine/     ← Roadmaps, pricing, feature prioritization [STUB]
-│   ├── growth-engine/      ← Funnels, cohorts, KPIs, retention [STUB]
-│   ├── distro-engine/      ← Marketplace, SEO, affiliates, partnerships [STUB]
-│   ├── legal-engine/       ← Contracts, IP, compliance, licensing [STUB]
-│   ├── support-engine/     ← Tickets, knowledge base, NPS, auto-triage [STUB]
-│   ├── infra-engine/       ← CI/CD, deployments, monitoring, incidents [STUB]
+│   ├── forge-engine/         ← Agent orchestration + Mission (goals/planning) [WIRED]
+│   ├── code-engine/          ← Code intelligence: parser, graph, BM25 [WIRED]
+│   ├── harvest-engine/       ← Opportunity discovery + scoring [WIRED]
+│   ├── content-engine/       ← Content creation + publishing [WIRED]
+│   ├── flow-engine/          ← DAG workflow engine (petgraph) [WIRED]
+│   ├── gtm-engine/           ← GoToMarket (CRM + outreach + ops) [STUB]
+│   ├── finance-engine/       ← Revenue, expenses, tax, runway, P&L [STUB]
+│   ├── product-engine/       ← Roadmaps, pricing, feature prioritization [STUB]
+│   ├── growth-engine/        ← Funnels, cohorts, KPIs, retention [STUB]
+│   ├── distro-engine/        ← Marketplace, SEO, affiliates, partnerships [STUB]
+│   ├── legal-engine/         ← Contracts, IP, compliance, licensing [STUB]
+│   ├── support-engine/       ← Tickets, knowledge base, NPS, auto-triage [STUB]
+│   ├── infra-engine/         ← CI/CD, deployments, monitoring, incidents [STUB]
 │   │
-│   ├── rusvel-api/         ← Axum HTTP: 79 routes, 22 modules
-│   ├── rusvel-cli/         ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
-│   ├── rusvel-tui/         ← TUI dashboard (Ratatui) — wired via --tui flag
-│   ├── rusvel-mcp/         ← MCP server (stdio JSON-RPC, 6 tools)
-│   └── rusvel-app/         ← Binary entry point (composition root)
+│   ├── dept-forge/           ← DepartmentApp for Forge [NEW]
+│   ├── dept-code/            ← DepartmentApp for Code [NEW]
+│   ├── dept-content/         ← DepartmentApp for Content [NEW]
+│   ├── dept-harvest/         ← DepartmentApp for Harvest [NEW]
+│   ├── dept-flow/            ← DepartmentApp for Flow [NEW]
+│   ├── dept-gtm/             ← DepartmentApp for GoToMarket [NEW]
+│   ├── dept-finance/         ← DepartmentApp for Finance [NEW]
+│   ├── dept-product/         ← DepartmentApp for Product [NEW]
+│   ├── dept-growth/          ← DepartmentApp for Growth [NEW]
+│   ├── dept-distro/          ← DepartmentApp for Distribution [NEW]
+│   ├── dept-legal/           ← DepartmentApp for Legal [NEW]
+│   ├── dept-support/         ← DepartmentApp for Support [NEW]
+│   ├── dept-infra/           ← DepartmentApp for Infra [NEW]
+│   │
+│   ├── rusvel-api/           ← Axum HTTP: ~115 handler functions, 22+ modules
+│   ├── rusvel-cli/           ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
+│   ├── rusvel-tui/           ← TUI dashboard (Ratatui) — wired via --tui flag
+│   ├── rusvel-mcp/           ← MCP server (stdio JSON-RPC, 6 tools)
+│   └── rusvel-app/           ← Binary entry point (composition root)
 │
-├── frontend/               ← SvelteKit 5 + Tailwind 4 + shadcn/ui (oklch tokens)
+├── frontend/                 ← SvelteKit 5 + Tailwind 4 + shadcn/ui (oklch tokens)
 ├── Cargo.toml
 └── CLAUDE.md
 ```
 
-34 crates. 13 engines (5 wired + 8 stubs) + 16 adapters + 5 surfaces.
+49 crates. 13 engines (5 wired + 8 stubs) + 13 dept-* crates + 18 adapters + 5 surfaces.
+
+### AgentRuntime Streaming + Tool Loop
+
+`AgentRuntime::run_streaming()` returns an `mpsc::Receiver<AgentEvent>` that emits:
+- `AgentEvent::TextDelta { text }` — incremental LLM output
+- `AgentEvent::ToolCall { name, input }` — tool invocation
+- `AgentEvent::ToolResult { name, output }` — tool result
+- `AgentEvent::Done { output }` — final output
+- `AgentEvent::Error { message }` — error
+
+The runtime manages a multi-turn tool loop: LLM generates tool calls, the runtime executes
+them via `ScopedToolRegistry`, feeds results back, and continues until the LLM produces a
+final text response or hits the iteration limit.
+
+### ScopedToolRegistry + Deferred Loading
+
+`ScopedToolRegistry` in `rusvel-tool` scopes tool visibility per department. Each department
+declares which tools it contributes via `DepartmentManifest::tools`. Tools can be loaded
+lazily (deferred) to avoid startup cost. The `tool_search` meta-tool allows the agent to
+discover additional tools at runtime.
+
+### ModelTier Routing + CostTracker
+
+`rusvel-llm` supports `ModelTier` routing (e.g. `Quick`, `Standard`, `Premium`) to select
+the appropriate model based on task complexity. `CostTracker` tracks token usage and
+estimated costs per session.
 
 ### Three-Tier Terminal Interface
 

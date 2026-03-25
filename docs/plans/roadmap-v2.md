@@ -1,6 +1,6 @@
 # RUSVEL — Roadmap v2 (Post-Review)
 
-> 5 engines (was 7). Central job queue. Session-centric everything.
+> 13 engines (5 wired + 8 stubs). 49 crates. DepartmentApp pattern. Central job queue. Session-centric everything.
 
 ---
 
@@ -9,26 +9,28 @@
 
 **Deliverable:** `rusvel forge mission today` via CLI, Web, MCP, REPL, TUI.
 
-- rusvel-core (19 ports + 82 domain types + approval model)
-- Adapters: config, db (5 stores), schema, event, llm (4 providers), memory (FTS5), tool, builtin-tools, mcp-client, jobs, embed, vector, deploy, auth
+- rusvel-core (20 ports + 82 domain types + DepartmentApp/Manifest + approval model)
+- Adapters: config, db (5 stores), schema, event, llm (4 providers + ModelTier + CostTracker), memory (FTS5), tool (ScopedToolRegistry), builtin-tools, engine-tools, mcp-client, jobs, embed, vector, deploy, auth, terminal
 - forge-engine + code-engine + content-engine + harvest-engine + flow-engine (all wired)
-- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API (79 routes), Web (SvelteKit, 12 pages), MCP (6 tools)
+- 13 dept-* crates implementing DepartmentApp trait (ADR-014, EngineKind removed)
+- AgentRuntime with run_streaming() + 21+ registered tools
+- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API (~115 handlers), Web (SvelteKit, 12+ pages), MCP (6 tools)
 - 8 stub engines (gtm, finance, product, growth, distro, legal, support, infra)
 
 **Proves:** Ports + adapters + session hierarchy + job queue + events + streaming LLM.
 
 ---
 
-## Phase 1 — Agent Runtime + Code Intelligence
+## Phase 1 — Agent Runtime + Code Intelligence (largely complete)
 > Deep agent capabilities + first analytical engine.
 
 **Deliverable:** Forge orchestrates multi-agent workflows that analyze code.
 
-- rusvel-agent expanded: workflow patterns (Sequential, Parallel, Loop, Graph)
-- rusvel-llm expanded: Claude + OpenAI adapters
-- rusvel-memory expanded: vector embeddings for semantic search
-- forge-engine: multi-agent orchestration, persona system, safety controls
-- code-engine v0: Rust parsing (tree-sitter), symbol graph, BM25 search, complexity metrics
+- ~~rusvel-agent expanded: workflow patterns~~ — AgentRuntime with run_streaming() + multi-turn tool loop DONE
+- ~~rusvel-llm expanded: Claude + OpenAI adapters~~ — 4 providers + ModelTier routing + CostTracker DONE
+- ~~rusvel-memory expanded: vector embeddings for semantic search~~ — LanceDB + embeddings DONE
+- ~~forge-engine: multi-agent orchestration, persona system, safety controls~~ — 10 personas DONE
+- ~~code-engine v0: Rust parsing, symbol graph, BM25 search, complexity metrics~~ — DONE
 - Git worktree isolation for agent safety
 - Observability: tracing + run IDs + replay view
 
@@ -95,11 +97,11 @@
 
 | Phase | New Crates | Total |
 |-------|-----------|-------|
-| 0 | 34 (16 foundation + 13 engines + 5 surfaces) | 34 |
-| 1 | 0 (expand existing) | 34 |
-| 2 | 0 (expand existing) | 34 |
-| 3 | 0 (expand existing) | 34 |
-| 4 | 0 (expand existing) | 34 |
-| 5 | +N (plugins, new adapters) | 34+N |
+| 0 | 49 (18 foundation + 13 engines + 13 dept-* + 5 surfaces) | 49 |
+| 1 | 0 (expand existing) | 49 |
+| 2 | 0 (expand existing) | 49 |
+| 3 | 0 (expand existing) | 49 |
+| 4 | 0 (expand existing) | 49 |
+| 5 | +N (plugins, new adapters) | 49+N |
 
-**Note:** Crate count grew from original plan of 20 to 34 as new adapters (schema, embed, vector, deploy, builtin-tools, mcp-client) and flow-engine were added. The architecture holds — all growth was in foundation adapters and one new engine.
+**Note:** Crate count grew from original plan of 20 to 49. Growth: 20 → 27 (early adapters) → 34 (schema, embed, vector, deploy, builtin-tools, mcp-client, flow-engine) → 49 (13 dept-* crates for DepartmentApp pattern + rusvel-engine-tools + rusvel-terminal). The architecture holds — all growth was in foundation adapters, department encapsulation, and the tool system.
