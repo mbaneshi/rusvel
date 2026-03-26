@@ -1,3 +1,5 @@
+> **NOTE:** Phase 4 (remove EngineKind) completed via ADR-014.
+
 # ADR-011: Config Hierarchy & Department Registry
 
 **Date:** 2026-03-23

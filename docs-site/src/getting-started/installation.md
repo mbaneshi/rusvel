@@ -57,7 +57,7 @@ cd rusvel
 cargo build
 ```
 
-The workspace has 49 crates. First build takes a few minutes; subsequent builds are incremental.
+The workspace has 48 crates. First build takes a few minutes; subsequent builds are incremental.
 
 ## Build the Frontend
 
@@ -77,10 +77,10 @@ Run the full test suite to confirm everything works:
 cargo test
 ```
 
-You should see all 98 test suites passing across multiple crates:
+You should see all 222 tests passing across 30 test binaries:
 
 ```
-test result: ok. 98 passed; 0 failed
+test result: ok. 222 passed; 0 failed
 ```
 
 ### Test individual crates

@@ -1,3 +1,5 @@
+> **SUPERSEDED** — See architecture-v2.md for current architecture.
+
 # RUSVEL — Architecture Document
 
 ---

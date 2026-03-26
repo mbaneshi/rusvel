@@ -129,3 +129,13 @@
 **Context:** Users need to extend the system with new agents, skills, rules, MCP servers, hooks, and workflows. Manually configuring each entity is tedious.
 **Decision:** `POST /api/capability/build` accepts a natural language description, uses Claude with WebSearch/WebFetch to discover resources, generates a bundle of entities, and persists them to ObjectStore. Also available in department chat via `!build <description>`.
 **Consequence:** One-shot system extension. "Install a GitHub code review agent" creates the agent, skills, hooks, and MCP server config in one call. Reduces configuration from minutes to seconds.
+
+---
+
+## ADR-014: DepartmentApp Pattern — Departments as Self-Contained Crates
+
+**Date:** 2026-03-25
+**Status:** Accepted
+**Context:** The `EngineKind` enum in `rusvel-core` grew with every new department, forcing core changes for what should be a registration concern. `DepartmentRegistry` hardcoded metadata (prompts, capabilities, colors) that belongs with the department itself. Adding a department touched 5+ files.
+**Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct in `rusvel-core::department`. Each department lives in its own `dept-*` crate implementing `DepartmentApp`. The host collects manifests, resolves dependencies, and calls `register()` in order. `EngineKind` enum is removed entirely; departments use string IDs. 13 `dept-*` crates created: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`, `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`, `dept-support`, `dept-infra`.
+**Consequence:** Adding a department = adding a `dept-*` crate. Zero changes to `rusvel-core`. Each department declares its own routes, tools, capabilities, and system prompt via `DepartmentManifest`. Supersedes the `department-scaling-proposal.md`.

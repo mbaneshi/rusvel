@@ -236,7 +236,7 @@ Starts a stdio JSON-RPC server for MCP client integration (e.g. Claude Code). Wa
 
 ---
 
-## 7. API Routes (~79 routes)
+## 7. API Routes (124 handlers across 23 modules)
 
 While the server is running (`cargo run`), test with curl:
 
@@ -454,7 +454,7 @@ curl -X POST http://localhost:3000/api/help \
 ## 8. Automated Tests
 
 ```bash
-cargo test                     # All 98 test suites
+cargo test                     # All 222 tests in 30 binaries
 cargo test -p rusvel-core      # Core types and ports
 cargo test -p rusvel-db        # Database store
 cargo test -p rusvel-api       # API routes

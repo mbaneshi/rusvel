@@ -1,3 +1,5 @@
+> **SUPERSEDED** by ADR-014. See department-as-app.md.
+
 # RUSVEL — Scalable Department Architecture Proposal
 
 > Making each department a standalone, extensible powerhouse — ready to absorb

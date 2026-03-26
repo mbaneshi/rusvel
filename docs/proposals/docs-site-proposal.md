@@ -1,7 +1,7 @@
 # Documentation Site Proposal for RUSVEL
 
 > Evaluated: 2026-03-24
-> Context: RUSVEL is a Rust + SvelteKit monorepo, 34 crates, 12 departments, targeting solo devs/founders.
+> Context: RUSVEL is a Rust + SvelteKit monorepo, 48 crates, 12 departments, targeting solo devs/founders.
 
 ---
 
@@ -131,7 +131,7 @@ Based on RUSVEL's vision, mission, and repo:
 
 3. **Millisecond builds.** Our 20 pages build in <1 second. No waiting, no debugging npm version conflicts. The Starlight build has been broken for hours — mdBook would have been deployed 5 minutes after creating the files.
 
-4. **Zero maintenance.** mdBook is stable. It doesn't break between versions. There's no JS framework churn. We already have enough complexity in 27 Rust crates + SvelteKit frontend — docs should be boring and reliable.
+4. **Zero maintenance.** mdBook is stable. It doesn't break between versions. There's no JS framework churn. We already have enough complexity in 48 Rust crates + SvelteKit frontend — docs should be boring and reliable.
 
 5. **The content already exists.** We have 20+ markdown files in `docs-site/src/content/docs/`. They'll work in mdBook with zero changes (just needs a `SUMMARY.md`).
 

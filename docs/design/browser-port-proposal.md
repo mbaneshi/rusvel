@@ -1,3 +1,5 @@
+> **NOTE:** Superseded by cdp-browser-bridge.md. Port count outdated.
+
 # Browser Port — Attach to Running Browsers for Live Data Extraction
 
 **Status:** Proposal

@@ -20,8 +20,8 @@ cargo run
 - **12 Departments** — Forge, Code, Content, Harvest, GTM, Finance, Product, Growth, Distribution, Legal, Support, Infra
 - **Knowledge/RAG** — fastembed + lancedb for semantic search over your documents
 - **Self-Improvement** — The app can analyze and improve its own codebase
-- **49 Rust crates** — Hexagonal architecture with 14 port traits
-- **98 test suites** across the workspace, 0 failures
+- **48 Rust crates** — Hexagonal architecture with 19 port traits (14 Port + 5 Store)
+- **222 tests** in 30 test binaries across the workspace, 0 failures
 
 ## Architecture
 

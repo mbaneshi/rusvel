@@ -1,3 +1,5 @@
+> **PARTIALLY SUPERSEDED** — Mission/Ops/Connect engines removed.
+
 # RUSVEL — Engine Specifications
 
 > Detailed spec for each domain engine. What it does, what ports it uses, and what it produces.

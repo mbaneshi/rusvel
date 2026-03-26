@@ -20,7 +20,7 @@
 
 ## Milestone 0.1 — Core Traits + Types
 
-**rusvel-core: 20 port traits + 82 domain types. Zero framework deps.**
+**rusvel-core: 19 port traits (14 Port + 5 Store) + 82 domain types. Zero framework deps.**
 
 - [x] Port traits: LlmPort, AgentPort, ToolPort, EventPort, StoragePort (5 sub-stores), MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, Engine
 - [ ] StoragePort with 5 sub-stores: EventStore, ObjectStore, SessionStore, JobStore, MetricStore
@@ -131,25 +131,25 @@
 ## Definition of Done for Phase 0
 
 - [x] `cargo build --release` → single binary
-- [x] 49 crates compile (18 foundation + 13 engines + 13 dept-* + 5 surfaces)
+- [x] 48 crates compile (18 foundation + 13 engines + 13 dept-* + 4 surfaces)
 - [x] `rusvel session create "my-project"` → creates session
 - [x] `rusvel forge mission today` → generates daily plan via LLM
 - [x] `rusvel` → opens web dashboard with session view
 - [x] `rusvel --mcp` → works as MCP server (6 tools)
-- [x] 20 port traits defined in rusvel-core (including TerminalPort)
+- [x] 19 port traits defined in rusvel-core (14 Port + 5 Store, including TerminalPort)
 - [x] Session → Run → Thread hierarchy working
 - [x] Central job queue processing jobs (CodeAnalyze, ContentPublish, HarvestScan)
 - [x] Human approval model in domain types + API endpoints + frontend UI
 - [x] All domain types have metadata field
 - [x] Events emitted and persisted for all actions
-- [x] ≥ 50 tests passing (98 suites, 0 failures)
+- [x] ≥ 50 tests passing (222 tests in 30 binaries, 0 failures)
 - [x] CLAUDE.md with project conventions
 - [x] 5 engines fully wired (Forge, Code, Content, Harvest, Flow)
-- [x] ~115 API handler functions across 22+ modules
+- [x] 124 API handler functions across 23 modules
 - [x] 12+ frontend pages including database browser, flows, knowledge
 - [x] DepartmentApp trait + 13 dept-* crates (ADR-014, EngineKind removed)
 - [x] AgentRuntime streaming with multi-turn tool loop
-- [x] 21+ registered tools (9 built-in + 12 engine + tool_search)
+- [x] 22+ registered tools (10 built-in incl. tool_search + 12 engine)
 - [x] ModelTier routing + CostTracker
 - [x] TerminalPort + rusvel-terminal adapter
 

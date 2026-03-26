@@ -46,7 +46,7 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 
 The heart of the system. Contains:
 
-- **14 port traits** -- interfaces that engines depend on (LlmPort, AgentPort, ToolPort, EventPort, StoragePort, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort)
+- **19 port traits** (14 Port + 5 Store) -- interfaces that engines depend on (LlmPort, AgentPort, ToolPort, EventPort, StoragePort + 5 sub-stores, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort)
 - **82+ shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, DepartmentManifest, etc.
 - Zero framework dependencies
 
@@ -94,7 +94,7 @@ Domain logic crates. Each engine depends **only** on `rusvel-core` traits:
 | `infra-engine` | Deployment, monitoring, incident response |
 | `flow-engine` | DAG workflow engine: petgraph, code/condition/agent nodes |
 
-Each engine also has a corresponding **`dept-*` wrapper crate** (e.g. `dept-forge`, `dept-code`, `dept-finance`) that implements the `DepartmentApp` trait (ADR-014), declaring the department's manifest, tools, and registration logic. There are 12 `dept-*` crates plus `dept-flow` for the flow engine.
+Each engine also has a corresponding **`dept-*` wrapper crate** (e.g. `dept-forge`, `dept-code`, `dept-finance`) that implements the `DepartmentApp` trait (ADR-014), declaring the department's manifest, tools, and registration logic. There are 13 `dept-*` crates (12 departments + `dept-flow` for the flow engine).
 
 ### Layer 4: Surfaces
 
@@ -116,8 +116,8 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 
 ```
 rusvel/
-├── crates/                   49 crates total
-│   ├── rusvel-core/          14 port traits + domain types + DepartmentApp
+├── crates/                   48 crates total
+│   ├── rusvel-core/          19 port traits (14 Port + 5 Store) + domain types + DepartmentApp
 │   ├── rusvel-db/            SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           4 LLM providers
 │   ├── rusvel-agent/         Agent runtime (LLM+Tool+Memory)
@@ -150,7 +150,7 @@ rusvel/
 │   ├── flow-engine/          DAG workflow engine
 │   ├── dept-forge/           DepartmentApp wrapper for Forge
 │   ├── dept-code/            DepartmentApp wrapper for Code
-│   ├── dept-harvest/         ... (12 dept-* wrappers total)
+│   ├── dept-harvest/         ... (13 dept-* wrappers total)
 │   ├── dept-flow/            DepartmentApp wrapper for Flow
 │   ├── rusvel-api/           Axum HTTP API
 │   ├── rusvel-cli/           Clap CLI + REPL
@@ -158,7 +158,7 @@ rusvel/
 │   ├── rusvel-mcp/           MCP server (stdio JSON-RPC)
 │   └── rusvel-app/           Binary entry point
 ├── frontend/                 SvelteKit 5 + Tailwind 4
-├── Cargo.toml                Workspace manifest (49 members)
+├── Cargo.toml                Workspace manifest (48 members)
 └── CLAUDE.md                 Project conventions
 ```
 
@@ -172,7 +172,7 @@ rusvel/
 6. **Human approval gates** on content publishing and outreach sending (ADR-008).
 7. **Each crate stays under 2000 lines.** Single responsibility.
 
-## The 14 Core Ports
+## The 19 Port Traits (14 Port + 5 Store)
 
 | Port | Responsibility |
 |------|---------------|
@@ -180,7 +180,12 @@ rusvel/
 | `AgentPort` | Agent orchestration: create, run, stop, status |
 | `ToolPort` | Tool registry + execution |
 | `EventPort` | System-wide typed event bus (append-only) |
-| `StoragePort` | 5 canonical stores: Event, Object, Session, Job, Metric |
+| `StoragePort` | 5 canonical sub-stores (see below) |
+| `EventStore` | Append-only event log |
+| `ObjectStore` | CRUD for domain objects |
+| `SessionStore` | Session/Run/Thread hierarchy |
+| `JobStore` | Job queue persistence |
+| `MetricStore` | Time-series metrics |
 | `MemoryPort` | Context, knowledge, semantic search |
 | `JobPort` | Central job queue with approval support |
 | `SessionPort` | Session hierarchy management |

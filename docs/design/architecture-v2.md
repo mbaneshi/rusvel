@@ -53,7 +53,7 @@
 │              FOUNDATION                          │
 │                                                 │
 │  ┌──────────── rusvel-core ──────────────┐      │
-│  │  20 Port Traits + 82 Domain Types     │      │
+│  │  19 Port Traits + 82 Domain Types     │      │
 │  │  DepartmentApp + DepartmentManifest   │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
@@ -177,9 +177,9 @@ Also available in department chat via `!build <description>` prefix.
 
 ---
 
-## The 20 Core Ports (was 13 in v1, 10 in early v2)
+## The 19 Port Traits (14 Port + 5 Store) — was 13 in v1, 10 in early v2
 
-Evolved from 10 to 20 as the system grew — added sub-store traits, embedding/vector ports, deploy, and terminal:
+Evolved from 10 to 19 as the system grew — added sub-store traits, embedding/vector ports, deploy, and terminal:
 
 | Port | Responsibility | Notes |
 |------|---------------|-------|
@@ -202,7 +202,8 @@ Evolved from 10 to 20 as the system grew — added sub-store traits, embedding/v
 | `VectorStorePort` | Similarity search | LanceDB adapter |
 | `DeployPort` | Deployment operations | CI/CD, hosting |
 | `TerminalPort` | Terminal interaction | Shell commands, output capture |
-| `Engine` | Engine trait: name, capabilities, health | All 13 engines implement |
+
+**Plus:** `Engine` trait (name, capabilities, health) — implemented by all 13 engines. Not counted as a port trait.
 
 **Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (ADR-003, ADR-006).
 
@@ -484,7 +485,7 @@ pub struct Event {
 ```
 rusvel-app (binary, composition root)
 ├── rusvel-cli
-├── rusvel-api (Axum, ~115 handlers) ── serves SPA via fallback
+├── rusvel-api (Axum, 124 handlers across 23 modules) ── serves SPA via fallback
 ├── rusvel-tui (Ratatui)
 ├── rusvel-mcp (rmcp, 6 tools)
 │
@@ -540,7 +541,7 @@ rusvel-app (binary, composition root)
 ```
 rusvel/
 ├── crates/
-│   ├── rusvel-core/          ← 20 port traits + 82 domain types + DepartmentApp/Manifest
+│   ├── rusvel-core/          ← 19 port traits (14 Port + 5 Store) + 82 domain types + DepartmentApp/Manifest
 │   ├── rusvel-schema/        ← DB schema introspection (RusvelBase)
 │   ├── rusvel-db/            ← SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           ← LlmPort: Ollama, OpenAI, Claude API, CLI + ModelTier + CostTracker
@@ -587,7 +588,7 @@ rusvel/
 │   ├── dept-support/         ← DepartmentApp for Support [NEW]
 │   ├── dept-infra/           ← DepartmentApp for Infra [NEW]
 │   │
-│   ├── rusvel-api/           ← Axum HTTP: ~115 handler functions, 22+ modules
+│   ├── rusvel-api/           ← Axum HTTP: 124 handler functions, 23 modules
 │   ├── rusvel-cli/           ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
 │   ├── rusvel-tui/           ← TUI dashboard (Ratatui) — wired via --tui flag
 │   ├── rusvel-mcp/           ← MCP server (stdio JSON-RPC, 6 tools)
@@ -598,7 +599,7 @@ rusvel/
 └── CLAUDE.md
 ```
 
-49 crates. 13 engines (5 wired + 8 stubs) + 13 dept-* crates + 18 adapters + 5 surfaces.
+48 crates. 13 engines (5 wired + 8 stubs) + 13 dept-* crates + 18 adapters + 4 surfaces.
 
 ### AgentRuntime Streaming + Tool Loop
 

@@ -48,7 +48,7 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 ┌──────────────────────┴─────────────────────────┐
 │              FOUNDATION (Ports + Adapters)       │
 │                                                 │
-│  rusvel-core   (20 traits, zero deps)           │
+│  rusvel-core   (19 traits, zero deps)           │
 │  rusvel-llm    (Claude/OpenAI/Ollama)           │
 │  rusvel-agent  (agent runtime + workflows)      │
 │  rusvel-db     (SQLite WAL + migrations)        │
@@ -67,7 +67,7 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 └─────────────────────────────────────────────────┘
 ```
 
-## The 20 Core Ports (in rusvel-core)
+## The 19 Port Traits (14 Port + 5 Store) in rusvel-core
 
 | Port | Responsibility |
 |------|---------------|
@@ -90,7 +90,8 @@ RUSVEL is a single Rust binary that replaces an entire agency. It combines AI ag
 | `VectorStorePort` | Similarity search |
 | `DeployPort` | Deployment operations |
 | `TerminalPort` | Terminal interaction, shell commands |
-| `Engine` | Engine trait: name, capabilities, health |
+
+**Plus:** `Engine` trait (name, capabilities, health) — implemented by all 13 engines. Not counted as a port trait.
 
 > **Removed from v1:** `AutomationPort`, `SchedulePort`, `HarvestPort`, `PublishPort` — consolidated or moved to engine-internal traits (see ADR-003, ADR-006).
 
@@ -215,16 +216,16 @@ $ rusvel --tui                   # Full-screen terminal dashboard
 
 The vertical slice is proven and significantly expanded:
 
-- **49 crates** (18 foundation + 13 engines + 13 dept-* crates + 5 surfaces)
-- **20 port traits** in rusvel-core with 82 domain types
-- **~115 API handler functions** across 22+ modules
-- **98 test suites**, 0 failures
-- **~43,276 lines** of Rust across 185 source files
+- **48 crates** (18 foundation + 13 engines + 13 dept-* crates + 4 surfaces)
+- **19 port traits** (14 Port + 5 Store) in rusvel-core with 82 domain types
+- **124 API handler functions** across 23 modules
+- **222 tests** in 30 test binaries, 0 failures
+- **~43,670 lines** of Rust across 185 source files
 - **12+ frontend routes** (home, chat, database browser, dept/[id], flows, knowledge, settings)
 - **5 wired engines** (Forge, Code, Content, Harvest, Flow) with real domain logic
 - **8 stub engines** with department chat via generic agent
 - **13 dept-* crates** implementing `DepartmentApp` trait (ADR-014, EngineKind removed)
-- **21+ registered tools** (9 built-in + 12 engine + tool_search)
+- **22+ registered tools** (10 built-in incl. tool_search + 12 engine)
 - **AgentRuntime streaming** with multi-turn tool loop
 - **ModelTier routing** + CostTracker for smart model selection
 - **6 MCP tools** for Claude Code integration

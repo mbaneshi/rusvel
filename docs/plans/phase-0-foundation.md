@@ -1,3 +1,5 @@
+> **SUPERSEDED** — See phase-0-foundation-v2.md.
+
 # Phase 0 — Foundation
 
 > Goal: Prove the hexagonal architecture works end-to-end with one vertical slice.

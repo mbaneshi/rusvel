@@ -1,3 +1,5 @@
+> **SUPERSEDED** — Reflects v1 architecture. See architecture-v2.md.
+
 # RUSVEL — Design Brief for AI Review
 
 > Send this prompt to Claude, Perplexity, and Gemini for competing design perspectives.

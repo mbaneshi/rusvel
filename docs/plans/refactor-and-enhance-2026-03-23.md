@@ -1,3 +1,5 @@
+> **COMPLETED & ARCHIVED** — Done 2026-03-24.
+
 # Refactor & Enhance — Definitive Plan
 
 > Fixes structural debt first, then adds features on a solid foundation.

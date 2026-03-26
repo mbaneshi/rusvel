@@ -157,7 +157,7 @@ rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 
 - `docs/design/vision.md` — What RUSVEL is
 - `docs/design/architecture-v2.md` — Current architecture (v2, post-review)
-- `docs/design/decisions.md` — 13 ADRs with rationale
+- `docs/design/decisions.md` — 14 ADRs with rationale
 - `docs/design/audit-2026-03-23.md` — Comprehensive codebase audit
 - `docs/status/current-state.md` — Live codebase metrics snapshot
 - `docs/plans/phase-0-foundation-v2.md` — Current phase milestones

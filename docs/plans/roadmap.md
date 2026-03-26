@@ -1,3 +1,5 @@
+> **SUPERSEDED** — See roadmap-v2.md.
+
 # RUSVEL — Roadmap
 
 ---

@@ -1,3 +1,5 @@
+> **COMPLETED & ARCHIVED** — Done 2026-03-24.
+
 # UI Enhancements Plan — 2026-03-23
 
 > Beyond the foundation (shadcn-svelte, Streamdown, toasts, command palette, Svelte Flow, charts).

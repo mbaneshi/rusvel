@@ -1,3 +1,5 @@
+> **SUPERSEDED** — See sprints.md for current plan.
+
 # Sprint: Verified State & What's Left
 
 > Verified from disk: 2026-03-23 | cargo build: 3 warnings, 0 errors | cargo test: 192 pass | svelte-check: 0 errors, 3 warnings
