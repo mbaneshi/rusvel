@@ -16,7 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: Install protoc (needed by lancedb)
         run: sudo apt-get install -y protobuf-compiler
@@ -24,8 +29,9 @@ jobs:
       - name: Build
         run: cargo build --workspace
 
-      - name: Test
-        run: cargo test --workspace
+      # Line coverage floor — see docs/testing/coverage-strategy.md (raise when baseline improves)
+      - name: Test with coverage floor
+        run: cargo llvm-cov test --workspace --summary-only --fail-under-lines 42
 
   frontend:
     name: Frontend

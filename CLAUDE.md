@@ -191,6 +191,9 @@ cargo test -p rusvel-db        # DB store
 cargo test -p rusvel-api       # API tests
 cargo test -p rusvel-llm       # LLM provider tests
 pnpm test:visual               # Visual regression tests (Playwright)
+
+# Line coverage (llvm-cov): rustup component add llvm-tools-preview && cargo install cargo-llvm-cov
+./scripts/coverage.sh          # HTML report + summary; see docs/testing/coverage-strategy.md
 ```
 
 ## Visual E2E Testing
