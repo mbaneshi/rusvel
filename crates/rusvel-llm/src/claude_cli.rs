@@ -17,6 +17,8 @@ use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::LlmPort;
 
+use crate::flat_prompt::flat_prompt;
+
 /// Adapter that calls the `claude` CLI in non-interactive mode (`-p`).
 ///
 /// Uses Max subscription env vars by default. Falls back to API key
@@ -80,22 +82,7 @@ impl ClaudeCliProvider {
     /// Concatenates system instructions and user messages into a single
     /// prompt since `claude -p` takes a flat string, not a message array.
     fn build_prompt(request: &LlmRequest) -> String {
-        let mut parts = Vec::new();
-
-        for msg in &request.messages {
-            let text = extract_text(&msg.content);
-            if text.is_empty() {
-                continue;
-            }
-            match msg.role {
-                LlmRole::System => parts.push(format!("<system>\n{text}\n</system>")),
-                LlmRole::User => parts.push(text),
-                LlmRole::Assistant => parts.push(format!("<assistant>\n{text}\n</assistant>")),
-                LlmRole::Tool => parts.push(format!("<tool-result>\n{text}\n</tool-result>")),
-            }
-        }
-
-        parts.join("\n\n")
+        flat_prompt(request)
     }
 }
 
@@ -397,19 +384,6 @@ impl LlmPort for ClaudeCliProvider {
             model: self.model.clone(),
         }])
     }
-}
-
-/// Extract concatenated text from all `Part::Text` parts.
-fn extract_text(content: &Content) -> String {
-    content
-        .parts
-        .iter()
-        .filter_map(|p| match p {
-            Part::Text(t) => Some(t.as_str()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("")
 }
 
 // ════════════════════════════════════════════════════════════════════

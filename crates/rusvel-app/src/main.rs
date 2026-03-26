@@ -43,7 +43,7 @@ use uuid::Uuid;
 use rusvel_db::Database;
 use rusvel_embed::FastEmbedAdapter;
 use rusvel_event::{EventBus, TriggerManager};
-use rusvel_llm::{ClaudeCliProvider, CostTrackingLlm};
+use rusvel_llm::{ClaudeCliProvider, CostTrackingLlm, CursorAgentProvider, MultiProvider};
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
 use rusvel_tool::ToolRegistry;
@@ -764,8 +764,16 @@ async fn main() -> Result<()> {
     // 3. Concrete adapters
     let db: Arc<Database> = Arc::new(Database::open(data_dir.join("rusvel.db"))?);
     let config = Arc::new(TomlConfig::load(data_dir.join("config.toml"))?);
-    let base_llm: Arc<dyn rusvel_core::ports::LlmPort> =
-        Arc::new(ClaudeCliProvider::max_subscription());
+    let mut llm_multi = MultiProvider::new();
+    llm_multi.register(
+        ModelProvider::Claude,
+        Arc::new(ClaudeCliProvider::max_subscription()),
+    );
+    llm_multi.register(
+        ModelProvider::Other("cursor".into()),
+        Arc::new(CursorAgentProvider::from_env()),
+    );
+    let base_llm: Arc<dyn rusvel_core::ports::LlmPort> = Arc::new(llm_multi);
     let metrics_store: Arc<dyn MetricStore> = db.clone() as Arc<dyn MetricStore>;
     let llm: Arc<dyn rusvel_core::ports::LlmPort> =
         Arc::new(CostTrackingLlm::with_metrics(base_llm, metrics_store));

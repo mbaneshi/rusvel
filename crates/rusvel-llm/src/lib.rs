@@ -8,6 +8,8 @@
 
 mod claude;
 mod claude_cli;
+mod cursor_agent;
+mod flat_prompt;
 mod cost_tracking;
 mod multi;
 mod ollama;
@@ -17,6 +19,7 @@ pub mod stream;
 
 pub use claude::ClaudeProvider;
 pub use claude_cli::ClaudeCliProvider;
+pub use cursor_agent::CursorAgentProvider;
 pub use cost_tracking::CostTrackingLlm;
 pub use multi::MultiProvider;
 pub use ollama::OllamaProvider;
