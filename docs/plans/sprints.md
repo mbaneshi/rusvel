@@ -5,11 +5,13 @@
 
 ---
 
-## Where We Are (verified 2026-03-26)
+## Where We Are (verified 2026-03-27)
 
-**Build:** `cargo build` clean (0 errors). `cargo test` 0 failures across 98 test suites. **49 crates**, ~43k lines Rust, 185 source files.
+**Build:** `cargo build` clean (0 errors). `cargo test` 0 failures in full local run.
 
-**Git:** Clean. 15 uncommitted files (docs/frontend in-progress).
+**Metrics glossary:** [`docs/status/current-state.md`](../status/current-state.md) — **50** workspace members, **~52,560** LOC in `crates/*.rs`, **215** Rust files under `crates/`, **~399** tests, **~61** test targets from `cargo test --no-run`, **105** `.route(` chains in `rusvel-api/src/lib.rs`. Older docs used different counts (e.g. “98 test suites” vs test targets; “49 crates” vs current **50** members).
+
+**Git:** See working tree; not tracked here.
 
 **What shipped since original plan:**
 

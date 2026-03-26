@@ -1,5 +1,7 @@
 # Phase 0 — Foundation v2 (Post-Review)
 
+> **Historical milestones.** Checkboxes below describe original Phase 0 intent. **Implemented vs not** is tracked in [`../status/current-state.md`](../status/current-state.md) and [`../status/verification-log-2026-03-27.md`](../status/verification-log-2026-03-27.md). Do not infer current product status from unchecked boxes alone.
+
 > Incorporates Perplexity feedback. Supersedes phase-0-foundation.md.
 > Goal: Prove hexagonal architecture with one vertical slice.
 > Deliverable: `rusvel forge mission today` works from CLI, API, and Web.

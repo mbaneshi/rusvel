@@ -1,5 +1,7 @@
 # RUSVEL Gap Analysis: What old/ Has That We Don't
 
+> **Status 2026-03-27:** Historical comparison to `old/` monoliths. **Current shipped behavior** is in [`current-state.md`](current-state.md). Tables below are not auto-updated when RUSVEL gains features — re-verify before acting.
+
 > Audited 2026-03-22 — compared working code in old/ against current RUSVEL crates
 
 ---
@@ -18,7 +20,7 @@ These are in `old/forge-project/crates/forge-safety/` and `forge-process/`. With
 |---------|-----------|---------------|------------|
 | **Circuit Breaker** (3-state FSM) | forge-safety/lib.rs:20-127 | Safety guard exists but basic | Port the Closed→Open→HalfOpen FSM with atomic ops |
 | **Rate Limiter** (token bucket) | forge-safety/lib.rs:129-171 | Missing | Port — prevents API quota exhaustion |
-| **Cost Tracker** (budget enforcement) | forge-safety/lib.rs:182-228 | ADR-008 mentions it | Port — Warning + Hard Limit per session |
+| **Cost Tracker** (budget enforcement) | forge-safety/lib.rs:182-228 | **MetricStore** tracks usage/cost in current app; **hard budget enforcement** vs old forge-safety may still differ | Compare `MetricStore` + job approval with old Warning/Hard Limit UX |
 | **Loop Detector** (exit gate) | forge-process/loop_detect.rs | Missing | Port — sliding window hash to detect repeating output |
 | **Context Pruner** (token-aware) | forge-process/context_pruner.rs | Missing | Port — truncate/drop old messages to fit token budget |
 
@@ -28,17 +30,17 @@ All have full test suites in the old code. These are pure functions — can be p
 
 ## HIGH PRIORITY — Content Publishing (Real APIs)
 
-In `old/contentforge/crates/contentforge-publish/src/adapters/`. RUSVEL's content-engine has the pipeline but no real HTTP calls.
+**Update 2026-03-27:** `content-engine` ships **HTTP adapters** for **DEV.to**, **Twitter/X**, and **LinkedIn** under `crates/content-engine/src/adapters/` (`devto.rs`, `twitter.rs`, `linkedin.rs`), using `ConfigPort` keys (e.g. API keys / bearer tokens). **Bluesky** and **Mastodon** are still not present vs old `contentforge`.
 
-| Platform | Old Source | What Works | RUSVEL Status |
-|----------|-----------|------------|---------------|
-| **DEV.to** | adapters/devto.rs | Full CRUD via REST, API key auth, tag validation | Stubbed |
-| **Twitter/X** | adapters/twitter.rs | OAuth 2.0, single + thread support, rate limit handling | Missing |
-| **LinkedIn** | adapters/linkedin.rs | OAuth 2.0, `urn:li:person:*` author, REST API | Missing |
-| **Bluesky** | adapters/bluesky.rs | Handle + App Password → JWT, AT Protocol | Missing |
-| **Mastodon** | adapters/mastodon.rs | Per-instance OAuth, form-encoded POST | Missing |
+| Platform | Old Source | RUSVEL as of 2026-03-27 |
+|----------|-----------|-------------------------|
+| **DEV.to** | adapters/devto.rs | Implemented — `DevToAdapter` |
+| **Twitter/X** | adapters/twitter.rs | Implemented — `TwitterAdapter` (bearer token) |
+| **LinkedIn** | adapters/linkedin.rs | Implemented — `LinkedInAdapter` |
+| **Bluesky** | adapters/bluesky.rs | Missing |
+| **Mastodon** | adapters/mastodon.rs | Missing |
 
-Also missing: **PublisherRegistry** to route publish calls by platform, and **PlatformCredential** enum for per-platform auth storage.
+Routing is via content-engine’s platform adapter wiring (not necessarily identical to old **PublisherRegistry** naming).
 
 ---
 
@@ -88,13 +90,13 @@ In `old/codeilus/codeilus/crates/`. RUSVEL's code-engine has basic parse + searc
 
 ## MEDIUM PRIORITY — Approval/Governance
 
-In `old/agentforge-hq/crates/forge-governance/`. RUSVEL has ApprovalStatus in domain types but no API or workflow.
+**Update 2026-03-27:** RUSVEL has **job-based approvals** (`GET /api/approvals`, approve/reject) and approval-gated jobs (see [`current-state.md`](current-state.md)). Old forge-governance had a richer **governance** model; parity is not 1:1.
 
-| Feature | Old Source | What Works | RUSVEL Status |
-|---------|-----------|------------|---------------|
-| **Approval model** | forge-governance/model.rs | approval_type + status + data_json | Domain types exist |
-| **Approval API** | forge-governance routes | POST (create), PATCH (approve/reject), GET (list+filter) | No API endpoints |
-| **Approval gates** | orchestration | Check before publish/send/spend | Mentioned in ADR-008, not wired |
+| Feature | Old Source | RUSVEL Status (2026-03-27) |
+|---------|-----------|----------------------------|
+| **Approval model** | forge-governance/model.rs | Domain + **Job** approval states; API lists pending jobs |
+| **Approval API** | forge-governance routes | **Present** — REST under `/api/approvals/*` |
+| **Approval gates** | orchestration | **Wired** for gated job kinds (e.g. publish) per ADR-008 |
 
 ---
 
