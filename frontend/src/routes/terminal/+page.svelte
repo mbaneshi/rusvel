@@ -1,107 +1,60 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { Terminal } from '@xterm/xterm';
-	import { FitAddon } from '@xterm/addon-fit';
-	import '@xterm/xterm/css/xterm.css';
+	import { activeSession } from '$lib/stores';
+	import DeptTerminal from '$lib/components/DeptTerminal.svelte';
+	import { STANDALONE_TERMINAL_DEPT_ID } from '$lib/terminalConstants';
 
-	let termEl: HTMLDivElement;
-	let term: Terminal | null = null;
-	let fitAddon: FitAddon | null = null;
-	let ws: WebSocket | null = null;
-	let connected = $state(false);
-	let error = $state('');
+	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
+	activeSession.subscribe((v) => (currentSession = v));
 
-	function getWsUrl(): string {
-		const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		const host = window.location.hostname;
-		// Use API port 3000 in dev (SvelteKit on 5173), same host in prod
-		const port = window.location.port === '5173' ? '3000' : window.location.port;
-		return `${proto}//${host}:${port}/api/terminal/ws`;
+	let terminalPaneId = $state<string | null>(null);
+	let terminalPaneForKey = $state<string | null>(null);
+	let terminalLoading = $state(false);
+	let terminalErr = $state('');
+
+	function apiBase(): string {
+		if (typeof window === 'undefined') return '';
+		const { protocol, hostname, port } = window.location;
+		const apiPort = port === '5173' ? '3000' : port;
+		return `${protocol}//${hostname}${apiPort ? `:${apiPort}` : ''}`;
 	}
 
-	function connect() {
-		error = '';
-		const url = getWsUrl();
-		ws = new WebSocket(url);
-		ws.binaryType = 'arraybuffer';
+	$effect(() => {
+		const sessionId = currentSession?.id;
+		if (!sessionId) {
+			terminalPaneId = null;
+			terminalPaneForKey = null;
+			terminalErr = '';
+			terminalLoading = false;
+			return;
+		}
 
-		ws.onopen = () => {
-			connected = true;
-			term?.focus();
-		};
+		const key = `${sessionId}:${STANDALONE_TERMINAL_DEPT_ID}`;
+		if (terminalPaneForKey === key && terminalPaneId) return;
 
-		ws.onmessage = (ev: MessageEvent) => {
-			if (ev.data instanceof ArrayBuffer) {
-				term?.write(new Uint8Array(ev.data));
-			} else if (typeof ev.data === 'string') {
-				term?.write(ev.data);
-			}
-		};
-
-		ws.onclose = () => {
-			connected = false;
-			term?.write('\r\n\x1b[90m[disconnected]\x1b[0m\r\n');
-		};
-
-		ws.onerror = () => {
-			error = 'WebSocket connection failed';
-			connected = false;
-		};
-	}
-
-	function disconnect() {
-		ws?.close();
-		ws = null;
-		connected = false;
-	}
-
-	onMount(() => {
-		term = new Terminal({
-			cursorBlink: true,
-			fontSize: 14,
-			fontFamily: 'ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace',
-			theme: {
-				background: '#09090b',
-				foreground: '#fafafa',
-				cursor: '#fafafa',
-				selectionBackground: '#27272a',
-				black: '#09090b',
-				red: '#ef4444',
-				green: '#22c55e',
-				yellow: '#eab308',
-				blue: '#3b82f6',
-				magenta: '#a855f7',
-				cyan: '#06b6d4',
-				white: '#fafafa'
-			}
-		});
-
-		fitAddon = new FitAddon();
-		term.loadAddon(fitAddon);
-		term.open(termEl);
-		fitAddon.fit();
-
-		term.onData((data: string) => {
-			if (ws?.readyState === WebSocket.OPEN) {
-				ws.send(data);
-			}
-		});
-
-		const resizeObserver = new ResizeObserver(() => {
-			fitAddon?.fit();
-		});
-		resizeObserver.observe(termEl);
-
-		connect();
-
+		let cancelled = false;
+		terminalLoading = true;
+		terminalErr = '';
+		const url = `${apiBase()}/api/terminal/dept/${encodeURIComponent(STANDALONE_TERMINAL_DEPT_ID)}?session_id=${encodeURIComponent(sessionId)}`;
+		fetch(url)
+			.then((r) => {
+				if (!r.ok) return r.text().then((t) => Promise.reject(new Error(t || r.statusText)));
+				return r.json();
+			})
+			.then((j) => {
+				if (!cancelled && j.pane_id) {
+					terminalPaneId = j.pane_id;
+					terminalPaneForKey = key;
+				}
+			})
+			.catch((e: unknown) => {
+				if (!cancelled) terminalErr = e instanceof Error ? e.message : 'Failed to open terminal';
+			})
+			.finally(() => {
+				if (!cancelled) terminalLoading = false;
+			});
 		return () => {
-			resizeObserver.disconnect();
+			cancelled = true;
 		};
-	});
-
-	onDestroy(() => {
-		disconnect();
-		term?.dispose();
 	});
 </script>
 
@@ -110,48 +63,23 @@
 </svelte:head>
 
 <div class="flex h-[calc(100vh-3.5rem)] flex-col">
-	<!-- Toolbar -->
 	<div class="flex items-center justify-between border-b border-border px-4 py-2">
-		<div class="flex items-center gap-3">
-			<h1 class="text-sm font-semibold">Terminal</h1>
-			<span
-				class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium {connected
-					? 'bg-green-500/10 text-green-500'
-					: 'bg-muted text-muted-foreground'}"
-			>
-				<span
-					class="h-1.5 w-1.5 rounded-full {connected ? 'bg-green-500' : 'bg-muted-foreground'}"
-				></span>
-				{connected ? 'Connected' : 'Disconnected'}
-			</span>
-		</div>
-		<div class="flex gap-2">
-			{#if connected}
-				<button
-					type="button"
-					onclick={disconnect}
-					class="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-				>
-					Disconnect
-				</button>
-			{:else}
-				<button
-					type="button"
-					onclick={connect}
-					class="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-				>
-					Reconnect
-				</button>
-			{/if}
-		</div>
+		<h1 class="text-sm font-semibold">Terminal</h1>
 	</div>
 
-	{#if error}
-		<div class="border-b border-red-500/20 bg-red-500/5 px-4 py-2 text-xs text-red-500">
-			{error}
-		</div>
-	{/if}
-
-	<!-- Terminal container -->
-	<div class="min-h-0 flex-1 bg-[#09090b] p-1" bind:this={termEl}></div>
+	<div class="min-h-0 flex-1 p-2">
+		{#if !currentSession?.id}
+			<p class="text-xs text-muted-foreground">Select a session in the sidebar to use the terminal.</p>
+		{:else if terminalLoading}
+			<p class="text-xs text-muted-foreground">Starting terminal…</p>
+		{:else if terminalErr}
+			<p class="text-xs text-red-500">{terminalErr}</p>
+		{:else if terminalPaneId}
+			{#key terminalPaneId}
+				<div class="h-full min-h-[320px]">
+					<DeptTerminal paneId={terminalPaneId} />
+				</div>
+			{/key}
+		{/if}
+	</div>
 </div>
