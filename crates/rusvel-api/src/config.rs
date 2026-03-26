@@ -10,6 +10,9 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tracing::info;
+
+use rusvel_core::ports::StoragePort;
 
 use crate::AppState;
 
@@ -32,8 +35,8 @@ impl Default for ChatConfig {
     fn default() -> Self {
         Self {
             // Default to Cursor terminal agent (`rusvel-llm` CursorAgentProvider) to avoid
-            // Claude Max / API limits when Cursor subscription is available. Switch to
-            // `sonnet` / `opus` / `haiku` in the UI for Claude CLI routing.
+            // Claude Max / API limits when Cursor subscription is available. Pick
+            // `claude/sonnet` etc. in the UI for Claude CLI routing.
             model: "cursor/sonnet-4".into(),
             effort: "medium".into(),
             max_budget_usd: None,
@@ -47,11 +50,19 @@ impl Default for ChatConfig {
 }
 
 impl ChatConfig {
+    /// Model id for `claude -p --model` (strip `claude/` prefix; bare ids unchanged).
+    fn claude_cli_model_flag(&self) -> String {
+        match self.model.split_once('/') {
+            Some(("claude", name)) => name.to_string(),
+            _ => self.model.clone(),
+        }
+    }
+
     /// Build CLI arguments for `claude -p` from this config.
     pub fn to_claude_args(&self) -> Vec<String> {
         let mut args = vec![
             "--model".into(),
-            self.model.clone(),
+            self.claude_cli_model_flag(),
             "--effort".into(),
             self.effort.clone(),
             "--permission-mode".into(),
@@ -80,21 +91,54 @@ impl ChatConfig {
 const CONFIG_KEY: &str = "chat_config";
 const CONFIG_ID: &str = "current";
 
-/// `GET /api/config` — get current chat configuration.
-pub async fn get_config(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<ChatConfig>, (StatusCode, String)> {
-    let stored = state
-        .storage
+/// Legacy picker values (before `cursor/…` and `claude/…` prefixes) routed to Claude CLI
+/// and hit Max/API limits. Rewrite once to Cursor agent.
+pub(crate) fn migrate_legacy_chat_model(config: &mut ChatConfig) -> bool {
+    if matches!(config.model.as_str(), "sonnet" | "opus" | "haiku") {
+        config.model = "cursor/sonnet-4".into();
+        true
+    } else {
+        false
+    }
+}
+
+/// Load persisted chat config and migrate legacy model ids to `cursor/sonnet-4` when needed.
+pub async fn load_and_migrate_chat_config(
+    storage: &Arc<dyn StoragePort>,
+) -> Result<ChatConfig, (StatusCode, String)> {
+    let stored = storage
         .objects()
         .get(CONFIG_KEY, CONFIG_ID)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let config = stored
+    let mut config: ChatConfig = stored
         .and_then(|v| serde_json::from_value(v).ok())
         .unwrap_or_default();
 
+    if migrate_legacy_chat_model(&mut config) {
+        info!(
+            target: "rusvel::config",
+            model = %config.model,
+            "migrated legacy bare Claude chat model to Cursor agent default"
+        );
+        let value =
+            serde_json::to_value(&config).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        storage
+            .objects()
+            .put(CONFIG_KEY, CONFIG_ID, value)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    Ok(config)
+}
+
+/// `GET /api/config` — get current chat configuration.
+pub async fn get_config(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ChatConfig>, (StatusCode, String)> {
+    let config = load_and_migrate_chat_config(&state.storage).await?;
     Ok(Json(config))
 }
 
@@ -143,17 +187,17 @@ pub async fn list_models() -> Json<Vec<ModelOption>> {
             description: "Cursor agent with extended reasoning variant (if listed by cursor agent --list-models)".into(),
         },
         ModelOption {
-            value: "sonnet".into(),
+            value: "claude/sonnet".into(),
             label: "Claude · Sonnet".into(),
             description: "Claude CLI — fast, capable (Claude Max / API)".into(),
         },
         ModelOption {
-            value: "opus".into(),
+            value: "claude/opus".into(),
             label: "Claude · Opus".into(),
             description: "Claude CLI — most capable".into(),
         },
         ModelOption {
-            value: "haiku".into(),
+            value: "claude/haiku".into(),
             label: "Claude · Haiku".into(),
             description: "Claude CLI — fastest".into(),
         },
@@ -222,4 +266,39 @@ pub async fn list_tools() -> Json<Vec<ToolOption>> {
             category: "Files".into(),
         },
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrate_legacy_opus_to_cursor() {
+        let mut c = ChatConfig {
+            model: "opus".into(),
+            ..Default::default()
+        };
+        assert!(migrate_legacy_chat_model(&mut c));
+        assert_eq!(c.model, "cursor/sonnet-4");
+    }
+
+    #[test]
+    fn does_not_migrate_claude_prefixed() {
+        let mut c = ChatConfig {
+            model: "claude/opus".into(),
+            ..Default::default()
+        };
+        assert!(!migrate_legacy_chat_model(&mut c));
+    }
+
+    #[test]
+    fn to_claude_args_strips_claude_prefix() {
+        let c = ChatConfig {
+            model: "claude/opus".into(),
+            ..Default::default()
+        };
+        let args = c.to_claude_args();
+        let i = args.iter().position(|a| a == "--model").unwrap();
+        assert_eq!(args.get(i + 1).map(String::as_str), Some("opus"));
+    }
 }

@@ -24,7 +24,7 @@ use rusvel_core::id::SessionId;
 use rusvel_core::ports::{AgentPort, StoragePort};
 
 use crate::AppState;
-use crate::config::ChatConfig;
+use crate::config::load_and_migrate_chat_config;
 
 // ── Request / Response types ─────────────────────────────────
 
@@ -89,16 +89,10 @@ pub async fn chat_handler(
     };
     let _ = store_message(&state.storage, &user_msg).await;
 
-    // Load chat config (model, effort, tools, etc.)
-    let chat_config: ChatConfig = state
-        .storage
-        .objects()
-        .get("chat_config", "current")
+    // Load chat config (model, effort, tools, etc.) — migrates legacy bare `opus`/`sonnet`/`haiku` to Cursor.
+    let chat_config = load_and_migrate_chat_config(&state.storage)
         .await
-        .ok()
-        .flatten()
-        .and_then(|v| serde_json::from_value(v).ok())
-        .unwrap_or_default();
+        .map_err(|e| (e.0, e.1))?;
 
     // Build AgentConfig from chat config + profile
     let system_prompt = profile.to_system_prompt();
