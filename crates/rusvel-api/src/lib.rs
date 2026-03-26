@@ -26,6 +26,7 @@ pub mod routes;
 pub mod rules;
 pub mod skills;
 pub mod system;
+pub mod terminal;
 pub mod visual_report;
 pub mod workflows;
 
@@ -46,8 +47,8 @@ use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
-    DeployPort, EmbeddingPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort, ToolPort,
-    VectorStorePort,
+    DeployPort, EmbeddingPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort,
+    TerminalPort, ToolPort, VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_agent::AgentRuntime;
@@ -76,6 +77,7 @@ pub struct AppState {
     pub deploy: Option<Arc<dyn DeployPort>>,
     pub agent_runtime: Arc<AgentRuntime>,
     pub tools: Arc<dyn ToolPort>,
+    pub terminal: Option<Arc<dyn TerminalPort>>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -290,6 +292,9 @@ pub fn build_router_with_frontend(
             "/api/system/visual-test",
             post(visual_report::run_visual_tests),
         )
+        // Terminal: dept pane + WebSocket
+        .route("/api/terminal/dept/{dept_id}", get(terminal::terminal_dept_pane))
+        .route("/api/terminal/ws", get(terminal::terminal_ws))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

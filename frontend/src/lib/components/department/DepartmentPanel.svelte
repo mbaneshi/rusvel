@@ -4,6 +4,7 @@
 	import { getDeptConfig } from '$lib/api';
 	import type { DepartmentConfig } from '$lib/api';
 	import DeptHelpTooltip from '$lib/components/onboarding/DeptHelpTooltip.svelte';
+	import DeptTerminal from '$lib/components/DeptTerminal.svelte';
 	import { getDeptColor } from './colors';
 	import ActionsTab from './ActionsTab.svelte';
 	import AgentsTab from './AgentsTab.svelte';
@@ -23,6 +24,7 @@
 		color,
 		quickActions = [],
 		tabs = ['actions', 'agents', 'workflows', 'skills', 'rules', 'mcp', 'hooks', 'dirs', 'events'],
+		sessionId = null,
 		helpDescription = '',
 		helpPrompts = []
 	}: {
@@ -32,6 +34,7 @@
 		color: string;
 		quickActions: { label: string; prompt: string }[];
 		tabs?: string[];
+		sessionId?: string | null;
 		helpDescription?: string;
 		helpPrompts?: string[];
 	} = $props();
@@ -41,6 +44,48 @@
 	let isOpen = $state(true);
 	let width = $state(288);
 	let resizing = $state(false);
+	let terminalPaneId = $state<string | null>(null);
+	let terminalPaneForKey = $state<string | null>(null);
+	let terminalLoading = $state(false);
+	let terminalErr = $state('');
+
+	function apiBase(): string {
+		if (typeof window === 'undefined') return '';
+		const { protocol, hostname, port } = window.location;
+		const apiPort = port === '5173' ? '3000' : port;
+		return `${protocol}//${hostname}${apiPort ? `:${apiPort}` : ''}`;
+	}
+
+	$effect(() => {
+		if (activeTab !== 'terminal' || !sessionId) return;
+		const key = `${sessionId}:${dept}`;
+		if (terminalPaneForKey === key && terminalPaneId) return;
+
+		let cancelled = false;
+		terminalLoading = true;
+		terminalErr = '';
+		const url = `${apiBase()}/api/terminal/dept/${encodeURIComponent(dept)}?session_id=${encodeURIComponent(sessionId)}`;
+		fetch(url)
+			.then((r) => {
+				if (!r.ok) return r.text().then((t) => Promise.reject(new Error(t || r.statusText)));
+				return r.json();
+			})
+			.then((j: { pane_id?: string }) => {
+				if (!cancelled && j.pane_id) {
+					terminalPaneId = j.pane_id;
+					terminalPaneForKey = key;
+				}
+			})
+			.catch((e: unknown) => {
+				if (!cancelled) terminalErr = e instanceof Error ? e.message : 'Failed to open terminal';
+			})
+			.finally(() => {
+				if (!cancelled) terminalLoading = false;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
 
 	const deptHsl = $derived(getDeptColor(color));
 
@@ -80,6 +125,7 @@
 		[
 			{ id: 'actions', label: 'Actions' },
 			{ id: 'engine', label: 'Engine' },
+			{ id: 'terminal', label: 'Terminal' },
 			{ id: 'agents', label: 'Agents' },
 			{ id: 'workflows', label: 'Flows' },
 			{ id: 'skills', label: 'Skills' },
@@ -171,6 +217,20 @@
 				<ActionsTab {dept} {quickActions} {deptHsl} />
 			{:else if activeTab === 'engine'}
 				<EngineTab {dept} {deptHsl} />
+			{:else if activeTab === 'terminal'}
+				<div class="p-2">
+					{#if !sessionId}
+						<p class="text-[11px] text-muted-foreground">Select a session to use the terminal.</p>
+					{:else if terminalLoading}
+						<p class="text-[11px] text-muted-foreground">Starting terminal…</p>
+					{:else if terminalErr}
+						<p class="text-[11px] text-red-500">{terminalErr}</p>
+					{:else if terminalPaneId}
+						{#key terminalPaneId}
+							<DeptTerminal paneId={terminalPaneId} />
+						{/key}
+					{/if}
+				</div>
 			{:else if activeTab === 'agents'}
 				<AgentsTab {dept} {deptHsl} />
 			{:else if activeTab === 'skills'}

@@ -32,7 +32,8 @@
 				icon={dept.icon}
 				color={dept.color}
 				quickActions={dept.quick_actions}
-				tabs={tabsFromDepartment(dept)}
+				sessionId={currentSession.id}
+				tabs={[...tabsFromDepartment(dept), 'terminal']}
 			/>
 		{/key}
 		<div class="flex-1">
