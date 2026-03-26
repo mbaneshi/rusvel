@@ -3,11 +3,18 @@
 //! Registers file operations, shell execution, web fetching, and git tools
 //! into a [`ToolRegistry`](rusvel_tool::ToolRegistry).
 
+pub mod delegate;
+pub mod flow;
+pub mod terminal_tools;
 mod file_ops;
 mod git;
+pub mod memory;
 mod shell;
 pub mod tool_search;
 
+use std::sync::Arc;
+
+use rusvel_core::ports::{AgentPort, EventPort, MemoryPort, StoragePort, TerminalPort};
 use rusvel_tool::ToolRegistry;
 
 /// Register all built-in tools into the given registry.
@@ -15,4 +22,36 @@ pub async fn register_all(registry: &ToolRegistry) {
     file_ops::register(registry).await;
     shell::register(registry).await;
     git::register(registry).await;
+}
+
+/// Register memory tools (memory_write, memory_read, memory_search, memory_delete).
+pub async fn register_memory_tools(registry: &ToolRegistry, memory_port: Arc<dyn MemoryPort>) {
+    memory::register(registry, memory_port).await;
+}
+
+/// Register delegate_agent tool for spawning sub-agents (streams to a delegation pane when terminal is set).
+pub async fn register_delegate_tool(
+    registry: &ToolRegistry,
+    agent: Arc<rusvel_agent::AgentRuntime>,
+    terminal: Option<Arc<dyn TerminalPort>>,
+) {
+    delegate::register(registry, agent, terminal).await;
+}
+
+/// Register terminal_open and terminal_watch.
+pub async fn register_terminal_tools(
+    registry: &ToolRegistry,
+    terminal: Option<Arc<dyn TerminalPort>>,
+) {
+    terminal_tools::register(registry, terminal).await;
+}
+
+/// Register flow tools (invoke_flow).
+pub async fn register_flow_tools(
+    registry: &ToolRegistry,
+    storage: Arc<dyn StoragePort>,
+    events: Arc<dyn EventPort>,
+    agent: Arc<dyn AgentPort>,
+) {
+    flow::register(registry, storage, events, agent).await;
 }

@@ -9,11 +9,11 @@ use axum::extract::{Path, Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::Json;
 use futures::stream::StreamExt;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use rusvel_core::id::{PaneId, SessionId};
+use rusvel_core::id::{PaneId, RunId, SessionId};
 use rusvel_core::terminal::{PaneSize, PaneSource, WindowSource};
 
 use crate::AppState;
@@ -89,7 +89,13 @@ pub async fn terminal_dept_pane(
     let size = PaneSize { rows: 24, cols: 80 };
 
     let pane_id = match terminal
-        .create_pane(&window_id, &shell, &cwd, size, PaneSource::Shell)
+        .create_pane(
+            &window_id,
+            &shell,
+            &cwd,
+            size,
+            PaneSource::Department(dept_id.clone()),
+        )
         .await
     {
         Ok(id) => id,
@@ -107,6 +113,121 @@ pub async fn terminal_dept_pane(
     guard.insert(key, pane_id);
 
     Json(serde_json::json!({ "pane_id": pane_id.to_string() })).into_response()
+}
+
+/// GET /api/terminal/runs/:run_id/panes — panes indexed to this agent run (delegation child run, etc.).
+pub async fn terminal_run_panes(
+    Path(run_id_str): Path<String>,
+    State(state): State<std::sync::Arc<AppState>>,
+) -> impl IntoResponse {
+    let terminal = match state.terminal.as_ref() {
+        Some(t) => t.clone(),
+        None => {
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({ "error": "Terminal not configured" })),
+            )
+                .into_response();
+        }
+    };
+
+    let run_uuid = match Uuid::parse_str(run_id_str.trim()) {
+        Ok(u) => u,
+        Err(_) => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid run_id" })),
+            )
+                .into_response();
+        }
+    };
+    let run_id = RunId::from_uuid(run_uuid);
+
+    match terminal.panes_for_run(&run_id).await {
+        Ok(panes) => Json(serde_json::json!({ "panes": panes })).into_response(),
+        Err(e) => {
+            tracing::error!("panes_for_run: {e}");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "failed to list panes" })),
+            )
+                .into_response()
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TerminalResizeBody {
+    pub rows: u16,
+    pub cols: u16,
+}
+
+#[derive(Serialize)]
+struct ResizeError<'a> {
+    error: &'a str,
+}
+
+/// POST /api/terminal/pane/:pane_id/resize — sync PTY to xterm dimensions (cols/rows).
+pub async fn terminal_resize_pane(
+    Path(pane_id_str): Path<String>,
+    State(state): State<std::sync::Arc<AppState>>,
+    Json(body): Json<TerminalResizeBody>,
+) -> impl IntoResponse {
+    let terminal = match state.terminal.as_ref() {
+        Some(t) => t.clone(),
+        None => {
+            return (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                Json(ResizeError {
+                    error: "Terminal not configured",
+                }),
+            )
+                .into_response();
+        }
+    };
+
+    let uuid = match Uuid::parse_str(pane_id_str.trim()) {
+        Ok(u) => u,
+        Err(_) => {
+            return (
+                axum::http::StatusCode::BAD_REQUEST,
+                Json(ResizeError {
+                    error: "invalid pane_id",
+                }),
+            )
+                .into_response();
+        }
+    };
+    let pane_id = PaneId::from_uuid(uuid);
+
+    if body.rows == 0 || body.cols == 0 {
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(ResizeError {
+                error: "rows and cols must be positive",
+            }),
+        )
+            .into_response();
+    }
+
+    let size = PaneSize {
+        rows: body.rows,
+        cols: body.cols,
+    };
+
+    match terminal.resize_pane(&pane_id, size).await {
+        Ok(()) => axum::http::StatusCode::NO_CONTENT.into_response(),
+        Err(e) => {
+            tracing::debug!("resize_pane failed: {e}");
+            (
+                axum::http::StatusCode::NOT_FOUND,
+                Json(ResizeError {
+                    error: "resize failed",
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

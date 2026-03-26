@@ -5,20 +5,76 @@
 //! 1. Read all manifests (no side effects, fast)
 //! 2. Validate IDs and dependencies
 //! 3. Register departments in dependency order
-//! 4. Generate DepartmentRegistry from manifests
+//! 4. Finalize [`RegistrationContext`] → registry + tools + event subs + job handlers
 //!
 //! The composition root (`main.rs`) creates ports, then calls
-//! `boot_departments()` which registers all departments and returns
-//! the generated registry.
+//! `boot_departments()` which registers all departments. The host wires
+//! event subscriptions to [`rusvel_event::EventBus`] and job handlers to
+//! the queue worker.
 
 use std::sync::Arc;
 
 use rusvel_core::DepartmentApp;
 use rusvel_core::department::{
-    RegistrationContext, validate_unique_ids, resolve_dependency_order,
+    DepartmentsBootArtifacts, EventSubscription, RegistrationContext, resolve_dependency_order,
+    validate_unique_ids,
 };
+use rusvel_core::domain::JobKind;
 use rusvel_core::ports::*;
-use rusvel_core::registry::DepartmentRegistry;
+use rusvel_event::EventBus;
+use tokio::sync::broadcast;
+
+/// Map a queued [`JobKind`] to the string key departments use in [`JobHandlerRegistrar`].
+pub fn department_job_registry_key(kind: &JobKind) -> String {
+    match kind {
+        JobKind::ContentPublish => "content.publish".into(),
+        JobKind::CodeAnalyze => "code.analyze".into(),
+        JobKind::HarvestScan => "harvest.scan".into(),
+        JobKind::Custom(s) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+/// Subscribe to live [`EventBus`] broadcasts and invoke matching department handlers.
+pub fn spawn_department_event_dispatch(
+    event_bus: Arc<EventBus>,
+    subscriptions: Vec<EventSubscription>,
+) {
+    if subscriptions.is_empty() {
+        return;
+    }
+    tracing::info!(
+        count = subscriptions.len(),
+        "Department event dispatch: bridging EventBus → department handlers"
+    );
+    tokio::spawn(async move {
+        let mut rx = event_bus.subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    for sub in &subscriptions {
+                        if sub.event_kind == event.kind {
+                            let h = sub.handler.clone();
+                            let kind = sub.event_kind.clone();
+                            let ev = event.clone();
+                            tokio::spawn(async move {
+                                if let Err(e) = h(ev).await {
+                                    tracing::warn!(
+                                        error = %e,
+                                        kind = %kind,
+                                        "department event handler failed"
+                                    );
+                                }
+                            });
+                        }
+                    }
+                }
+                Err(broadcast::RecvError::Lagged(_)) => {}
+                Err(broadcast::RecvError::Closed) => break,
+            }
+        }
+    });
+}
 
 /// Ordered list of installed departments.
 ///
@@ -67,7 +123,7 @@ pub async fn boot_departments(
     auth: Arc<dyn AuthPort>,
     embedding: Option<Arc<dyn EmbeddingPort>>,
     vector_store: Option<Arc<dyn VectorStorePort>>,
-) -> anyhow::Result<DepartmentRegistry> {
+) -> anyhow::Result<DepartmentsBootArtifacts> {
     // Phase 1: Read all manifests (no side effects)
     let manifests: Vec<_> = departments.iter().map(|d| d.manifest()).collect();
 
@@ -113,15 +169,18 @@ pub async fn boot_departments(
         }
     }
 
-    // Phase 4: Generate registry from manifests
-    let registry = ctx.build_registry();
+    let tools_n = ctx.tools.len();
+    let ev_n = ctx.event_handlers.len();
+    let job_n = ctx.job_handlers.len();
+
+    let artifacts = ctx.finalize();
     tracing::info!(
         "Department boot complete: {} departments registered, {} tools, {} event handlers, {} job handlers",
-        registry.departments.len(),
-        ctx.tools.len(),
-        ctx.event_handlers.len(),
-        ctx.job_handlers.len(),
+        artifacts.registry.departments.len(),
+        tools_n,
+        ev_n,
+        job_n,
     );
 
-    Ok(registry)
+    Ok(artifacts)
 }

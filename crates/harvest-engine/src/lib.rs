@@ -5,11 +5,12 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use rusvel_core::engine::Engine;
-use rusvel_core::ports::{AgentPort, EventPort, StoragePort};
+use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort};
 use rusvel_core::{
-    Capability, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
-    OpportunityId, OpportunityStage, Result, RusvelError, SessionId,
+    Capability, Contact, ContactId, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
+    OpportunityId, OpportunitySource, OpportunityStage, Result, RusvelError, SessionId,
 };
+use rusvel_core::domain::BrowserEvent;
 
 pub mod events;
 pub mod pipeline;
@@ -51,6 +52,9 @@ pub struct HarvestEngine {
     storage: Arc<dyn StoragePort>,
     event_port: Option<Arc<dyn EventPort>>,
     agent: Option<Arc<dyn AgentPort>>,
+    /// Injected for host wiring; optional tooling may use [`HarvestEngine::on_data_captured`].
+    #[allow(dead_code)]
+    browser: Option<Arc<dyn BrowserPort>>,
     config: HarvestConfig,
 }
 
@@ -60,8 +64,14 @@ impl HarvestEngine {
             storage,
             event_port: None,
             agent: None,
+            browser: None,
             config: HarvestConfig::default(),
         }
+    }
+
+    pub fn with_browser(mut self, b: Arc<dyn BrowserPort>) -> Self {
+        self.browser = Some(b);
+        self
     }
 
     pub fn with_events(mut self, events: Arc<dyn EventPort>) -> Self {
@@ -317,6 +327,164 @@ impl HarvestEngine {
         Pipeline::new(self.storage.clone())
             .list(session_id, stage)
             .await
+    }
+
+    /// Normalize CDP-captured browser payloads into opportunities / CRM contacts (Upwork).
+    pub async fn on_data_captured(
+        &self,
+        session_id: &SessionId,
+        event: BrowserEvent,
+    ) -> Result<()> {
+        let BrowserEvent::DataCaptured {
+            platform,
+            kind,
+            data,
+            ..
+        } = event
+        else {
+            return Ok(());
+        };
+        if platform != "upwork" {
+            return Ok(());
+        }
+        match kind.as_str() {
+            "job_listing" => {
+                if let Some(jobs) = data.get("jobs").and_then(|v| v.as_array()) {
+                    for j in jobs {
+                        self.ingest_upwork_job_row(session_id, j).await?;
+                    }
+                } else {
+                    self.ingest_upwork_job_row(session_id, &data).await?;
+                }
+            }
+            "client_profile" => {
+                self.ingest_upwork_client(session_id, &data).await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    async fn ingest_upwork_job_row(
+        &self,
+        session_id: &SessionId,
+        row: &serde_json::Value,
+    ) -> Result<()> {
+        let title = row
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Untitled opportunity");
+        let raw = source::RawOpportunity {
+            title: title.into(),
+            description: row
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .into(),
+            url: row
+                .get("url")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            budget: row
+                .get("budget")
+                .and_then(|v| {
+                    v.as_str()
+                        .map(String::from)
+                        .or_else(|| v.as_f64().map(|n| format!("${n:.0}")))
+                }),
+            skills: row
+                .get("skills")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            posted_at: row
+                .get("posted_at")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            source_data: row.clone(),
+        };
+        let scorer = OpportunityScorer::new(
+            self.agent.clone(),
+            self.config.skills.clone(),
+            self.config.min_budget,
+        );
+        let scored = scorer.score(&raw).await?;
+        let opportunity = Opportunity {
+            id: OpportunityId::new(),
+            session_id: *session_id,
+            source: OpportunitySource::Upwork,
+            title: scored.raw.title.clone(),
+            url: scored.raw.url.clone(),
+            description: scored.raw.description.clone(),
+            score: scored.score,
+            stage: OpportunityStage::Cold,
+            value_estimate: parse_budget(&scored.raw.budget),
+            metadata: serde_json::json!({
+                "reasoning": scored.reasoning,
+                "skills": scored.raw.skills,
+                "posted_at": scored.raw.posted_at,
+                "browser_capture": true,
+            }),
+        };
+        let pipe = Pipeline::new(self.storage.clone());
+        pipe.add(&opportunity).await?;
+        self.emit(
+            session_id,
+            events::OPPORTUNITY_DISCOVERED,
+            serde_json::json!({"id": opportunity.id.to_string(), "title": &opportunity.title, "source": "browser"}),
+        )
+        .await;
+        Ok(())
+    }
+
+    async fn ingest_upwork_client(
+        &self,
+        session_id: &SessionId,
+        data: &serde_json::Value,
+    ) -> Result<()> {
+        let name = data
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Unknown client");
+        let links: Vec<String> = data
+            .get("profile_url")
+            .and_then(|v| v.as_str())
+            .map(|s| vec![s.to_string()])
+            .unwrap_or_default();
+        let contact = Contact {
+            id: ContactId::new(),
+            session_id: *session_id,
+            name: name.into(),
+            emails: vec![],
+            links,
+            company: data
+                .get("company")
+                .and_then(|v| v.as_str())
+                .map(String::from),
+            role: None,
+            tags: vec!["upwork".into(), "browser".into()],
+            last_contacted_at: None,
+            metadata: data.clone(),
+        };
+        self.storage
+            .objects()
+            .put(
+                "contact",
+                &contact.id.to_string(),
+                serde_json::to_value(&contact)?,
+            )
+            .await?;
+        self.emit(
+            session_id,
+            "harvest.contact.captured",
+            serde_json::json!({"contact_id": contact.id.to_string(), "name": contact.name}),
+        )
+        .await;
+        Ok(())
     }
 }
 

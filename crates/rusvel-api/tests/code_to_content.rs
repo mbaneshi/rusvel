@@ -228,6 +228,8 @@ async fn test_router() -> (Router, Arc<MockPlatformAdapter>, SessionId) {
         deploy: None,
         agent_runtime,
         tools,
+        terminal: None,
+        cdp: None,
     };
 
     let router = build_router(state);

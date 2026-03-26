@@ -43,8 +43,23 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                             .and_then(|v| v.as_str())
                             .map(parse_content_kind)
                             .unwrap_or(ContentKind::Blog);
+                        let deltas = vec![json!({
+                            "tool": "content_draft",
+                            "phase": "started",
+                            "topic": topic,
+                            "kind": format!("{kind:?}"),
+                        })];
                         match engine.draft(&sid, topic, kind).await {
-                            Ok(item) => ok_json(&item),
+                            Ok(item) => {
+                                let mut deltas = deltas;
+                                deltas.push(json!({
+                                    "tool": "content_draft",
+                                    "phase": "completed",
+                                    "content_id": item.id.to_string(),
+                                    "title": item.title,
+                                }));
+                                ok_json_with_deltas(&item, deltas)
+                            }
                             Err(e) => err_result(e),
                         }
                     })
@@ -264,11 +279,23 @@ fn parse_platform(s: &str) -> Platform {
 }
 
 fn ok_json<T: serde::Serialize>(val: &T) -> rusvel_core::error::Result<ToolResult> {
+    ok_json_with_deltas(val, vec![])
+}
+
+fn ok_json_with_deltas<T: serde::Serialize>(
+    val: &T,
+    deltas: Vec<serde_json::Value>,
+) -> rusvel_core::error::Result<ToolResult> {
     let output = serde_json::to_string_pretty(val).unwrap_or_default();
+    let metadata = if deltas.is_empty() {
+        json!({})
+    } else {
+        json!({ "ag_ui_state_deltas": deltas })
+    };
     Ok(ToolResult {
         success: true,
         output: Content::text(output),
-        metadata: json!({}),
+        metadata,
     })
 }
 

@@ -21,7 +21,8 @@
 	import {
 		MessageSquare, LayoutDashboard, Database, GitBranch, Settings,
 		Hammer, Code, Search, PenTool, Rocket, DollarSign, Package,
-		TrendingUp, Share2, Scale, HeadphonesIcon, Server, ClipboardCheck
+		TrendingUp, Share2, Scale, HeadphonesIcon, Server, ClipboardCheck,
+		TerminalSquare
 	} from 'lucide-svelte';
 
 	let { children }: { children: Snippet } = $props();
@@ -46,6 +47,7 @@
 		legal: Scale,
 		support: HeadphonesIcon,
 		infra: Server,
+		terminal: TerminalSquare,
 	};
 
 	let showNewSession = $state(false);
@@ -62,7 +64,8 @@
 		{ href: '/approvals', label: 'Approvals', icon: 'approvals', tour: '' },
 		{ href: '/', label: 'Dashboard', icon: 'dashboard', tour: 'nav-dashboard' },
 		{ href: '/database/schema', label: 'Database', icon: 'database', tour: '' },
-		{ href: '/flows', label: 'Flows', icon: 'flows', tour: '' }
+		{ href: '/flows', label: 'Flows', icon: 'flows', tour: '' },
+		{ href: '/terminal', label: 'Terminal', icon: 'terminal', tour: '' }
 	];
 	const staticNavAfter = [
 		{ href: '/settings', label: 'Settings', icon: 'settings', tour: 'nav-settings' }

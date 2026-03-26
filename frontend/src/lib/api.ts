@@ -931,6 +931,22 @@ export async function getFlowNodeTypes(): Promise<string[]> {
 	return request('/api/flows/node-types');
 }
 
+/** Terminal pane for a flow execution (from `PaneSource::FlowNode`). */
+export interface FlowTerminalPane {
+	id: string;
+	title: string;
+	node_id?: string | null;
+	flow_execution_id?: string | null;
+	source?: { type?: string; value?: Record<string, unknown> };
+}
+
+export async function getFlowExecutionPanes(
+	flowId: string,
+	executionId: string
+): Promise<FlowTerminalPane[]> {
+	return request(`/api/flows/${flowId}/executions/${executionId}/panes`);
+}
+
 // ── Visual Testing ────────────────────────────────────────────
 
 export interface VisualIssue {

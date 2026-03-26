@@ -309,6 +309,33 @@ impl LlmBatchItemOutcome {
     }
 }
 
+/// High-level batch lifecycle status for callers that want to track a batch
+/// from submission through completion in a single enum.
+///
+/// Compared to [`BatchJobStatus`] (wire-level), this carries the responses
+/// inline so callers can pattern-match once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum BatchStatus {
+    Pending {
+        batch_id: String,
+        submitted: DateTime<Utc>,
+    },
+    Processing {
+        batch_id: String,
+        completed: usize,
+        total: usize,
+    },
+    Done {
+        batch_id: String,
+        responses: Vec<LlmResponse>,
+    },
+    Failed {
+        batch_id: String,
+        error: String,
+    },
+}
+
 /// Heuristic USD estimate from usage (approximate public list prices; Ollama/local = 0).
 pub fn estimate_llm_cost_usd(provider: &ModelProvider, model: &str, usage: &LlmUsage) -> f64 {
     let in_m = usage.input_tokens as f64 / 1_000_000.0;
@@ -377,6 +404,30 @@ pub enum Capability {
     ToolUse,
     WebBrowsing,
     Custom(String),
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Starter kits (one-click department bundles)
+// ════════════════════════════════════════════════════════════════════
+
+/// A curated bundle of agents, skills, rules, and workflows for a persona or use case.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StarterKit {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub target_audience: String,
+    pub departments: Vec<String>,
+    pub entities: Vec<KitEntity>,
+}
+
+/// One entity to create when a [`StarterKit`] is installed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KitEntity {
+    pub kind: String,
+    pub department: String,
+    pub name: String,
+    pub definition: serde_json::Value,
 }
 
 /// Configuration passed to [`AgentPort::create`](crate::ports::AgentPort::create).
@@ -849,99 +900,6 @@ pub enum TriggerAction {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Starter kits (one-click department bundles)
-// ════════════════════════════════════════════════════════════════════
-
-/// A curated bundle of agents, skills, rules, and workflows for a persona or use case.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StarterKit {
-    pub id: String,
-    pub name: String,
-    pub description: String,
-    pub target_audience: String,
-    pub departments: Vec<String>,
-    pub entities: Vec<KitEntity>,
-}
-
-/// One entity to create when a [`StarterKit`] is installed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KitEntity {
-    pub kind: String,
-    pub department: String,
-    pub name: String,
-    pub definition: serde_json::Value,
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Browser / CDP (BrowserPort)
-// ════════════════════════════════════════════════════════════════════
-
-/// Open browser tab metadata from CDP target listing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TabInfo {
-    pub id: String,
-    pub url: String,
-    pub title: String,
-    pub platform: Option<String>,
-}
-
-/// Events streamed from [`crate::ports::BrowserPort::observe`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum BrowserEvent {
-    DataCaptured {
-        platform: String,
-        kind: String,
-        data: serde_json::Value,
-        tab_id: String,
-    },
-    Navigation { tab_id: String, url: String },
-    TabChanged { tab_id: String, opened: bool },
-}
-
-impl BrowserEvent {
-    /// One-line log for terminal / TUI (CDP capture).
-    ///
-    /// Example: `[14:32:01] upwork | job_listing | "Senior Rust Developer - Remote" | score: 8.5`
-    #[must_use]
-    pub fn terminal_log_line(&self) -> Option<String> {
-        match self {
-            BrowserEvent::DataCaptured {
-                platform,
-                kind,
-                data,
-                ..
-            } => {
-                let title_part = data
-                    .get("title")
-                    .or_else(|| data.get("name"))
-                    .and_then(|v| v.as_str())
-                    .map(|s| format!("{s:?}"))
-                    .unwrap_or_else(|| "\"—\"".to_string());
-                let score_part = data
-                    .get("score")
-                    .and_then(|v| v.as_f64())
-                    .map(|s| format!(" | score: {s:.1}"))
-                    .unwrap_or_default();
-                let time = Utc::now().format("%H:%M:%S");
-                Some(format!(
-                    "[{time}] {platform} | {kind} | {title_part}{score_part}"
-                ))
-            }
-            _ => None,
-        }
-    }
-}
-
-/// How aggressively the agent may drive the browser.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BrowsingMode {
-    Passive,
-    Assisted,
-    Autonomous,
-    Vision,
-}
-
-// ════════════════════════════════════════════════════════════════════
 //  Code intelligence references
 // ════════════════════════════════════════════════════════════════════
 
@@ -1036,6 +994,55 @@ pub struct ToolResult {
     pub success: bool,
     pub output: Content,
     pub metadata: serde_json::Value,
+}
+
+/// When in the tool lifecycle a hook fires.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum HookPoint {
+    PreToolUse,
+    PostToolUse,
+}
+
+/// Decision returned by a tool hook.
+#[derive(Debug, Clone)]
+pub enum HookDecision {
+    Allow,
+    Modify(serde_json::Value),
+    Deny(String),
+}
+
+/// Configuration for a registered tool hook.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolHookConfig {
+    pub id: String,
+    pub hook_point: HookPoint,
+    pub tool_pattern: String,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Tool permission types (per-department tool access control)
+// ════════════════════════════════════════════════════════════════════
+
+/// How a tool invocation is handled when permission is checked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum ToolPermissionMode {
+    /// Execute immediately without human intervention.
+    Auto,
+    /// Pause and require human approval before execution.
+    Supervised,
+    /// Block execution entirely.
+    Locked,
+}
+
+/// A permission rule controlling tool access, optionally scoped to a department.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolPermission {
+    /// Tool name pattern: exact name, prefix glob (`"harvest_*"`), or wildcard (`"*"`).
+    pub tool_pattern: String,
+    pub mode: ToolPermissionMode,
+    /// When `Some`, this rule only applies to the given department.
+    /// When `None`, it is a global rule.
+    pub department_id: Option<String>,
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1258,8 +1265,79 @@ pub enum HybridHitSource {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Tests
+//  Browser / CDP (BrowserPort — passive observation foundation)
 // ════════════════════════════════════════════════════════════════════
+
+/// Open browser tab as seen via Chrome DevTools Protocol (`/json/list`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabInfo {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub platform: Option<String>,
+}
+
+/// Streamed observation events from a tab (network, navigation, lifecycle).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BrowserEvent {
+    DataCaptured {
+        platform: String,
+        kind: String,
+        data: serde_json::Value,
+        tab_id: String,
+    },
+    Navigation {
+        tab_id: String,
+        url: String,
+    },
+    TabChanged {
+        tab_id: String,
+        opened: bool,
+    },
+}
+
+impl BrowserEvent {
+    /// One-line log for terminal / TUI (CDP capture).
+    ///
+    /// Example: `[14:32:01] upwork | job_listing | "Senior Rust Developer - Remote" | score: 8.5`
+    #[must_use]
+    pub fn terminal_log_line(&self) -> Option<String> {
+        match self {
+            BrowserEvent::DataCaptured {
+                platform,
+                kind,
+                data,
+                ..
+            } => {
+                let title_part = data
+                    .get("title")
+                    .or_else(|| data.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| format!("{s:?}"))
+                    .unwrap_or_else(|| "\"—\"".to_string());
+                let score_part = data
+                    .get("score")
+                    .and_then(|v| v.as_f64())
+                    .map(|s| format!(" | score: {s:.1}"))
+                    .unwrap_or_default();
+                let time = Utc::now().format("%H:%M:%S");
+                Some(format!(
+                    "[{time}] {platform} | {kind} | {title_part}{score_part}"
+                ))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// How aggressively the system may drive or read the browser session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrowsingMode {
+    Passive,
+    Assisted,
+    Autonomous,
+    Vision,
+}
 
 // ════════════════════════════════════════════════════════════════════
 //  Flow Engine — DAG workflow definitions and execution
@@ -1396,6 +1474,74 @@ pub struct FlowCheckpoint {
     #[serde(default)]
     pub started_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Playbooks — predefined multi-step pipelines (FlowEngine + delegate_agent)
+// ════════════════════════════════════════════════════════════════════
+
+/// A named playbook: sequential steps over agent delegation and/or flow invocation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Playbook {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub steps: Vec<PlaybookStep>,
+    #[serde(default = "default_metadata")]
+    pub metadata: serde_json::Value,
+}
+
+/// One step in a [`Playbook`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaybookStep {
+    pub name: String,
+    pub description: String,
+    pub action: PlaybookAction,
+}
+
+/// What a playbook step executes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PlaybookAction {
+    Agent {
+        #[serde(default)]
+        persona: Option<String>,
+        prompt_template: String,
+        #[serde(default)]
+        tools: Vec<String>,
+    },
+    Flow {
+        flow_id: String,
+        #[serde(default)]
+        input_mapping: Option<String>,
+    },
+    Approval {
+        message: String,
+    },
+}
+
+/// A single execution of a playbook.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlaybookRun {
+    pub id: String,
+    pub playbook_id: String,
+    pub status: PlaybookRunStatus,
+    pub step_results: Vec<serde_json::Value>,
+    pub started_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+/// Lifecycle of a [`PlaybookRun`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaybookRunStatus {
+    Running,
+    Paused,
+    Completed,
+    Failed,
 }
 
 #[cfg(test)]

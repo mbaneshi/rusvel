@@ -20,6 +20,7 @@ members = [
     "crates/rusvel-embed",
     "crates/rusvel-vector",
     "crates/rusvel-terminal",
+    "crates/rusvel-cdp",
 
     # ─── Domain Engines ───
     "crates/forge-engine",
@@ -74,6 +75,7 @@ futures = "0.3"
 
 # Web
 axum = { version = "0.8", features = ["ws"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
 
@@ -152,6 +154,7 @@ rusvel-deploy = { path = "crates/rusvel-deploy" }
 rusvel-embed = { path = "crates/rusvel-embed" }
 rusvel-vector = { path = "crates/rusvel-vector" }
 rusvel-terminal = { path = "crates/rusvel-terminal" }
+rusvel-cdp = { path = "crates/rusvel-cdp" }
 forge-engine = { path = "crates/forge-engine" }
 code-engine = { path = "crates/code-engine" }
 harvest-engine = { path = "crates/harvest-engine" }

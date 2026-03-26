@@ -6,11 +6,14 @@
 		deleteFlow,
 		runFlow,
 		getFlowNodeTypes,
+		getFlowExecutionPanes,
 		type FlowDef,
-		type FlowExecution
+		type FlowExecution,
+		type FlowTerminalPane
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
 	import Button from '$lib/components/ui/Button.svelte';
+	import DeptTerminal from '$lib/components/DeptTerminal.svelte';
 
 	let flows: FlowDef[] = $state([]);
 	let nodeTypes: string[] = $state([]);
@@ -19,6 +22,17 @@
 	let newFlowJson = $state('');
 	let selectedExecution: FlowExecution | null = $state(null);
 	let runningFlowId = $state('');
+	let executionPanes: FlowTerminalPane[] = $state([]);
+	let panesLoading = $state(false);
+
+	function paneNodeLabel(pane: FlowTerminalPane, flow: FlowDef | undefined): string {
+		const nid = pane.node_id ?? (pane.source?.value?.node_id as string | undefined);
+		if (nid && flow) {
+			const n = flow.nodes.find((x) => x.id === nid);
+			if (n) return n.name;
+		}
+		return pane.title || pane.id.slice(0, 8);
+	}
 
 	onMount(async () => {
 		try {
@@ -57,10 +71,19 @@
 	async function handleRun(id: string) {
 		runningFlowId = id;
 		selectedExecution = null;
+		executionPanes = [];
 		try {
 			const exec = await runFlow(id);
 			selectedExecution = exec;
 			toast.success(`Flow executed: ${exec.status}`);
+			panesLoading = true;
+			try {
+				executionPanes = await getFlowExecutionPanes(id, exec.id);
+			} catch {
+				executionPanes = [];
+			} finally {
+				panesLoading = false;
+			}
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Flow execution failed');
 		} finally {
@@ -170,12 +193,13 @@
 	{/if}
 
 	{#if selectedExecution}
+		{@const exec = selectedExecution}
 		<div class="rounded-lg border border-border bg-card p-4 space-y-3">
 			<div class="flex items-center justify-between">
 				<h2 class="font-medium">
 					Execution
-					<span class={statusColor(selectedExecution.status)}>
-						{selectedExecution.status}
+					<span class={statusColor(exec.status)}>
+						{exec.status}
 					</span>
 				</h2>
 				<button
@@ -187,12 +211,30 @@
 				</button>
 			</div>
 
-			{#if selectedExecution.error}
-				<p class="text-sm text-red-500">{selectedExecution.error}</p>
+			{#if exec.error}
+				<p class="text-sm text-red-500">{exec.error}</p>
+			{/if}
+
+			{#if panesLoading}
+				<p class="text-xs text-muted-foreground">Loading terminal panes…</p>
+			{:else if executionPanes.length > 0}
+				{@const flowForExec = flows.find((f) => f.id === exec.flow_id)}
+				<div class="grid gap-3 sm:grid-cols-2">
+					{#each executionPanes as pane}
+						<div class="flex min-h-[260px] flex-col gap-1">
+							<p class="text-xs font-medium text-muted-foreground">
+								{paneNodeLabel(pane, flowForExec)}
+							</p>
+							<div class="min-h-[240px] flex-1 overflow-hidden rounded-md border border-border">
+								<DeptTerminal paneId={pane.id} />
+							</div>
+						</div>
+					{/each}
+				</div>
 			{/if}
 
 			<div class="space-y-2">
-				{#each Object.entries(selectedExecution.node_results) as [nodeId, result]}
+				{#each Object.entries(exec.node_results) as [nodeId, result]}
 					<div
 						class="rounded border border-border p-2 text-xs {result.status === 'Succeeded' ? 'border-green-500/30' : result.status === 'Failed' ? 'border-red-500/30' : result.status === 'Skipped' ? 'border-gray-500/20' : ''}"
 					>

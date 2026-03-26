@@ -61,6 +61,10 @@ rusvel-vector = { workspace = true }
 rusvel-builtin-tools = { workspace = true }
 rusvel-engine-tools = { workspace = true }
 
+# ─── Terminal ───
+rusvel-terminal = { workspace = true }
+rusvel-cdp      = { workspace = true }
+
 # ─── Surfaces ───
 rusvel-cli = { workspace = true }
 rusvel-api = { workspace = true }

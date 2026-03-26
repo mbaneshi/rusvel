@@ -51,6 +51,8 @@ impl DepartmentApp for FlowDepartment {
             ctx.storage.clone(),
             ctx.events.clone(),
             ctx.agent.clone(),
+            None,
+            None,
         ));
         let _ = self.engine.set(engine);
 

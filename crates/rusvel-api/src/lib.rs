@@ -9,6 +9,7 @@
 pub mod agents;
 pub mod analytics;
 pub mod approvals;
+pub mod browser;
 pub mod build_cmd;
 pub mod capability;
 pub mod chat;
@@ -80,6 +81,8 @@ pub struct AppState {
     pub agent_runtime: Arc<AgentRuntime>,
     pub tools: Arc<dyn ToolPort>,
     pub terminal: Option<Arc<dyn TerminalPort>>,
+    /// Chrome CDP client (passive capture + actions); `None` when not wired.
+    pub cdp: Option<Arc<rusvel_cdp::CdpClient>>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -242,6 +245,10 @@ pub fn build_router_with_frontend(
         )
         .route("/api/flows/{id}/run", post(flow_routes::run_flow))
         .route("/api/flows/{id}/executions", get(flow_routes::list_executions))
+        .route(
+            "/api/flows/{id}/executions/{exec_id}/panes",
+            get(flow_routes::list_flow_execution_panes),
+        )
         .route("/api/flows/executions/{id}", get(flow_routes::get_execution))
         .route(
             "/api/flows/executions/{id}/resume",
@@ -319,9 +326,24 @@ pub fn build_router_with_frontend(
             "/api/system/visual-test",
             post(visual_report::run_visual_tests),
         )
-        // Terminal: dept pane + WebSocket
+        // Terminal: dept pane + WebSocket + run-scoped panes (delegation visibility)
         .route("/api/terminal/dept/{dept_id}", get(terminal::terminal_dept_pane))
+        .route("/api/terminal/runs/{run_id}/panes", get(terminal::terminal_run_panes))
         .route("/api/terminal/ws", get(terminal::terminal_ws))
+        // Browser (CDP)
+        .route("/api/browser/status", get(browser::browser_status))
+        .route("/api/browser/connect", axum::routing::post(browser::browser_connect))
+        .route("/api/browser/tabs", get(browser::browser_tabs))
+        .route(
+            "/api/browser/observe/{tab}",
+            axum::routing::post(browser::browser_observe),
+        )
+        .route("/api/browser/captures", get(browser::browser_captures))
+        .route(
+            "/api/browser/captures/stream",
+            get(browser::browser_captures_stream),
+        )
+        .route("/api/browser/act", axum::routing::post(browser::browser_act))
         .with_state(shared);
 
     // Serve frontend SPA if build directory exists.

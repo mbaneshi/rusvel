@@ -44,6 +44,10 @@ impl CostTrackingLlm {
             &req_for_cost.model.model,
             &resp.usage,
         );
+        // Claude CLI reports actual spend in metadata (usage tokens are often zero).
+        if let Some(actual) = resp.metadata.get("cost_usd").and_then(|v| v.as_f64()) {
+            usd = actual;
+        }
         if let Some(d) = resp
             .metadata
             .get(RUSVEL_META_BATCH_DISCOUNT)

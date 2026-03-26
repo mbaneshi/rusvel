@@ -17,7 +17,9 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
 
 use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
-use rusvel_core::domain::{AgentConfig, Content, ModelProvider, ModelRef};
+use rusvel_core::domain::{
+    AgentConfig, Content, ModelProvider, ModelRef, RUSVEL_META_MODEL_TIER,
+};
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{AgentPort, StoragePort};
 
@@ -31,6 +33,9 @@ pub struct ChatRequest {
     pub message: String,
     #[serde(default)]
     pub conversation_id: Option<String>,
+    /// Overrides persisted chat config when set (`fast` | `balanced` | `premium`).
+    #[serde(default)]
+    pub model_tier: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -98,6 +103,14 @@ pub async fn chat_handler(
     // Build AgentConfig from chat config + profile
     let system_prompt = profile.to_system_prompt();
     let model_ref = parse_model_ref(&chat_config.model);
+    let tier = body
+        .model_tier
+        .as_deref()
+        .or(chat_config.model_tier.as_deref());
+    let mut meta = serde_json::Map::new();
+    if let Some(t) = tier {
+        meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!(t));
+    }
     let agent_config = AgentConfig {
         profile_id: None,
         session_id: SessionId::new(),
@@ -105,7 +118,7 @@ pub async fn chat_handler(
         tools: chat_config.allowed_tools.clone(),
         instructions: Some(system_prompt),
         budget_limit: chat_config.max_budget_usd,
-        metadata: serde_json::json!({}),
+        metadata: serde_json::Value::Object(meta),
     };
 
     // Build user input with conversation history context

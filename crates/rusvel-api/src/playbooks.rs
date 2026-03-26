@@ -1,0 +1,438 @@
+//! Playbooks — predefined multi-step pipelines (delegate_agent + FlowEngine).
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use axum::Json;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use chrono::Utc;
+use serde::Deserialize;
+use serde_json::json;
+
+use rusvel_core::domain::{Content, Part, Playbook, PlaybookAction, PlaybookRun, PlaybookRunStatus};
+use rusvel_core::id::FlowId;
+use crate::AppState;
+
+type ApiResult<T> = Result<Json<T>, (StatusCode, String)>;
+
+fn err(status: StatusCode, msg: impl Into<String>) -> (StatusCode, String) {
+    (status, msg.into())
+}
+
+// ── Store (module-local; playbooks are lightweight and not yet persisted) ──
+
+struct PlaybookStore {
+    user: std::sync::RwLock<HashMap<String, Playbook>>,
+    runs: std::sync::RwLock<HashMap<String, PlaybookRun>>,
+}
+
+impl PlaybookStore {
+    fn new() -> Self {
+        Self {
+            user: std::sync::RwLock::new(HashMap::new()),
+            runs: std::sync::RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+fn store() -> &'static PlaybookStore {
+    use std::sync::OnceLock;
+    static S: OnceLock<PlaybookStore> = OnceLock::new();
+    S.get_or_init(PlaybookStore::new)
+}
+
+fn builtin_playbooks() -> Vec<Playbook> {
+    vec![
+        Playbook {
+            id: "builtin-content-from-code".into(),
+            name: "Content from Code".into(),
+            description: "Analyze the codebase, draft a blog post, then review.".into(),
+            category: "content".into(),
+            steps: vec![
+                rusvel_core::domain::PlaybookStep {
+                    name: "Analyze".into(),
+                    description: "Survey the repo for themes worth writing about.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("CodeAnalyst".into()),
+                        prompt_template: "Analyze the current repository for 3–5 concrete themes suitable for a technical blog. Focus on architecture, interesting patterns, and lessons learned. Summarize in bullet points.\n\nContext:\n{{last_output}}".into(),
+                        tools: vec![
+                            "read_file".into(),
+                            "glob".into(),
+                            "grep".into(),
+                        ],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Draft".into(),
+                    description: "Turn the analysis into a draft post.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("TechnicalWriter".into()),
+                        prompt_template: "Write a concise technical blog draft (with title and sections) based on this analysis. Audience: senior engineers.\n\nAnalysis:\n{{last_output}}".into(),
+                        tools: vec!["read_file".into(), "write_file".into()],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Review".into(),
+                    description: "Review for clarity and accuracy.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("Editor".into()),
+                        prompt_template: "Review the draft below. List concrete improvements (max 5) and a short revised summary.\n\nDraft:\n{{last_output}}".into(),
+                        tools: vec![],
+                    },
+                },
+            ],
+            metadata: json!({"builtin": true}),
+        },
+        Playbook {
+            id: "builtin-opportunity-pipeline".into(),
+            name: "Opportunity Pipeline".into(),
+            description: "Scan sources, score opportunities, draft proposals.".into(),
+            category: "harvest".into(),
+            steps: vec![
+                rusvel_core::domain::PlaybookStep {
+                    name: "Scan".into(),
+                    description: "Identify candidate opportunities from configured sources.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("Sourcer".into()),
+                        prompt_template: "Outline a plan to scan and list new business opportunities relevant to this workspace (sources, filters, next actions). If you lack live data, describe the scan you would run.\n\nPrior context:\n{{last_output}}".into(),
+                        tools: vec!["read_file".into(), "grep".into()],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Score".into(),
+                    description: "Score and prioritize leads.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("Scorer".into()),
+                        prompt_template: "Given the scan summary below, propose a scoring rubric (0–10) and rank the top 3 opportunities with rationale.\n\n{{last_output}}".into(),
+                        tools: vec![],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Proposals".into(),
+                    description: "Draft outreach or proposal snippets.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("BizDev".into()),
+                        prompt_template: "Draft short proposal or outreach snippets (2–3 paragraphs total) for the top opportunity. Base it on:\n\n{{last_output}}".into(),
+                        tools: vec![],
+                    },
+                },
+            ],
+            metadata: json!({"builtin": true}),
+        },
+        Playbook {
+            id: "builtin-daily-brief".into(),
+            name: "Daily Brief".into(),
+            description: "Query department context, summarize, present an executive brief.".into(),
+            category: "forge".into(),
+            steps: vec![
+                rusvel_core::domain::PlaybookStep {
+                    name: "Gather".into(),
+                    description: "Collect signals across departments (as available).".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("ChiefOfStaff".into()),
+                        prompt_template: "Summarize what each RUSVEL department (code, content, harvest, finance, growth, gtm, product, support, infra, legal, distro, forge) would report as its top 1–2 items today. If unknown, say 'no signal' for that dept.\n\nNotes:\n{{last_output}}".into(),
+                        tools: vec!["read_file".into(), "grep".into()],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Summarize".into(),
+                    description: "Compress into themes and risks.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("Analyst".into()),
+                        prompt_template: "From the department notes below, extract themes, risks, and dependencies (bullet list).\n\n{{last_output}}".into(),
+                        tools: vec![],
+                    },
+                },
+                rusvel_core::domain::PlaybookStep {
+                    name: "Present".into(),
+                    description: "Executive one-pager.".into(),
+                    action: PlaybookAction::Agent {
+                        persona: Some("ExecutiveBrief".into()),
+                        prompt_template: "Produce a tight executive brief (max 200 words): headline, 3 priorities, 1 risk, 1 ask.\n\nInput:\n{{last_output}}".into(),
+                        tools: vec![],
+                    },
+                },
+            ],
+            metadata: json!({"builtin": true}),
+        },
+    ]
+}
+
+fn all_playbooks() -> Vec<Playbook> {
+    let mut out: Vec<Playbook> = builtin_playbooks();
+    let user = store().user.read().expect("playbook store poisoned");
+    out.extend(user.values().cloned());
+    out
+}
+
+fn resolve_playbook(id: &str) -> Option<Playbook> {
+    if let Some(p) = builtin_playbooks().into_iter().find(|b| b.id == id) {
+        return Some(p);
+    }
+    store().user.read().ok()?.get(id).cloned()
+}
+
+fn content_to_string(content: &Content) -> String {
+    content
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            Part::Text(t) => Some(t.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn interpolate(template: &str, ctx: &serde_json::Value) -> String {
+    let mut s = template.to_string();
+    if let Some(obj) = ctx.as_object() {
+        for (k, v) in obj {
+            let mut pat = String::from("{{");
+            pat.push_str(k);
+            pat.push_str("}}");
+            let rep = match v {
+                serde_json::Value::String(x) => x.clone(),
+                serde_json::Value::Null => String::new(),
+                x => x.to_string(),
+            };
+            s = s.replace(&pat, &rep);
+        }
+    }
+    s
+}
+
+async fn run_step(
+    state: &Arc<AppState>,
+    step: &rusvel_core::domain::PlaybookStep,
+    ctx: &mut serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    match &step.action {
+        PlaybookAction::Agent {
+            persona,
+            prompt_template,
+            tools,
+        } => {
+            let prompt = interpolate(prompt_template, ctx);
+            let mut args = json!({
+                "prompt": prompt,
+                "tools": tools,
+            });
+            if let Some(p) = persona {
+                args["persona"] = json!(p);
+            }
+            let tr = state
+                .tools
+                .call("delegate_agent", args)
+                .await
+                .map_err(|e| e.to_string())?;
+            let text = content_to_string(&tr.output);
+            ctx["last_output"] = json!(text);
+            Ok(json!({
+                "step": step.name,
+                "kind": "agent",
+                "success": tr.success,
+                "output": text,
+            }))
+        }
+        PlaybookAction::Flow {
+            flow_id,
+            input_mapping,
+        } => {
+            let engine = state
+                .flow_engine
+                .as_ref()
+                .map(|e| e.as_ref())
+                .ok_or_else(|| "Flow engine not available".to_string())?;
+            let fid = flow_id
+                .parse::<uuid::Uuid>()
+                .map(FlowId::from_uuid)
+                .map_err(|_| "invalid flow_id".to_string())?;
+            let trigger = if let Some(raw) = input_mapping {
+                serde_json::from_str(raw).unwrap_or_else(|_| {
+                    json!({ "context": ctx.clone(), "last_output": ctx.get("last_output").cloned().unwrap_or(json!(null)) })
+                })
+            } else {
+                json!({ "context": ctx.clone() })
+            };
+            let execution = engine
+                .run_flow(&fid, trigger)
+                .await
+                .map_err(|e| e.to_string())?;
+            let v = serde_json::to_value(&execution).map_err(|e| e.to_string())?;
+            ctx["last_output"] = v.clone();
+            Ok(json!({
+                "step": step.name,
+                "kind": "flow",
+                "execution": v,
+            }))
+        }
+        PlaybookAction::Approval { message } => Ok(json!({
+            "step": step.name,
+            "kind": "approval",
+            "message": message,
+            "status": "awaiting_approval",
+        })),
+    }
+}
+
+// ── Handlers ──────────────────────────────────────────────────────
+
+/// `GET /api/playbooks` — list built-in and user playbooks.
+pub async fn list_playbooks() -> ApiResult<Vec<Playbook>> {
+    Ok(Json(all_playbooks()))
+}
+
+/// `GET /api/playbooks/:id` — get one playbook.
+pub async fn get_playbook(Path(id): Path<String>) -> ApiResult<Playbook> {
+    let p =
+        resolve_playbook(&id).ok_or_else(|| err(StatusCode::NOT_FOUND, "playbook not found"))?;
+    Ok(Json(p))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreatePlaybookBody {
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub steps: Vec<rusvel_core::domain::PlaybookStep>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+/// `POST /api/playbooks` — create a user playbook.
+pub async fn create_playbook(Json(body): Json<CreatePlaybookBody>) -> ApiResult<serde_json::Value> {
+    let id = uuid::Uuid::now_v7().to_string();
+    if builtin_playbooks().iter().any(|b| b.id == id) {
+        return Err(err(StatusCode::CONFLICT, "id collision"));
+    }
+    let pb = Playbook {
+        id: id.clone(),
+        name: body.name,
+        description: body.description,
+        category: body.category,
+        steps: body.steps,
+        metadata: if body.metadata.is_null() {
+            json!({})
+        } else {
+            body.metadata
+        },
+    };
+    store()
+        .user
+        .write()
+        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "lock poisoned"))?
+        .insert(id.clone(), pb);
+    Ok(Json(json!({ "id": id })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RunPlaybookBody {
+    #[serde(default)]
+    pub variables: serde_json::Value,
+}
+
+/// `POST /api/playbooks/:id/run` — start a run (async).
+pub async fn run_playbook(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<RunPlaybookBody>,
+) -> ApiResult<serde_json::Value> {
+    let playbook =
+        resolve_playbook(&id).ok_or_else(|| err(StatusCode::NOT_FOUND, "playbook not found"))?;
+    let run_id = uuid::Uuid::now_v7().to_string();
+    let run = PlaybookRun {
+        id: run_id.clone(),
+        playbook_id: playbook.id.clone(),
+        status: PlaybookRunStatus::Running,
+        step_results: vec![],
+        started_at: Utc::now(),
+        completed_at: None,
+        error: None,
+    };
+    store()
+        .runs
+        .write()
+        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "lock poisoned"))?
+        .insert(run_id.clone(), run.clone());
+
+    let mut initial = body.variables;
+    if !initial.is_object() {
+        initial = json!({});
+    }
+    spawn_run_with_context(state, run, playbook, initial);
+
+    Ok(Json(json!({ "run_id": run_id })))
+}
+
+fn spawn_run_with_context(
+    state: Arc<AppState>,
+    mut run: PlaybookRun,
+    playbook: Playbook,
+    ctx: serde_json::Value,
+) {
+    tokio::spawn(async move {
+        let mut ctx = ctx;
+        if !ctx.is_object() {
+            ctx = json!({});
+        }
+        for step in &playbook.steps {
+            match run_step(&state, step, &mut ctx).await {
+                Ok(mut result) => {
+                    if let Some(obj) = result.as_object_mut() {
+                        if obj.get("kind").and_then(|k| k.as_str()) == Some("approval") {
+                            run.status = PlaybookRunStatus::Paused;
+                            run.step_results.push(result);
+                            run.completed_at = Some(Utc::now());
+                            if let Ok(mut g) = store().runs.write() {
+                                g.insert(run.id.clone(), run);
+                            }
+                            return;
+                        }
+                    }
+                    run.step_results.push(result);
+                }
+                Err(e) => {
+                    run.status = PlaybookRunStatus::Failed;
+                    run.error = Some(e);
+                    run.completed_at = Some(Utc::now());
+                    if let Ok(mut g) = store().runs.write() {
+                        g.insert(run.id.clone(), run);
+                    }
+                    return;
+                }
+            }
+        }
+        run.status = PlaybookRunStatus::Completed;
+        run.completed_at = Some(Utc::now());
+        if let Ok(mut g) = store().runs.write() {
+            g.insert(run.id.clone(), run);
+        }
+    });
+}
+
+/// `GET /api/playbooks/runs/:run_id` — status and step results.
+pub async fn get_run(Path(run_id): Path<String>) -> ApiResult<PlaybookRun> {
+    let g = store()
+        .runs
+        .read()
+        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "lock poisoned"))?;
+    let r = g
+        .get(&run_id)
+        .cloned()
+        .ok_or_else(|| err(StatusCode::NOT_FOUND, "run not found"))?;
+    Ok(Json(r))
+}
+
+/// `GET /api/playbooks/runs` — recent runs (newest first).
+pub async fn list_runs() -> ApiResult<Vec<PlaybookRun>> {
+    let g = store()
+        .runs
+        .read()
+        .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "lock poisoned"))?;
+    let mut runs: Vec<PlaybookRun> = g.values().cloned().collect();
+    runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    runs.truncate(100);
+    Ok(Json(runs))
+}

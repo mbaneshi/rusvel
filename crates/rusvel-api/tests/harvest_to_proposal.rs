@@ -263,6 +263,8 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         deploy: None,
         agent_runtime,
         tools,
+        terminal: None,
+        cdp: None,
     };
 
     (

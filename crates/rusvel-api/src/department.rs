@@ -19,7 +19,9 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
-use rusvel_core::domain::{AgentConfig, Content, EventFilter, ModelProvider, ModelRef, UserProfile};
+use rusvel_core::domain::{
+    AgentConfig, Content, EventFilter, ModelProvider, ModelRef, RUSVEL_META_MODEL_TIER, UserProfile,
+};
 use rusvel_core::id::{EventId, SessionId};
 use rusvel_core::ports::{AgentPort, StoragePort};
 use rusvel_core::registry::DepartmentDef;
@@ -381,6 +383,10 @@ pub async fn dept_chat(
 
     // Build AgentConfig for the runtime
     let model_ref = parse_model_ref(&resolved.model);
+    let mut meta = serde_json::Map::new();
+    if let Some(t) = &body.model_tier {
+        meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!(t));
+    }
     let agent_config = AgentConfig {
         profile_id: None,
         session_id: SessionId::new(),
@@ -388,7 +394,7 @@ pub async fn dept_chat(
         tools: resolved.allowed_tools.clone(),
         instructions: Some(resolved.system_prompt.clone()),
         budget_limit: resolved.max_budget_usd,
-        metadata: serde_json::json!({}),
+        metadata: serde_json::Value::Object(meta),
     };
 
     // Build the user message with conversation history context

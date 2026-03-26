@@ -86,6 +86,29 @@ impl RegistrationContext {
     pub fn build_registry(&self) -> DepartmentRegistry {
         DepartmentRegistry::from_manifests(&self.manifests)
     }
+
+    /// Consume the context after registration and return the registry plus
+    /// all subsystem contributions (tools, event subscriptions, job handlers).
+    pub fn finalize(self) -> DepartmentsBootArtifacts {
+        let registry = DepartmentRegistry::from_manifests(&self.manifests);
+        let tools = self.tools.into_tools();
+        let event_subscriptions = self.event_handlers.into_subscriptions();
+        let job_handlers = self.job_handlers.into_handlers();
+        DepartmentsBootArtifacts {
+            registry,
+            tools,
+            event_subscriptions,
+            job_handlers,
+        }
+    }
+}
+
+/// Output of [`RegistrationContext::finalize`]: registry and collected registrations.
+pub struct DepartmentsBootArtifacts {
+    pub registry: DepartmentRegistry,
+    pub tools: Vec<ToolRegistration>,
+    pub event_subscriptions: Vec<EventSubscription>,
+    pub job_handlers: HashMap<String, JobHandlerEntry>,
 }
 
 // ════════════════════════════════════════════════════════════════════

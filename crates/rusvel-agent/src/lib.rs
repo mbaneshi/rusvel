@@ -185,6 +185,20 @@ struct RunState {
     status: AgentStatus,
 }
 
+fn merge_llm_request_metadata(config: &AgentConfig) -> serde_json::Value {
+    let mut m = serde_json::Map::new();
+    if let serde_json::Value::Object(ref o) = config.metadata {
+        for (k, v) in o {
+            m.insert(k.clone(), v.clone());
+        }
+    }
+    m.insert(
+        RUSVEL_META_SESSION_ID.into(),
+        serde_json::Value::String(config.session_id.to_string()),
+    );
+    serde_json::Value::Object(m)
+}
+
 /// Agent orchestration runtime.
 ///
 /// Wraps [`LlmPort`], [`ToolPort`], and [`MemoryPort`] into a coherent
@@ -294,7 +308,7 @@ impl AgentRuntime {
             tools,
             temperature: None,
             max_tokens: None,
-            metadata: serde_json::json!({}),
+            metadata: merge_llm_request_metadata(config),
         }
     }
 
@@ -577,6 +591,22 @@ Output plain text only, no preamble.",
 }
 
 /// Inner streaming agent loop, factored out so it can be spawned as a task.
+/// For each entry in `metadata.ag_ui_state_deltas`, emit [`AgentEvent::StateDelta`].
+async fn emit_tool_ag_ui_state_deltas(
+    tx: &tokio::sync::mpsc::Sender<AgentEvent>,
+    metadata: &serde_json::Value,
+) {
+    if let Some(arr) = metadata.get("ag_ui_state_deltas").and_then(|v| v.as_array()) {
+        for d in arr {
+            let _ = tx
+                .send(AgentEvent::StateDelta {
+                    delta: d.clone(),
+                })
+                .await;
+        }
+    }
+}
+
 async fn run_streaming_loop(
     llm: &Arc<dyn LlmPort>,
     tools: &Arc<dyn ToolPort>,
@@ -707,6 +737,10 @@ async fn run_streaming_loop(
 
                 let tool_result = tools.call(&tool_name, effective_args).await;
                 tool_calls += 1;
+
+                if let Ok(ref r) = tool_result {
+                    emit_tool_ag_ui_state_deltas(tx, &r.metadata).await;
+                }
 
                 // Run post-tool-use hooks (informational).
                 run_hooks_post(hooks, &tool_name, &tool_args);

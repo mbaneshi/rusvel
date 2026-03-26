@@ -13,6 +13,7 @@ forge-engine = { workspace = true }
 code-engine = { workspace = true }
 content-engine = { workspace = true }
 harvest-engine = { workspace = true }
+rusvel-cdp = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

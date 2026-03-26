@@ -33,10 +33,24 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngi
                     let engine = engine.clone();
                     Box::pin(async move {
                         let path = args["path"].as_str().unwrap_or(".");
+                        let deltas = vec![json!({
+                            "tool": "code_analyze",
+                            "phase": "started",
+                            "path": path
+                        })];
                         match engine.analyze(Path::new(path)).await {
                             Ok(analysis) => {
                                 let summary = analysis.summary();
-                                ok_json(&summary)
+                                let mut deltas = deltas;
+                                deltas.push(json!({
+                                    "tool": "code_analyze",
+                                    "phase": "completed",
+                                    "repo_path": summary.repo_path,
+                                    "total_files": summary.total_files,
+                                    "total_symbols": summary.total_symbols,
+                                    "snapshot_id": summary.snapshot_id,
+                                }));
+                                ok_json_with_deltas(&summary, deltas)
                             }
                             Err(e) => err_result(e),
                         }
@@ -91,11 +105,23 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngi
 }
 
 fn ok_json<T: serde::Serialize>(val: &T) -> rusvel_core::error::Result<ToolResult> {
+    ok_json_with_deltas(val, vec![])
+}
+
+fn ok_json_with_deltas<T: serde::Serialize>(
+    val: &T,
+    deltas: Vec<serde_json::Value>,
+) -> rusvel_core::error::Result<ToolResult> {
     let output = serde_json::to_string_pretty(val).unwrap_or_default();
+    let metadata = if deltas.is_empty() {
+        json!({})
+    } else {
+        json!({ "ag_ui_state_deltas": deltas })
+    };
     Ok(ToolResult {
         success: true,
         output: Content::text(output),
-        metadata: json!({}),
+        metadata,
     })
 }
 

@@ -22,6 +22,9 @@ pub struct ChatConfig {
     pub allowed_tools: Vec<String>,
     pub disallowed_tools: Vec<String>,
     pub max_turns: Option<u32>,
+    /// Optional tier hint: `fast` | `balanced` | `premium` (see `rusvel_core::domain::ModelTier`).
+    #[serde(default)]
+    pub model_tier: Option<String>,
 }
 
 impl Default for ChatConfig {
@@ -34,6 +37,7 @@ impl Default for ChatConfig {
             allowed_tools: vec![],
             disallowed_tools: vec![],
             max_turns: None,
+            model_tier: None,
         }
     }
 }

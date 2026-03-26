@@ -17,7 +17,7 @@ use forge_engine::ForgeEngine;
 use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::{SessionPort, StoragePort};
+use rusvel_core::ports::{BrowserPort, SessionPort, StoragePort};
 
 // ── Active session config ────────────────────────────────────────
 
@@ -142,6 +142,26 @@ pub enum Commands {
     Gtm {
         #[command(subcommand)]
         action: departments::DeptAction,
+    },
+    /// Chrome CDP browser bridge (passive capture, tabs).
+    Browser {
+        #[command(subcommand)]
+        action: BrowserCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BrowserCmd {
+    /// Connect to Chrome remote debugging (default `http://127.0.0.1:9222`).
+    Connect {
+        endpoint: Option<String>,
+    },
+    /// Show whether the CLI has an active CDP session (connect first).
+    Status,
+    /// Print recent capture records as JSON.
+    Captures {
+        #[arg(long)]
+        platform: Option<String>,
     },
 }
 
@@ -286,7 +306,43 @@ pub async fn run(
             departments::handle_dept(departments::DeptCmd::Gtm { action }, storage, &engines)
                 .await
         }
+        Some(Commands::Browser { action }) => handle_browser(action).await,
     }
+}
+
+async fn handle_browser(cmd: BrowserCmd) -> Result<()> {
+    let cdp = rusvel_cdp::CdpClient::new();
+    match cmd {
+        BrowserCmd::Connect { endpoint } => {
+            let ep = endpoint.unwrap_or_else(|| "http://127.0.0.1:9222".into());
+            cdp.connect(&ep).await?;
+            println!("Connected to browser at {ep}");
+        }
+        BrowserCmd::Status => {
+            let connected = cdp.is_connected().await;
+            println!("browser connected: {connected}");
+        }
+        BrowserCmd::Captures { platform } => {
+            let list = cdp.captures_snapshot().await;
+            let filtered: Vec<serde_json::Value> = if let Some(p) = platform {
+                list.into_iter()
+                    .filter(|v| {
+                        v.get("DataCaptured")
+                            .and_then(|d| d.get("platform"))
+                            .and_then(|x| x.as_str())
+                            == Some(p.as_str())
+                    })
+                    .collect()
+            } else {
+                list
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&filtered).unwrap_or_else(|_| "[]".into())
+            );
+        }
+    }
+    Ok(())
 }
 
 pub(crate) async fn handle_session(cmd: SessionCmd, port: Arc<dyn SessionPort>) -> Result<()> {

@@ -9,7 +9,7 @@ use std::sync::{Arc, RwLock};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 
-use rusvel_core::domain::{ToolDefinition, ToolResult};
+use rusvel_core::domain::{ToolDefinition, ToolPermission, ToolPermissionMode, ToolResult};
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::ToolPort;
 
@@ -41,6 +41,7 @@ struct RegisteredTool {
 /// `&self` (interior mutability) while remaining `Send + Sync`.
 pub struct ToolRegistry {
     tools: RwLock<HashMap<String, RegisteredTool>>,
+    permissions: RwLock<Vec<ToolPermission>>,
 }
 
 impl ToolRegistry {
@@ -48,7 +49,81 @@ impl ToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: RwLock::new(HashMap::new()),
+            permissions: RwLock::new(Vec::new()),
         }
+    }
+
+    /// Add or replace a permission rule.
+    pub fn set_permission(&self, permission: ToolPermission) {
+        let mut perms = self.permissions.write().unwrap();
+        // Replace existing rule with same pattern + department_id, or push new.
+        if let Some(existing) = perms.iter_mut().find(|p| {
+            p.tool_pattern == permission.tool_pattern && p.department_id == permission.department_id
+        }) {
+            *existing = permission;
+        } else {
+            perms.push(permission);
+        }
+    }
+
+    /// Resolve the effective permission mode for a tool invocation.
+    ///
+    /// Priority: dept-specific exact > dept-specific prefix > dept-specific wildcard
+    ///         > global exact > global prefix > global wildcard > Auto (default).
+    pub fn check_permission(
+        &self,
+        tool_name: &str,
+        department_id: Option<&str>,
+    ) -> ToolPermissionMode {
+        let perms = self.permissions.read().unwrap();
+
+        // Score a pattern match: exact=3, prefix glob=2, wildcard=1, no match=0.
+        let match_score = |pattern: &str, name: &str| -> u8 {
+            if pattern == name {
+                3
+            } else if pattern == "*" {
+                1
+            } else if pattern.ends_with('*') && name.starts_with(&pattern[..pattern.len() - 1]) {
+                2
+            } else {
+                0
+            }
+        };
+
+        let mut best: Option<(u8, bool, &ToolPermissionMode)> = None; // (pattern_score, is_dept_specific, mode)
+
+        for perm in perms.iter() {
+            let score = match_score(&perm.tool_pattern, tool_name);
+            if score == 0 {
+                continue;
+            }
+
+            let is_dept = perm.department_id.is_some();
+            let dept_matches = match (&perm.department_id, department_id) {
+                (Some(pd), Some(dd)) => pd == dd,
+                (Some(_), None) => false,
+                (None, _) => true, // global rule applies to all
+            };
+
+            if !dept_matches {
+                continue;
+            }
+
+            let better = match best {
+                None => true,
+                Some((prev_score, prev_dept, _)) => {
+                    // dept-specific beats global; within same scope, higher score wins
+                    (is_dept, score) > (prev_dept, prev_score)
+                }
+            };
+
+            if better {
+                best = Some((score, is_dept, &perm.mode));
+            }
+        }
+
+        best.map(|(_, _, m)| m.clone())
+            .unwrap_or(ToolPermissionMode::Auto)
     }
 
     /// Register a tool definition together with its async handler.
@@ -145,7 +220,7 @@ impl ToolPort for ToolRegistry {
         Ok(())
     }
 
-    /// Look up a tool by name, validate args, and call its handler.
+    /// Look up a tool by name, validate args, check permissions, and call its handler.
     async fn call(&self, name: &str, args: serde_json::Value) -> Result<ToolResult> {
         let (handler, schema) = {
             let map = self.tools.read().unwrap();
@@ -160,6 +235,33 @@ impl ToolPort for ToolRegistry {
         };
 
         validate_args(&schema, &args)?;
+
+        // Extract optional department context from args.
+        let dept_id = args
+            .get("__department_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_owned());
+
+        match self.check_permission(name, dept_id.as_deref()) {
+            ToolPermissionMode::Locked => {
+                return Ok(ToolResult {
+                    success: false,
+                    output: rusvel_core::domain::Content::text(format!(
+                        "tool '{name}' is locked and cannot be executed"
+                    )),
+                    metadata: serde_json::json!({"permission": "locked"}),
+                });
+            }
+            ToolPermissionMode::Supervised => {
+                return Ok(ToolResult {
+                    success: true,
+                    output: rusvel_core::domain::Content::text("AWAITING_APPROVAL"),
+                    metadata: serde_json::json!({"permission": "supervised"}),
+                });
+            }
+            ToolPermissionMode::Auto => {}
+        }
+
         handler(args).await
     }
 

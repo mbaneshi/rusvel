@@ -19,6 +19,27 @@
 	let ws: WebSocket | null = null;
 	let connected = $state(false);
 	let error = $state('');
+	let resizeTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+
+	function postResize(rows: number, cols: number) {
+		if (rows <= 0 || cols <= 0) return;
+		const base = resolveHttpOrigin();
+		const url = `${base}/api/terminal/pane/${encodeURIComponent(paneId)}/resize`;
+		fetch(url, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ rows, cols })
+		}).catch(() => {});
+	}
+
+	function scheduleResizeNotify() {
+		if (!term) return;
+		if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+		resizeTimer = setTimeout(() => {
+			resizeTimer = undefined;
+			postResize(term!.cols, term!.rows);
+		}, 80);
+	}
 
 	function resolveHttpOrigin(): string {
 		if (apiOrigin) return apiOrigin.replace(/\/$/, '');
@@ -45,6 +66,8 @@
 
 		ws.onopen = () => {
 			connected = true;
+			fitAddon?.fit();
+			scheduleResizeNotify();
 			term?.focus();
 		};
 
@@ -101,12 +124,14 @@
 
 		const resizeObserver = new ResizeObserver(() => {
 			fitAddon?.fit();
+			scheduleResizeNotify();
 		});
 		resizeObserver.observe(termEl);
 
 		connect(paneId);
 
 		return () => {
+			if (resizeTimer !== undefined) clearTimeout(resizeTimer);
 			resizeObserver.disconnect();
 		};
 	});

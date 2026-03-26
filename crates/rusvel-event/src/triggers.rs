@@ -35,6 +35,7 @@ impl TriggerManager {
             events.clone(),
             agent.clone(),
             None,
+            None,
         ));
         Self {
             triggers: Arc::new(RwLock::new(Vec::new())),
