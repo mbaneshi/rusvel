@@ -22,5 +22,16 @@ axum = { workspace = true }
 tower = { workspace = true }
 futures = { workspace = true }
 
+[dev-dependencies]
+async-trait = { workspace = true }
+rusvel-agent = { workspace = true }
+rusvel-config = { workspace = true }
+rusvel-db = { workspace = true }
+rusvel-event = { workspace = true }
+rusvel-memory = { workspace = true }
+rusvel-tool = { workspace = true }
+tempfile = "3"
+tower = { workspace = true }
+
 [lints]
 workspace = true
