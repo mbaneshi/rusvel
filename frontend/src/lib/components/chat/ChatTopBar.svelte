@@ -5,7 +5,7 @@
 	import { cached } from '$lib/cache';
 
 	let config: ChatConfig = $state({
-		model: 'sonnet',
+		model: 'cursor/sonnet-4',
 		effort: 'medium',
 		max_budget_usd: null,
 		permission_mode: 'default',
@@ -86,7 +86,7 @@
 			class="rounded-md border border-[var(--border)] bg-[var(--secondary)] px-2 py-1 text-xs text-[var(--foreground)] focus:border-[var(--ring)] focus:outline-none"
 		>
 			{#each models as m}
-				<option value={m.value}>{m.label}</option>
+				<option value={m.value} title={m.description}>{m.label}</option>
 			{/each}
 		</select>
 	</div>

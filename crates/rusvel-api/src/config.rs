@@ -1,7 +1,8 @@
 //! Configuration API — manages model, effort, tools, and budget settings.
 //!
 //! Settings are persisted in `ObjectStore` and used by the chat handler
-//! to construct `claude -p` commands.
+//! to build [`AgentConfig`](rusvel_core::domain::AgentConfig) (Claude CLI,
+//! Cursor agent, Ollama, etc. depending on `model`).
 
 use std::sync::Arc;
 
@@ -30,7 +31,10 @@ pub struct ChatConfig {
 impl Default for ChatConfig {
     fn default() -> Self {
         Self {
-            model: "sonnet".into(),
+            // Default to Cursor terminal agent (`rusvel-llm` CursorAgentProvider) to avoid
+            // Claude Max / API limits when Cursor subscription is available. Switch to
+            // `sonnet` / `opus` / `haiku` in the UI for Claude CLI routing.
+            model: "cursor/sonnet-4".into(),
             effort: "medium".into(),
             max_budget_usd: None,
             permission_mode: "default".into(),
@@ -124,19 +128,34 @@ pub struct ModelOption {
 pub async fn list_models() -> Json<Vec<ModelOption>> {
     Json(vec![
         ModelOption {
+            value: "cursor/sonnet-4".into(),
+            label: "Cursor · Sonnet 4".into(),
+            description: "Cursor terminal agent (cursor agent --print) — uses Cursor quota; RUSVEL tools not forwarded".into(),
+        },
+        ModelOption {
+            value: "cursor/gpt-5".into(),
+            label: "Cursor · GPT-5".into(),
+            description: "Cursor agent with OpenAI-class model id (if available on your account)".into(),
+        },
+        ModelOption {
+            value: "cursor/sonnet-4-thinking".into(),
+            label: "Cursor · Sonnet thinking".into(),
+            description: "Cursor agent with extended reasoning variant (if listed by cursor agent --list-models)".into(),
+        },
+        ModelOption {
             value: "sonnet".into(),
-            label: "Sonnet".into(),
-            description: "Fast, capable — daily coding".into(),
+            label: "Claude · Sonnet".into(),
+            description: "Claude CLI — fast, capable (Claude Max / API)".into(),
         },
         ModelOption {
             value: "opus".into(),
-            label: "Opus".into(),
-            description: "Most capable — complex reasoning".into(),
+            label: "Claude · Opus".into(),
+            description: "Claude CLI — most capable".into(),
         },
         ModelOption {
             value: "haiku".into(),
-            label: "Haiku".into(),
-            description: "Fastest — quick tasks".into(),
+            label: "Claude · Haiku".into(),
+            description: "Claude CLI — fastest".into(),
         },
     ])
 }
