@@ -3,7 +3,7 @@
 //! **ADR-007:** Every struct carries `metadata: serde_json::Value` for
 //! schema evolution — engines can stash extra fields without migrations.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -766,6 +766,30 @@ pub enum Priority {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Executive brief (Forge — cross-department daily digest)
+// ════════════════════════════════════════════════════════════════════
+
+/// Cross-department executive digest from the Forge mission pipeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutiveBrief {
+    pub id: String,
+    pub date: NaiveDate,
+    pub sections: Vec<BriefSection>,
+    pub summary: String,
+    pub action_items: Vec<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// One department’s slice of an [`ExecutiveBrief`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BriefSection {
+    pub department: String,
+    pub status: String,
+    pub highlights: Vec<String>,
+    pub metrics: serde_json::Value,
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Event  (ADR-005: kind is String, not enum)
 // ════════════════════════════════════════════════════════════════════
 
@@ -795,6 +819,126 @@ pub struct EventFilter {
     pub kind: Option<String>,
     pub since: Option<DateTime<Utc>>,
     pub limit: Option<u32>,
+}
+
+/// Subscribes to event patterns and starts an agent run or flow execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventTrigger {
+    pub id: String,
+    pub name: String,
+    /// Glob-style pattern for [`Event::kind`] (e.g. `browser.data.*`, `content.published`, `*`).
+    pub event_pattern: String,
+    /// Action to run when the pattern matches.
+    pub action: TriggerAction,
+    /// When set, only [`Event::source`] must equal this department id.
+    pub department_id: Option<String>,
+    pub enabled: bool,
+}
+
+/// What to run when an [`EventTrigger`] fires.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TriggerAction {
+    /// Run an agent with the given config knobs.
+    RunAgent {
+        persona: Option<String>,
+        prompt_template: String,
+        tools: Vec<String>,
+    },
+    /// Execute a flow by id (UUID string).
+    RunFlow { flow_id: String },
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Starter kits (one-click department bundles)
+// ════════════════════════════════════════════════════════════════════
+
+/// A curated bundle of agents, skills, rules, and workflows for a persona or use case.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StarterKit {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub target_audience: String,
+    pub departments: Vec<String>,
+    pub entities: Vec<KitEntity>,
+}
+
+/// One entity to create when a [`StarterKit`] is installed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KitEntity {
+    pub kind: String,
+    pub department: String,
+    pub name: String,
+    pub definition: serde_json::Value,
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Browser / CDP (BrowserPort)
+// ════════════════════════════════════════════════════════════════════
+
+/// Open browser tab metadata from CDP target listing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabInfo {
+    pub id: String,
+    pub url: String,
+    pub title: String,
+    pub platform: Option<String>,
+}
+
+/// Events streamed from [`crate::ports::BrowserPort::observe`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BrowserEvent {
+    DataCaptured {
+        platform: String,
+        kind: String,
+        data: serde_json::Value,
+        tab_id: String,
+    },
+    Navigation { tab_id: String, url: String },
+    TabChanged { tab_id: String, opened: bool },
+}
+
+impl BrowserEvent {
+    /// One-line log for terminal / TUI (CDP capture).
+    ///
+    /// Example: `[14:32:01] upwork | job_listing | "Senior Rust Developer - Remote" | score: 8.5`
+    #[must_use]
+    pub fn terminal_log_line(&self) -> Option<String> {
+        match self {
+            BrowserEvent::DataCaptured {
+                platform,
+                kind,
+                data,
+                ..
+            } => {
+                let title_part = data
+                    .get("title")
+                    .or_else(|| data.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| format!("{s:?}"))
+                    .unwrap_or_else(|| "\"—\"".to_string());
+                let score_part = data
+                    .get("score")
+                    .and_then(|v| v.as_f64())
+                    .map(|s| format!(" | score: {s:.1}"))
+                    .unwrap_or_default();
+                let time = Utc::now().format("%H:%M:%S");
+                Some(format!(
+                    "[{time}] {platform} | {kind} | {title_part}{score_part}"
+                ))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// How aggressively the agent may drive the browser.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrowsingMode {
+    Passive,
+    Assisted,
+    Autonomous,
+    Vision,
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1230,6 +1374,28 @@ pub struct FlowNodeResult {
     pub error: Option<String>,
     pub started_at: Option<DateTime<Utc>>,
     pub finished_at: Option<DateTime<Utc>>,
+}
+
+fn default_empty_object() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+/// Persisted progress for durable flow execution (checkpoint / resume).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowCheckpoint {
+    pub flow_id: String,
+    pub execution_id: String,
+    pub completed_nodes: Vec<String>,
+    pub node_outputs: std::collections::HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    pub node_results: std::collections::HashMap<String, FlowNodeResult>,
+    pub failed_node: Option<String>,
+    pub error: Option<String>,
+    #[serde(default = "default_empty_object")]
+    pub trigger_data: serde_json::Value,
+    #[serde(default)]
+    pub started_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
 }
 
 #[cfg(test)]

@@ -3,6 +3,10 @@
 //! Events are both broadcast to live subscribers (via `tokio::sync::broadcast`)
 //! and persisted to an [`EventStore`] for later retrieval.
 
+pub mod triggers;
+
+pub use triggers::TriggerManager;
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
