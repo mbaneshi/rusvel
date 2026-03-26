@@ -3,7 +3,7 @@
 
 Agents are AI personas with specific roles, instructions, tools, and budgets. Each department has a default agent, and you can create custom agents for specialized tasks.
 
-Agents are powered by the `AgentPort` runtime, which wraps LLM access, tool execution, and memory into a single orchestration layer.
+Agents are powered by the **AgentRuntime** (in `rusvel-agent`), which wraps LLM access, tool execution, streaming, and memory into a single orchestration layer.
 
 ## Agent Profile Structure
 
@@ -75,7 +75,7 @@ curl -X PUT http://localhost:3000/api/agents/<id> \
 curl -X DELETE http://localhost:3000/api/agents/<id>
 ```
 
-## Model Selection
+## Model Selection and ModelTier Routing
 
 Agents can use any configured LLM provider:
 
@@ -83,9 +83,23 @@ Agents can use any configured LLM provider:
 |----------|---------------|
 | Ollama | `llama3.1`, `mistral`, `codellama` |
 | Claude API | `claude-sonnet-4-20250514`, `claude-opus-4-20250514` |
+| Claude CLI | Real streaming via Claude CLI binary |
 | OpenAI | `gpt-4o`, `gpt-4o-mini` |
 
 The model is set per agent and falls back to the department default, then the global default.
+
+**ModelTier routing** automatically classifies models into three tiers -- Haiku (fast/cheap), Sonnet (balanced), Opus (powerful/expensive). The **CostTracker** in MetricStore logs token usage and costs per tier, enabling budget-aware model selection.
+
+## Tools and ScopedToolRegistry
+
+Agents have access to **22+ tools**:
+
+- **10 built-in tools:** `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `bash`, `git_status`, `git_diff`, `git_log`, and `tool_search` (meta-tool)
+- **12 engine tools:** harvest (5: scan, score, propose, list, pipeline), content (5: draft, adapt, publish, list, approve), code (2: analyze, search)
+
+The **ScopedToolRegistry** filters tools per department -- the Content department sees content tools, the Code department sees code tools. This prevents tool overload and keeps agents focused.
+
+**Deferred tool loading** via the `tool_search` meta-tool saves ~85% of tool-description tokens. Instead of loading all tool schemas upfront, agents discover tools on-demand by searching for capabilities they need.
 
 ## Agent Budgets
 
@@ -98,10 +112,19 @@ When the budget is exceeded, the agent pauses and requests approval to continue.
 When you chat with a department, here is what happens:
 
 1. Your message goes to the department's agent
-2. The agent runtime loads the system prompt (department prompt + active rules)
-3. The LLM generates a response, optionally calling tools
-4. Tool results are fed back to the LLM for follow-up
-5. The final response is returned to the chat
-6. An event is logged with tokens used and tools called
+2. The **AgentRuntime** loads the system prompt (department prompt + active rules via `load_rules_for_engine()`)
+3. The **ScopedToolRegistry** provides department-specific tools
+4. The LLM generates a response via `run_streaming()`, emitting **AgentEvents** (text chunks, tool calls, tool results)
+5. Tool calls are executed and results fed back to the LLM in a tool-use loop
+6. **LlmStreamEvent** provides character-by-character SSE streaming to the frontend
+7. An event is logged with tokens used and tools called
 
 Engines never call the LLM directly (ADR-009). They always go through the AgentPort, which handles prompt construction, tool routing, retries, and memory injection.
+
+## Frontend Components
+
+The chat interface includes:
+
+- **ToolCallCard** -- renders tool invocations inline in the chat
+- **ApprovalCard** -- shows approval requests for sensitive operations
+- **ApprovalQueue** -- sidebar badge showing pending approvals across all departments

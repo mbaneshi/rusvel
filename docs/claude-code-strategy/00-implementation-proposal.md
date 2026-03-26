@@ -113,7 +113,7 @@ test-files.md       → "mock ports for engines, in-memory SQLite for DB"
 
 **Action 3.3 — SessionStart: Status check**
 - Hook: On session start → run `cargo test --quiet | tail -1` + show last commit
-- Why: Every session starts with truth: "149 tests passing, last commit: wire MCP flag". Prevents working on a broken branch unknowingly.
+- Why: Every session starts with truth: "222 tests passing, last commit: batch LlmPort + hybrid RAG". Prevents working on a broken branch unknowingly.
 
 **Reasoning:** Day 3 closes the automation loop. Format, notify, verify — all automatic. The developer's cognitive load drops significantly.
 
@@ -302,7 +302,7 @@ Frontend without reliable LLM backend shows empty states. Fix the engine before 
 CI/CD guards code that exists. We need to write the code first (expose engines, wire MCP, build approval flow). CI/CD in Week 3 guards everything we built in Weeks 1-2.
 
 ### "Why not skip subagents and just code?"
-A solo builder working 20 crates cannot hold all conventions in their head. Subagents enforce conventions by construction. The `rust-engine` subagent literally cannot import adapter crates because its system prompt forbids it. This prevents the #1 architectural risk.
+A solo builder working 48 crates cannot hold all conventions in their head. Subagents enforce conventions by construction. The `rust-engine` subagent literally cannot import adapter crates because its system prompt forbids it. This prevents the #1 architectural risk.
 
 ### "Why skills before second engine?"
 Because the `/wire-engine` skill is used to expose the second engine. Building the skill first means the second AND third AND fourth engine all benefit. Tool before task.

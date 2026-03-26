@@ -1,5 +1,7 @@
 # RUSVEL Onboarding, Guidance & Documentation Strategy
 
+> **STATUS: PARTIALLY IMPLEMENTED.** The following proposals are now wired in the frontend: OnboardingChecklist (P3), CommandPalette (P4), ProductTour (P6), DeptHelpTooltip (P8). The docs-site (P5) is built with mdBook at `docs-site/`.
+
 > Goal: Make the first 60 seconds magical, then get out of the way.
 
 ## Stack

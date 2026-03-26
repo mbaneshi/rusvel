@@ -1,7 +1,8 @@
 # Capability Engine: Self-Configuring AI Infrastructure
 
-> Describe what you need → RUSVEL discovers, builds, and wires the capability.
-> No manual agent/skill/workflow creation. The system builds itself.
+> **STATUS: IMPLEMENTED.** `POST /api/capability/build` and `!build` chat command are wired. AI-powered discovery + JSON bundle install for agents, skills, rules, MCP servers, hooks. See ADR-013.
+
+> Original proposal below (Describe what you need → RUSVEL discovers, builds, and wires the capability).
 
 ---
 

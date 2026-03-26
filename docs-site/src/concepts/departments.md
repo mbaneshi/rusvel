@@ -3,24 +3,38 @@
 
 RUSVEL organizes work into 12 departments, each with its own specialized AI agent. Together they form a virtual agency that a solo founder can command from a single interface.
 
-Departments are defined declaratively in a TOML registry. Adding a new department requires zero code changes -- just a new TOML block.
+Departments follow the **DepartmentApp pattern** (ADR-014). Each department lives in its own `dept-*` crate that implements the `DepartmentApp` trait, declares its capabilities via a `DepartmentManifest`, and registers with the host at boot. Adding a new department means adding a new `dept-*` crate -- zero changes to `rusvel-core`.
 
-## The 12 Departments
+## The DepartmentApp Trait
 
-| Department | Engine | Focus |
-|-----------|--------|-------|
-| [Forge](/departments/forge/) | Forge | Agent orchestration, goal planning, mission management |
-| [Code](/departments/code/) | Code | Code intelligence, implementation, testing |
-| [Content](/departments/content/) | Content | Content creation, publishing, calendar |
-| [Harvest](/departments/harvest/) | Harvest | Opportunity discovery, proposals, pipeline |
-| [GTM](/departments/gtm/) | GoToMarket | CRM, outreach, deals, invoicing |
-| [Finance](/departments/finance/) | Finance | Revenue, expenses, runway, tax |
-| [Product](/departments/product/) | Product | Roadmap, pricing, feedback |
-| [Growth](/departments/growth/) | Growth | Funnels, cohorts, KPIs, retention |
-| [Distro](/departments/distro/) | Distribution | Marketplace, SEO, affiliates |
-| [Legal](/departments/legal/) | Legal | Contracts, compliance, IP |
-| [Support](/departments/support/) | Support | Tickets, knowledge base, NPS |
-| [Infra](/departments/infra/) | Infra | Deployments, monitoring, incidents |
+Every department crate implements this contract:
+
+```rust
+pub trait DepartmentApp: Send + Sync {
+    fn manifest(&self) -> DepartmentManifest;
+    fn register(&self, ctx: &mut RegistrationContext) -> Result<()>;
+}
+```
+
+The `DepartmentManifest` declares the department's ID, name, icon, color, system prompt, capabilities, tabs, quick actions, routes, tools, and CLI commands. The host collects all manifests to generate the `DepartmentRegistry`, API routes, CLI subcommands, and frontend navigation.
+
+## The 13 dept-* Crates
+
+| Crate | Department | Engine | Focus |
+|-------|-----------|--------|-------|
+| `dept-forge` | [Forge](/departments/forge/) | Forge | Agent orchestration, goal planning, mission management |
+| `dept-code` | [Code](/departments/code/) | Code | Code intelligence, implementation, testing |
+| `dept-content` | [Content](/departments/content/) | Content | Content creation, publishing, calendar |
+| `dept-harvest` | [Harvest](/departments/harvest/) | Harvest | Opportunity discovery, proposals, pipeline |
+| `dept-flow` | [Flow](/departments/forge/) | Flow | DAG workflow engine, visual workflow builder |
+| `dept-gtm` | [GTM](/departments/gtm/) | GoToMarket | CRM, outreach, deals, invoicing |
+| `dept-finance` | [Finance](/departments/finance/) | Finance | Revenue, expenses, runway, tax |
+| `dept-product` | [Product](/departments/product/) | Product | Roadmap, pricing, feedback |
+| `dept-growth` | [Growth](/departments/growth/) | Growth | Funnels, cohorts, KPIs, retention |
+| `dept-distro` | [Distro](/departments/distro/) | Distribution | Marketplace, SEO, affiliates |
+| `dept-legal` | [Legal](/departments/legal/) | Legal | Contracts, compliance, IP |
+| `dept-support` | [Support](/departments/support/) | Support | Tickets, knowledge base, NPS |
+| `dept-infra` | [Infra](/departments/infra/) | Infra | Deployments, monitoring, incidents |
 
 ## Department UI Structure
 
@@ -28,7 +42,7 @@ Each department page has two panels:
 
 ### Chat Panel (right side)
 
-The AI agent for this department. Send messages, get responses, use quick actions. The agent has access to department-specific tools and knowledge.
+The AI agent for this department. Send messages, get responses, use quick actions. The agent has access to department-specific tools via the **ScopedToolRegistry** -- each department only sees tools relevant to its domain.
 
 ### Department Panel (left side)
 
@@ -56,7 +70,7 @@ The main **Chat** page (not tied to any department) runs the God Agent. This age
 
 ## Quick Actions
 
-Each department has predefined quick-action buttons that send a prompt to the agent with one click. These are defined in the department registry and can be customized.
+Each department has predefined quick-action buttons that send a prompt to the agent with one click. These are declared in the department's `DepartmentManifest` and can be customized.
 
 ## Department Configuration
 

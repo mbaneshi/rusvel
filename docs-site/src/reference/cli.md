@@ -1,10 +1,12 @@
 
 ## Overview
 
-RUSVEL uses [Clap 4](https://docs.rs/clap) for its CLI. The binary is `rusvel` (or `cargo run --` during development).
+RUSVEL provides a **three-tier CLI** using [Clap 4](https://docs.rs/clap). The binary is `rusvel` (or `cargo run --` during development).
 
-```bash
-rusvel [OPTIONS] [COMMAND]
+```
+rusvel <dept> <action>     # Tier 1: One-shot commands (12 departments)
+rusvel shell               # Tier 2: Interactive REPL (reedline, autocomplete, history)
+rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 ```
 
 ## Global Options
@@ -12,14 +14,15 @@ rusvel [OPTIONS] [COMMAND]
 | Flag | Description |
 |------|------------|
 | `--mcp` | Start the MCP server (stdio JSON-RPC) instead of the web server |
+| `--tui` | Launch the TUI dashboard (ratatui, 4-panel layout) |
 | `--help` | Show help information |
 | `--version` | Show version |
 
-## Commands
+## Starting the Server
 
 ### `rusvel` (no subcommand)
 
-Starts the API web server on `0.0.0.0:3000`. Serves the REST API and, if built, the SvelteKit frontend.
+Starts the API web server on `0.0.0.0:3000`. Serves the REST API and the embedded SvelteKit frontend.
 
 ```bash
 cargo run
@@ -33,108 +36,94 @@ Starts the MCP (Model Context Protocol) server over stdio. Used for integration 
 cargo run -- --mcp
 ```
 
+### `rusvel --tui`
 
-### `rusvel forge`
-
-Forge engine commands for mission planning and goals.
-
-### `rusvel forge mission`
-
-Mission planning subcommands.
-
-#### `rusvel forge mission today`
-
-Generate a prioritized daily plan for the active session. The AI reads your goals, checks engine states, and produces a task list.
+Launches the TUI dashboard with 4 panels: Tasks, Goals, Pipeline, Events. Press `q` to exit.
 
 ```bash
-cargo run -- forge mission today
+cargo run -- --tui
 ```
 
-**Output:**
-```
-Generating daily plan...
+## Tier 1: Department One-Shot Commands
 
-Daily Plan -- 2026-03-23
-==================================================
-  1. [High] Finalize API documentation
-  2. [Medium] Draft landing page copy
-  3. [Low] Review dependency updates
-
-Focus areas:
-  - Ship the auth feature
-
-Notes: Focus on high-priority items first.
-```
-
-#### `rusvel forge mission goals`
-
-List all goals for the active session.
+All 12 departments support these actions:
 
 ```bash
-cargo run -- forge mission goals
+rusvel <dept> status              # Show department status summary
+rusvel <dept> list [--kind X]     # List department items
+rusvel <dept> events              # Show recent events for department
 ```
 
-**Output:**
-```
-ID                                      TITLE                      TIMEFRAME   STATUS      PROGRESS
-----------------------------------------------------------------------------------------------------
-a1b2c3d4-...                            Launch MVP                 Month       Active      25%
-```
+**Departments:** `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`
 
-#### `rusvel forge mission goal add <title>`
+### Engine-Specific Commands
 
-Add a new goal to the active session.
+Some departments have additional commands powered by their wired engines:
 
 ```bash
-cargo run -- forge mission goal add "Launch MVP" \
-  --description "Ship the minimum viable product" \
-  --timeframe month
+# Code department
+rusvel code analyze [path]        # Analyze code: parser, dependency graph, metrics
+rusvel code search <query>        # BM25 search across codebase
+
+# Content department
+rusvel content draft <topic>      # Draft content on a topic
+rusvel content from-code          # Generate content from code analysis
+
+# Harvest department
+rusvel harvest pipeline           # Show opportunity pipeline
 ```
 
-**Options:**
+### Forge Commands
+
+```bash
+rusvel forge mission today        # Generate a prioritized daily plan
+rusvel forge mission goals        # List all goals for active session
+rusvel forge mission goal add <title>  # Add a new goal
+rusvel forge mission review       # Generate a periodic review
+```
+
+**Options for `goal add`:**
+
 | Flag | Default | Description |
 |------|---------|------------|
 | `--description` | `""` | Goal description |
 | `--timeframe` | `month` | One of: `day`, `week`, `month`, `quarter` |
 
-#### `rusvel forge mission review`
+**Options for `review`:**
 
-Generate a periodic review summarizing accomplishments, blockers, insights, and next actions.
-
-```bash
-cargo run -- forge mission review --period week
-```
-
-**Options:**
 | Flag | Default | Description |
 |------|---------|------------|
 | `--period` | `week` | One of: `day`, `week`, `month`, `quarter` |
 
-**Output:**
-```
-Generating Week review...
+## Tier 2: Interactive REPL
 
-Review (Week)
-==================================================
-
-Accomplishments:
-  - Completed API auth flow
-  - Deployed staging environment
-
-Blockers:
-  - Waiting on SSL certificate
-
-Next actions:
-  - Follow up on SSL certificate
-  - Schedule design review
+```bash
+rusvel shell
 ```
 
-## Active Session
+Launches an interactive shell powered by [reedline](https://docs.rs/reedline) with:
 
-The CLI stores the active session ID in `~/.rusvel/active_session`. All `forge` commands operate on this session. Change it with `session switch`.
+- **Tab completion** for commands and department names
+- **Ctrl+R** history search
+- **`use <dept>`** to switch department context
+- All Tier 1 commands available without the `rusvel` prefix
+
+## Session Management
+
+```bash
+rusvel session create <name>      # Create a new session
+rusvel session list               # List all sessions
+rusvel session switch <id>        # Switch active session
+```
+
+The CLI stores the active session ID in `~/.rusvel/active_session`. All `forge` commands operate on this session.
 
 If no active session is set, commands that require one will error:
 
 ```
 Error: No active session. Run `rusvel session create <name>` first.
 ```
+
+## Active Session
+
+The CLI stores the active session ID in `~/.rusvel/active_session`. All `forge` commands operate on this session. Change it with `session switch`.

@@ -8,7 +8,6 @@ RUSVEL stores its configuration and data in `~/.rusvel/`:
 ├── active_session       # UUID of the currently active session
 ├── config.toml          # Global configuration
 ├── profile.toml         # User profile (name, email, bio)
-├── departments.toml     # Department registry overrides (optional)
 └── rusvel.db            # SQLite database (WAL mode)
 ```
 
@@ -90,6 +89,26 @@ curl -X PUT http://localhost:3000/api/dept/code/config \
 | `system_prompt` | string | Override the department system prompt |
 | `max_turns` | number | Max conversation turns per request |
 
+## Department Registry (DepartmentApp Pattern)
+
+Since ADR-014, departments are no longer configured via TOML files. Each department is a self-contained `dept-*` crate implementing the `DepartmentApp` trait, which declares its capabilities via a `DepartmentManifest`:
+
+```rust
+pub struct DepartmentManifest {
+    pub id: String,              // e.g., "code"
+    pub name: String,            // e.g., "Code"
+    pub title: String,           // e.g., "Code Intelligence"
+    pub icon: String,            // e.g., "terminal"
+    pub color: String,           // e.g., "emerald"
+    pub system_prompt: String,   // Department-specific system prompt
+    pub capabilities: Vec<String>,
+    pub tabs: Vec<String>,
+    pub quick_actions: Vec<QuickAction>,
+}
+```
+
+The host (`rusvel-app`) collects manifests from all 13 `dept-*` crates at boot to generate the `DepartmentRegistry`. Adding a new department means adding a new `dept-*` crate -- zero changes to `rusvel-core`.
+
 ## Environment Variables
 
 | Variable | Purpose |
@@ -99,29 +118,6 @@ curl -X PUT http://localhost:3000/api/dept/code/config \
 | `RUSVEL_DB_PATH` | Override database file path |
 | `RUSVEL_CONFIG_DIR` | Override config directory (default: `~/.rusvel`) |
 | `RUST_LOG` | Logging level (e.g., `info`, `debug`, `rusvel_api=debug`) |
-
-## Department Registry (departments.toml)
-
-The department registry can be customized by placing a `departments.toml` file in `~/.rusvel/`. This is optional -- RUSVEL has built-in defaults for all 12 departments.
-
-Each department block defines:
-
-```toml
-[[department]]
-id = "custom"
-name = "Custom"
-title = "Custom Department"
-engine_kind = "Forge"
-icon = "+"
-color = "blue"
-system_prompt = "You are a custom department agent..."
-capabilities = ["custom_capability"]
-tabs = ["actions", "agents", "events"]
-
-[[department.quick_actions]]
-label = "Do Something"
-prompt = "Execute the custom task..."
-```
 
 ## Database
 

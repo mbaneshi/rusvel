@@ -125,7 +125,7 @@ Report: PASS/FAIL with details.
 
 This is where it gets powerful. RUSVEL **already has an MCP server** (`rusvel-mcp`). Once wired, Claude Code can **directly manage RUSVEL sessions, goals, and missions** through MCP tools.
 
-### Current MCP Tools (built, not wired)
+### Current MCP Tools (wired via `--mcp` flag)
 
 ```
 session_list    → List all RUSVEL sessions
@@ -136,9 +136,9 @@ mission_goals   → List goals
 mission_add_goal → Add a new goal
 ```
 
-### How to Wire It
+### Wiring (Already Done)
 
-**Step 1: Wire `--mcp` flag in main.rs** (one if-branch):
+The `--mcp` flag is wired in main.rs:
 ```rust
 if args.mcp {
     rusvel_mcp::serve(app_state).await?;

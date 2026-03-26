@@ -1,5 +1,7 @@
 # RusvelBase — Supabase for RUSVEL
 
+> **STATUS: IMPLEMENTED (Phases 1-3).** `rusvel-schema` crate for introspection, API routes at `/api/db/*` (tables, schema, rows, SQL runner), and Database Browser UI in the frontend. See `rusvel-schema` crate and `db_routes` API module.
+
 > A Supabase-equivalent database platform adapted for the single-binary Rust + SQLite + SvelteKit stack.
 > Created: 2026-03-24
 

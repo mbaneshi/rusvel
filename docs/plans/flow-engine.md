@@ -1,6 +1,8 @@
 # RUSVEL Flow — n8n-style Workflow Automation Engine
 
-> DAG-based workflow engine with visual builder, triggers, conditionals, and error handling — all within the single-binary constraint.
+> **STATUS: IMPLEMENTED.** Flow Engine is wired with petgraph DAG executor, 3 node types (code, condition, agent), 7 API routes at `/api/flows`, and visual workflow builder in the frontend. See `flow-engine` and `dept-flow` crates.
+
+> Original proposal below (DAG-based workflow engine with visual builder, triggers, conditionals, and error handling — all within the single-binary constraint).
 
 ## Motivation
 

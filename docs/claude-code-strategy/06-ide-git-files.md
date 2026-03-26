@@ -151,7 +151,7 @@ fi
 ### Multi-Format Support for RUSVEL
 
 **Code files (all formats):**
-- Rust (`.rs`) — 20 crates, primary language
+- Rust (`.rs`) — 48 crates, primary language
 - Svelte (`.svelte`) — frontend components and pages
 - TypeScript (`.ts`) — frontend logic, stores, API client
 - CSS (`.css`) — app.css with design tokens
