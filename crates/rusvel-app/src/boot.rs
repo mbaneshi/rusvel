@@ -19,21 +19,8 @@ use rusvel_core::department::{
     DepartmentsBootArtifacts, EventSubscription, RegistrationContext, resolve_dependency_order,
     validate_unique_ids,
 };
-use rusvel_core::domain::JobKind;
 use rusvel_core::ports::*;
 use rusvel_event::EventBus;
-use tokio::sync::broadcast;
-
-/// Map a queued [`JobKind`] to the string key departments use in [`JobHandlerRegistrar`].
-pub fn department_job_registry_key(kind: &JobKind) -> String {
-    match kind {
-        JobKind::ContentPublish => "content.publish".into(),
-        JobKind::CodeAnalyze => "code.analyze".into(),
-        JobKind::HarvestScan => "harvest.scan".into(),
-        JobKind::Custom(s) => s.clone(),
-        _ => String::new(),
-    }
-}
 
 /// Subscribe to live [`EventBus`] broadcasts and invoke matching department handlers.
 pub fn spawn_department_event_dispatch(
@@ -69,8 +56,8 @@ pub fn spawn_department_event_dispatch(
                         }
                     }
                 }
-                Err(broadcast::RecvError::Lagged(_)) => {}
-                Err(broadcast::RecvError::Closed) => break,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
         }
     });
