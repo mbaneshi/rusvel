@@ -46,8 +46,8 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 
 The heart of the system. Contains:
 
-- **19 port traits** (14 Port + 5 Store) -- interfaces that engines depend on (LlmPort, AgentPort, ToolPort, EventPort, StoragePort + 5 sub-stores, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort)
-- **82+ shared domain types** -- Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, DepartmentManifest, etc.
+- **20 port traits** in `ports.rs` — includes five `*Store` subtraits under the storage model, **`BrowserPort`**, and primary ports (LlmPort, AgentPort, ToolPort, EventPort, StoragePort, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort). `DepartmentApp` is defined under `department/`.
+- **~100** `pub struct` / `pub enum` in `domain.rs`, plus shared types — Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, DepartmentManifest, etc.
 - Zero framework dependencies
 
 ### Layer 2: Adapters
@@ -69,7 +69,8 @@ Concrete implementations of the port traits:
 | `rusvel-vector` | VectorStorePort | LanceDB vector store |
 | `rusvel-deploy` | DeployPort | Deployment adapter |
 | `rusvel-terminal` | TerminalPort | Terminal interaction adapter |
-| `rusvel-builtin-tools` | — | 9 built-in tools for agent execution |
+| `rusvel-builtin-tools` | — | Built-in tools for agents (file, shell, git, etc.) + optional `tool_search` meta-tool |
+| `rusvel-cdp` | — | Chrome DevTools Protocol client (Browser/CDP wiring) |
 | `rusvel-engine-tools` | — | Engine-specific tool wiring |
 | `rusvel-mcp-client` | — | MCP client for external MCP servers |
 | `rusvel-schema` | — | Database schema introspection (RusvelBase) |
@@ -116,15 +117,15 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 
 ```
 rusvel/
-├── crates/                   48 crates total
-│   ├── rusvel-core/          19 port traits (14 Port + 5 Store) + domain types + DepartmentApp
+├── crates/                   50 workspace members
+│   ├── rusvel-core/          20 port traits in ports.rs + domain types + DepartmentApp
 │   ├── rusvel-db/            SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           4 LLM providers
 │   ├── rusvel-agent/         Agent runtime (LLM+Tool+Memory)
 │   ├── rusvel-event/         Event bus + persistence
 │   ├── rusvel-memory/        FTS5 session-namespaced search
 │   ├── rusvel-tool/          Tool registry + JSON Schema
-│   ├── rusvel-builtin-tools/ 9 built-in tools for agent execution
+│   ├── rusvel-builtin-tools/ Built-in + meta tools for agent execution
 │   ├── rusvel-engine-tools/  Engine-specific tool wiring
 │   ├── rusvel-mcp-client/    MCP client for external servers
 │   ├── rusvel-jobs/          Central job queue
@@ -135,6 +136,7 @@ rusvel/
 │   ├── rusvel-vector/        Vector store (LanceDB)
 │   ├── rusvel-schema/        Database schema introspection
 │   ├── rusvel-terminal/      Terminal interaction adapter
+│   ├── rusvel-cdp/           CDP client (browser automation)
 │   ├── forge-engine/         Agent orchestration + Mission
 │   ├── code-engine/          Code intelligence
 │   ├── harvest-engine/       Opportunity discovery
@@ -158,7 +160,7 @@ rusvel/
 │   ├── rusvel-mcp/           MCP server (stdio JSON-RPC)
 │   └── rusvel-app/           Binary entry point
 ├── frontend/                 SvelteKit 5 + Tailwind 4
-├── Cargo.toml                Workspace manifest (48 members)
+├── Cargo.toml                Workspace manifest (50 members)
 └── CLAUDE.md                 Project conventions
 ```
 
@@ -172,7 +174,9 @@ rusvel/
 6. **Human approval gates** on content publishing and outreach sending (ADR-008).
 7. **Each crate stays under 2000 lines.** Single responsibility.
 
-## The 19 Port Traits (14 Port + 5 Store)
+## Port traits (`rusvel-core/src/ports.rs`)
+
+There are **20** `pub trait` definitions in `ports.rs` (including the five `*Store` subtraits). The table below lists the main contracts; see the source for the exact set.
 
 | Port | Responsibility |
 |------|---------------|
@@ -195,3 +199,4 @@ rusvel/
 | `VectorStorePort` | Vector storage and search (LanceDB) |
 | `DeployPort` | Deployment operations |
 | `TerminalPort` | Terminal interaction and display |
+| `BrowserPort` | Browser/CDP observation and actions |

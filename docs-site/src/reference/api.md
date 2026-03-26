@@ -1,188 +1,184 @@
 
 ## Overview
 
-RUSVEL exposes a JSON REST API on port 3000 via Axum. 124 handler functions across 23 modules. All endpoints are prefixed with `/api/`. CORS is enabled for all origins.
+RUSVEL exposes a JSON REST API on port **3000** via Axum. All endpoints use the `/api/` prefix. CORS is enabled for all origins.
+
+**Scale (verify on `main`):** the main router in `crates/rusvel-api/src/lib.rs` registers **105** `.route(` chains. Handler logic is split across **26** modules (one `*.rs` per module, excluding `lib.rs`). That is **not** the same as “105 HTTP methods” — a single chain can register `get().post()`.
+
+**Router modules:** `agents`, `analytics`, `approvals`, `browser`, `build_cmd`, `capability`, `chat`, `config`, `db_routes`, `department`, `engine_routes`, `flow_routes`, `help`, `hook_dispatch`, `hooks`, `kits`, `knowledge`, `mcp_servers`, `playbooks`, `routes`, `rules`, `skills`, `system`, `terminal`, `visual_report`, `workflows`.
+
+For canonical metrics and gaps, see **[Repository status](./repository-status.md)**.
+
+---
 
 ## Core
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/health` | Health check, returns server status |
-| `GET` | `/api/config` | Get global configuration |
-| `PUT` | `/api/config` | Update global configuration |
-| `GET` | `/api/config/models` | List available LLM models |
-| `GET` | `/api/config/tools` | List available tools |
-| `GET` | `/api/analytics` | Get analytics dashboard data |
-| `GET` | `/api/profile` | Get user profile |
-| `PUT` | `/api/profile` | Update user profile |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/brief` | Executive brief |
+| `POST` | `/api/brief/generate` | Generate brief |
+| `GET` | `/api/config` | Global configuration |
+| `PUT` | `/api/config` | Update configuration |
+| `GET` | `/api/config/models` | List LLM models |
+| `GET` | `/api/config/tools` | List tools |
+| `GET` | `/api/analytics` | Analytics dashboard data |
+| `GET` | `/api/profile` | User profile |
+| `PUT` | `/api/profile` | Update profile |
 
 ## Sessions
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/sessions` | List all sessions |
-| `POST` | `/api/sessions` | Create a new session |
-| `GET` | `/api/sessions/{id}` | Get a session by ID |
-| `GET` | `/api/sessions/{id}/mission/today` | Generate daily plan for session |
-| `GET` | `/api/sessions/{id}/mission/goals` | List goals for session |
-| `POST` | `/api/sessions/{id}/mission/goals` | Create a goal in session |
-| `GET` | `/api/sessions/{id}/events` | Query events for session |
+|--------|------|-------------|
+| `GET` | `/api/sessions` | List sessions |
+| `POST` | `/api/sessions` | Create session |
+| `GET` | `/api/sessions/{id}` | Get session |
+| `GET` | `/api/sessions/{id}/mission/today` | Daily plan |
+| `GET` | `/api/sessions/{id}/mission/goals` | List goals |
+| `POST` | `/api/sessions/{id}/mission/goals` | Create goal |
+| `GET` | `/api/sessions/{id}/events` | Query events |
 
-## Chat (God Agent)
+## Chat (God agent)
 
 | Method | Path | Description |
-|--------|------|------------|
-| `POST` | `/api/chat` | Send a message to the God Agent |
-| `GET` | `/api/chat/conversations` | List all God Agent conversations |
-| `GET` | `/api/chat/conversations/{id}` | Get conversation history by ID |
+|--------|------|-------------|
+| `POST` | `/api/chat` | Send message (SSE) |
+| `GET` | `/api/chat/conversations` | List conversations |
+| `GET` | `/api/chat/conversations/{id}` | Conversation history |
 
 ## Departments
 
-Departments use parameterized routes. Replace `{dept}` with the department ID: `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`.
+Replace `{dept}` with: `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`.
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/departments` | List all department definitions |
-| `POST` | `/api/dept/{dept}/chat` | Send a message to a department agent |
-| `GET` | `/api/dept/{dept}/chat/conversations` | List conversations for department |
-| `GET` | `/api/dept/{dept}/chat/conversations/{id}` | Get department conversation history |
-| `GET` | `/api/dept/{dept}/config` | Get department configuration |
-| `PUT` | `/api/dept/{dept}/config` | Update department configuration |
-| `GET` | `/api/dept/{dept}/events` | Query events for department |
+|--------|------|-------------|
+| `GET` | `/api/departments` | List department definitions |
+| `POST` | `/api/dept/{dept}/chat` | Department chat (SSE) |
+| `GET` | `/api/dept/{dept}/chat/conversations` | List conversations |
+| `GET` | `/api/dept/{dept}/chat/conversations/{id}` | History |
+| `GET` | `/api/dept/{dept}/config` | Department config |
+| `PUT` | `/api/dept/{dept}/config` | Update config |
+| `GET` | `/api/dept/{dept}/events` | Department events |
 
-## Engine-Specific Routes
-
-Wired engines expose additional endpoints under the department namespace:
+## Engine-specific routes
 
 | Method | Path | Description |
-|--------|------|------------|
-| `POST` | `/api/dept/code/analyze` | Run code analysis (parser, dependency graph, metrics) |
-| `POST` | `/api/dept/code/search` | BM25 search across codebase |
-| `POST` | `/api/dept/content/draft` | Draft content on a topic |
-| `POST` | `/api/dept/content/from-code` | Generate content from code analysis |
-| `POST` | `/api/dept/content/adapt` | Adapt content for a platform |
-| `POST` | `/api/dept/content/publish` | Publish content (requires approval) |
-| `GET` | `/api/dept/content/calendar` | Get content calendar |
-| `GET` | `/api/dept/content/analytics` | Get content analytics |
-| `POST` | `/api/dept/harvest/scan` | Scan sources for opportunities |
-| `POST` | `/api/dept/harvest/score` | Score an opportunity |
-| `POST` | `/api/dept/harvest/propose` | Generate a proposal |
-| `GET` | `/api/dept/harvest/pipeline` | Get opportunity pipeline |
-| `GET` | `/api/dept/harvest/sources` | List configured sources |
+|--------|------|-------------|
+| `POST` | `/api/dept/code/analyze` | Code analysis |
+| `GET` | `/api/dept/code/search` | BM25 search |
+| `POST` | `/api/dept/content/draft` | Draft content |
+| `POST` | `/api/dept/content/from-code` | Content from code analysis |
+| `PATCH` | `/api/dept/content/{id}/approve` | Approve content item |
+| `POST` | `/api/dept/content/publish` | Publish (may require approval) |
+| `GET` | `/api/dept/content/list` | List content items |
+| `POST` | `/api/dept/harvest/score` | Score opportunity |
+| `POST` | `/api/dept/harvest/scan` | Scan sources |
+| `POST` | `/api/dept/harvest/proposal` | Generate proposal |
+| `GET` | `/api/dept/harvest/pipeline` | Pipeline |
+| `GET` | `/api/dept/harvest/list` | List harvest items |
 
-## Flow Engine
-
-DAG workflow engine with petgraph. Supports code, condition, and agent node types.
+## Flow engine (DAG)
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/flows` | List all flows |
-| `POST` | `/api/flows` | Create a flow |
-| `GET` | `/api/flows/{id}` | Get a flow by ID |
-| `PUT` | `/api/flows/{id}` | Update a flow |
-| `DELETE` | `/api/flows/{id}` | Delete a flow |
-| `POST` | `/api/flows/{id}/run` | Execute a flow |
-| `GET` | `/api/flows/{id}/status` | Get flow execution status |
+|--------|------|-------------|
+| `GET` / `POST` | `/api/flows` | List / create flows |
+| `GET` / `PUT` / `DELETE` | `/api/flows/{id}` | Get / update / delete |
+| `POST` | `/api/flows/{id}/run` | Run flow |
+| `GET` | `/api/flows/{id}/executions` | List executions |
+| `GET` | `/api/flows/{id}/executions/{exec_id}/panes` | Execution panes |
+| `GET` | `/api/flows/executions/{id}` | Get execution |
+| `POST` | `/api/flows/executions/{id}/resume` | Resume |
+| `POST` | `/api/flows/executions/{id}/retry/{node_id}` | Retry node |
+| `GET` | `/api/flows/executions/{id}/checkpoint` | Checkpoint |
+| `GET` | `/api/flows/node-types` | List node types |
+
+## Playbooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/playbooks/runs` | List runs |
+| `GET` | `/api/playbooks/runs/{run_id}` | Get run |
+| `GET` / `POST` | `/api/playbooks` | List / create playbook |
+| `GET` | `/api/playbooks/{id}` | Get playbook |
+| `POST` | `/api/playbooks/{id}/run` | Run playbook |
+
+## Starter kits
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/kits` | List kits |
+| `GET` | `/api/kits/{id}` | Get kit |
+| `POST` | `/api/kits/{id}/install` | Install kit |
 
 ## Knowledge / RAG
 
-Vector-backed knowledge base for semantic search.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/knowledge` | List entries |
+| `POST` | `/api/knowledge/ingest` | Ingest |
+| `POST` | `/api/knowledge/search` | Semantic search |
+| `POST` | `/api/knowledge/hybrid-search` | Hybrid search |
+| `GET` | `/api/knowledge/stats` | Stats |
+| `GET` | `/api/knowledge/related` | Related entries |
+| `DELETE` | `/api/knowledge/{id}` | Delete entry |
+
+## Database (RusvelBase)
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/knowledge` | List knowledge entries |
-| `POST` | `/api/knowledge` | Add a knowledge entry |
-| `GET` | `/api/knowledge/{id}` | Get a knowledge entry |
-| `POST` | `/api/knowledge/search` | Semantic search across knowledge base |
-| `DELETE` | `/api/knowledge/{id}` | Delete a knowledge entry |
-
-## Database Browser (RusvelBase)
-
-Schema introspection, table viewer, and SQL runner.
-
-| Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/db/tables` | List all database tables |
-| `GET` | `/api/db/tables/{table}` | Get table schema |
-| `GET` | `/api/db/tables/{table}/rows` | Query rows from a table |
-| `POST` | `/api/db/query` | Execute a SQL query |
+|--------|------|-------------|
+| `GET` | `/api/db/tables` | List tables |
+| `GET` | `/api/db/tables/{table}/schema` | Table schema |
+| `GET` | `/api/db/tables/{table}/rows` | Table rows |
+| `POST` | `/api/db/sql` | Run SQL |
 
 ## Approvals
 
-Human-in-the-loop approval queue for content publishing and outreach.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/approvals` | Pending jobs |
+| `POST` | `/api/approvals/{id}/approve` | Approve |
+| `POST` | `/api/approvals/{id}/reject` | Reject |
+
+## Agents, skills, rules, workflows, MCP, hooks
+
+Standard REST under `/api/agents`, `/api/skills`, `/api/rules`, `/api/workflows`, `/api/mcp-servers`, `/api/hooks`. Workflows: `POST /api/workflows/{id}/run`. Hooks: `GET /api/hooks/events` for event types.
+
+## Capability and help
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/approvals` | List pending approvals |
-| `POST` | `/api/approvals/{id}/approve` | Approve a pending item |
-| `POST` | `/api/approvals/{id}/reject` | Reject a pending item |
+|--------|------|-------------|
+| `POST` | `/api/capability/build` | Capability / `!build` bundle |
+| `POST` | `/api/help` | AI help |
 
-## Agents CRUD
-
-| Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/agents` | List all agents |
-| `POST` | `/api/agents` | Create an agent |
-| `GET` | `/api/agents/{id}` | Get an agent by ID |
-| `PUT` | `/api/agents/{id}` | Update an agent |
-| `DELETE` | `/api/agents/{id}` | Delete an agent |
-
-## Skills CRUD
+## System and visual regression
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/skills` | List all skills |
-| `POST` | `/api/skills` | Create a skill |
-| `GET` | `/api/skills/{id}` | Get a skill by ID |
-| `PUT` | `/api/skills/{id}` | Update a skill |
-| `DELETE` | `/api/skills/{id}` | Delete a skill |
+|--------|------|-------------|
+| `POST` | `/api/system/test` | Run tests |
+| `POST` | `/api/system/build` | Run build |
+| `GET` | `/api/system/status` | Status |
+| `POST` | `/api/system/fix` | Self-fix |
+| `POST` | `/api/system/ingest-docs` | Ingest docs |
+| `GET` / `POST` | `/api/system/visual-report` | Visual reports |
+| `POST` | `/api/system/visual-report/self-correct` | Self-correct from diffs |
+| `POST` | `/api/system/visual-test` | Run visual tests |
 
-## Rules CRUD
-
-| Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/rules` | List all rules |
-| `POST` | `/api/rules` | Create a rule |
-| `GET` | `/api/rules/{id}` | Get a rule by ID |
-| `PUT` | `/api/rules/{id}` | Update a rule |
-| `DELETE` | `/api/rules/{id}` | Delete a rule |
-
-## Workflows
+## Terminal
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/workflows` | List all workflows |
-| `POST` | `/api/workflows` | Create a workflow |
-| `GET` | `/api/workflows/{id}` | Get a workflow by ID |
-| `PUT` | `/api/workflows/{id}` | Update a workflow |
-| `DELETE` | `/api/workflows/{id}` | Delete a workflow |
-| `POST` | `/api/workflows/{id}/run` | Execute a workflow with variables |
+|--------|------|-------------|
+| `GET` | `/api/terminal/dept/{dept_id}` | Dept terminal pane |
+| `GET` | `/api/terminal/runs/{run_id}/panes` | Run panes |
+| `GET` | `/api/terminal/ws` | Terminal WebSocket |
 
-## MCP Servers
+## Browser (CDP)
 
 | Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/mcp-servers` | List configured MCP servers |
-| `POST` | `/api/mcp-servers` | Add an MCP server |
-| `PUT` | `/api/mcp-servers/{id}` | Update an MCP server |
-| `DELETE` | `/api/mcp-servers/{id}` | Remove an MCP server |
-
-## Hooks
-
-| Method | Path | Description |
-|--------|------|------------|
-| `GET` | `/api/hooks` | List all hooks |
-| `POST` | `/api/hooks` | Create a hook |
-| `PUT` | `/api/hooks/{id}` | Update a hook |
-| `DELETE` | `/api/hooks/{id}` | Delete a hook |
-| `GET` | `/api/hooks/events` | List available hook event types |
-
-## System
-
-| Method | Path | Description |
-|--------|------|------------|
-| `POST` | `/api/capability/build` | Build a new capability from natural language (`!build` command) |
-| `POST` | `/api/help` | AI-powered help -- ask questions about RUSVEL |
-| `POST` | `/api/system/visual-test` | Run visual regression tests |
-| `GET` | `/api/system/visual-report` | Get visual test report |
-| `POST` | `/api/system/visual-report/self-correct` | Auto-generate fix skills/rules from visual diffs |
+|--------|------|-------------|
+| `GET` | `/api/browser/status` | Status |
+| `POST` | `/api/browser/connect` | Connect |
+| `GET` | `/api/browser/tabs` | Tabs |
+| `POST` | `/api/browser/observe/{tab}` | Observe |
+| `GET` | `/api/browser/captures` | Captures |
+| `GET` | `/api/browser/captures/stream` | Capture stream |
+| `POST` | `/api/browser/act` | Action |

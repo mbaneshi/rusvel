@@ -35,6 +35,7 @@
 
 # Reference
 
+- [Repository status](./reference/repository-status.md)
 - [CLI](./reference/cli.md)
 - [API](./reference/api.md)
 - [Configuration](./reference/configuration.md)

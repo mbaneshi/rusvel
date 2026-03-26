@@ -52,12 +52,12 @@ If you skip Ollama, you can configure Claude API or OpenAI keys instead.
 ## Clone and Build
 
 ```bash
-git clone https://github.com/your-org/rusvel.git
+git clone https://github.com/mbaneshi/rusvel.git
 cd rusvel
 cargo build
 ```
 
-The workspace has 48 crates. First build takes a few minutes; subsequent builds are incremental.
+The workspace has **50** members (see [Repository status](../reference/repository-status.md)). First build takes a few minutes; subsequent builds are incremental.
 
 ## Build the Frontend
 
@@ -77,10 +77,10 @@ Run the full test suite to confirm everything works:
 cargo test
 ```
 
-You should see all 222 tests passing across 30 test binaries:
+You should see on the order of **~399** tests passing (exact count changes over time). Use `cargo test` exit code 0 as the gate.
 
 ```
-test result: ok. 222 passed; 0 failed
+test result: ok. … passed; 0 failed
 ```
 
 ### Test individual crates

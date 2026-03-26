@@ -20,8 +20,10 @@ cargo run
 - **12 Departments** — Forge, Code, Content, Harvest, GTM, Finance, Product, Growth, Distribution, Legal, Support, Infra
 - **Knowledge/RAG** — fastembed + lancedb for semantic search over your documents
 - **Self-Improvement** — The app can analyze and improve its own codebase
-- **48 Rust crates** — Hexagonal architecture with 19 port traits (14 Port + 5 Store)
-- **222 tests** in 30 test binaries across the workspace, 0 failures
+- **50 workspace members** — Hexagonal architecture; **20** port traits in `rusvel-core/src/ports.rs` (including five `*Store` subtraits and `BrowserPort`)
+- **~399 tests** (~61 test targets); full `cargo test` passes in a normal dev environment
+
+See **[Repository status](./reference/repository-status.md)** for canonical metrics and links to `docs/status/current-state.md` on GitHub.
 
 ## Architecture
 
