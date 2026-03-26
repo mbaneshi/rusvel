@@ -13,15 +13,21 @@
 //! provides a catalog of reusable agent personas.
 
 pub mod persona;
+pub mod verification;
 pub mod workflow;
 
 pub use persona::PersonaCatalog;
+pub use verification::{
+    LlmCritiqueStep, RulesComplianceStep, VerificationChain, VerificationContext,
+    VerificationResult, VerificationStep,
+};
 pub use workflow::{Workflow, WorkflowRunner, WorkflowStep};
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -30,22 +36,147 @@ use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::*;
 use rusvel_core::ports::{AgentPort, LlmPort, MemoryPort, ToolPort};
 
+/// A hook handler invoked before or after a tool call.
+pub type HookHandler = Arc<dyn Fn(&str, &serde_json::Value) -> HookDecision + Send + Sync>;
+
 /// Maximum iterations in the agent loop to prevent runaways.
 const MAX_ITERATIONS: u32 = 10;
+
+/// When conversation turns exceed this count, older turns are summarized.
+const COMPACT_THRESHOLD: usize = 30;
+
+/// After compaction, this many trailing [`LlmMessage`] entries are kept verbatim (plus optional system).
+const COMPACT_KEEP_RECENT: usize = 10;
 
 /// Events emitted during a streaming agent run.
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     /// Incremental text chunk from the LLM.
     TextDelta { text: String },
-    /// A tool is being called.
-    ToolCall { name: String, args: serde_json::Value },
+    /// A tool is being called (includes provider tool call id when available).
+    ToolCall {
+        tool_call_id: String,
+        name: String,
+        args: serde_json::Value,
+    },
     /// Tool execution completed.
-    ToolResult { name: String, output: String, is_error: bool },
+    ToolResult {
+        tool_call_id: String,
+        name: String,
+        output: String,
+        is_error: bool,
+    },
+    /// Partial state for AG-UI clients (JSON Patch / arbitrary delta); rarely emitted.
+    StateDelta { delta: serde_json::Value },
     /// The agent run completed successfully.
     Done { output: AgentOutput },
     /// An error occurred.
     Error { message: String },
+}
+
+/// Wire-format events for AG-UI (Agent–User Interaction) compatible clients.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgUiEvent {
+    RunStarted { run_id: String, timestamp: String },
+    TextDelta { text: String },
+    ToolCallStart {
+        tool_call_id: String,
+        tool_name: String,
+        args: serde_json::Value,
+    },
+    ToolCallEnd {
+        tool_call_id: String,
+        tool_name: String,
+        output: String,
+        is_error: bool,
+    },
+    StateDelta { delta: serde_json::Value },
+    StepStarted { step_id: String, step_name: String },
+    StepCompleted { step_id: String },
+    RunCompleted { run_id: String, output: String },
+    RunFailed { run_id: String, error: String },
+}
+
+impl AgUiEvent {
+    /// SSE `event:` field (upper snake case).
+    pub fn sse_name(&self) -> &'static str {
+        match self {
+            Self::RunStarted { .. } => "RUN_STARTED",
+            Self::TextDelta { .. } => "TEXT_DELTA",
+            Self::ToolCallStart { .. } => "TOOL_CALL_START",
+            Self::ToolCallEnd { .. } => "TOOL_CALL_END",
+            Self::StateDelta { .. } => "STATE_DELTA",
+            Self::StepStarted { .. } => "STEP_STARTED",
+            Self::StepCompleted { .. } => "STEP_COMPLETED",
+            Self::RunCompleted { .. } => "RUN_COMPLETED",
+            Self::RunFailed { .. } => "RUN_FAILED",
+        }
+    }
+}
+
+fn agent_output_to_plain(output: &AgentOutput) -> String {
+    output
+        .content
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            Part::Text(t) => Some(t.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Maps internal [`AgentEvent`] to AG-UI wire format (excluding run prelude).
+pub fn agent_event_to_ag_ui(run_id: &str, event: AgentEvent) -> AgUiEvent {
+    match event {
+        AgentEvent::TextDelta { text } => AgUiEvent::TextDelta { text },
+        AgentEvent::ToolCall {
+            tool_call_id,
+            name,
+            args,
+        } => AgUiEvent::ToolCallStart {
+            tool_call_id,
+            tool_name: name,
+            args,
+        },
+        AgentEvent::ToolResult {
+            tool_call_id,
+            name,
+            output,
+            is_error,
+        } => AgUiEvent::ToolCallEnd {
+            tool_call_id,
+            tool_name: name,
+            output,
+            is_error,
+        },
+        AgentEvent::StateDelta { delta } => AgUiEvent::StateDelta { delta },
+        AgentEvent::Done { output } => AgUiEvent::RunCompleted {
+            run_id: run_id.to_string(),
+            output: agent_output_to_plain(&output),
+        },
+        AgentEvent::Error { message } => AgUiEvent::RunFailed {
+            run_id: run_id.to_string(),
+            error: message,
+        },
+    }
+}
+
+/// JSON body for one SSE `data:` line, with `conversation_id` for routing.
+pub fn ag_ui_json_with_conversation(ev: &AgUiEvent, conversation_id: &str) -> String {
+    let mut v = match serde_json::to_value(ev) {
+        Ok(v) => v,
+        Err(_) => serde_json::json!({}),
+    };
+    if let Some(obj) = v.as_object_mut() {
+        obj.insert(
+            "conversation_id".into(),
+            serde_json::Value::String(conversation_id.to_string()),
+        );
+    }
+    serde_json::to_string(&v).unwrap_or_else(|_| "{}".to_string())
 }
 
 /// Internal state for a single agent run.
@@ -65,6 +196,7 @@ pub struct AgentRuntime {
     #[allow(dead_code)] // will be used for context retrieval in future iterations
     memory: Arc<dyn MemoryPort>,
     runs: RwLock<HashMap<RunId, RunState>>,
+    hooks: RwLock<Vec<(ToolHookConfig, HookHandler)>>,
 }
 
 impl AgentRuntime {
@@ -79,6 +211,57 @@ impl AgentRuntime {
             tools,
             memory,
             runs: RwLock::new(HashMap::new()),
+            hooks: RwLock::new(Vec::new()),
+        }
+    }
+
+    /// Register a hook to run before or after tool calls.
+    pub fn register_hook(&self, config: ToolHookConfig, handler: HookHandler) {
+        // Use blocking write since this is called during setup, not in async hot path.
+        self.hooks.blocking_write().push((config, handler));
+    }
+
+    /// Run pre-tool-use hooks, returning the (possibly modified) args or a denial.
+    async fn run_pre_hooks(
+        &self,
+        tool_name: &str,
+        args: &serde_json::Value,
+    ) -> std::result::Result<serde_json::Value, String> {
+        let hooks = self.hooks.read().await;
+        let mut current_args = args.clone();
+        for (cfg, handler) in hooks.iter() {
+            if cfg.hook_point != HookPoint::PreToolUse {
+                continue;
+            }
+            if !match_tool_pattern(&cfg.tool_pattern, tool_name) {
+                continue;
+            }
+            match handler(tool_name, &current_args) {
+                HookDecision::Allow => {}
+                HookDecision::Modify(new_args) => {
+                    debug!(hook_id = %cfg.id, %tool_name, "pre-hook modified args");
+                    current_args = new_args;
+                }
+                HookDecision::Deny(reason) => {
+                    debug!(hook_id = %cfg.id, %tool_name, %reason, "pre-hook denied tool call");
+                    return Err(reason);
+                }
+            }
+        }
+        Ok(current_args)
+    }
+
+    /// Run post-tool-use hooks (informational only, results are ignored).
+    async fn run_post_hooks(&self, tool_name: &str, args: &serde_json::Value) {
+        let hooks = self.hooks.read().await;
+        for (cfg, handler) in hooks.iter() {
+            if cfg.hook_point != HookPoint::PostToolUse {
+                continue;
+            }
+            if !match_tool_pattern(&cfg.tool_pattern, tool_name) {
+                continue;
+            }
+            let _ = handler(tool_name, args);
         }
     }
 
@@ -161,10 +344,11 @@ impl AgentRuntime {
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         let llm = self.llm.clone();
         let tools = self.tools.clone();
+        let hooks_snapshot = self.hooks.read().await.clone();
         let run_id = *run_id;
 
         tokio::spawn(async move {
-            let result = run_streaming_loop(&llm, &tools, &config, &run_id, input, &tx).await;
+            let result = run_streaming_loop(&llm, &tools, &config, &run_id, input, &tx, &hooks_snapshot).await;
             match result {
                 Ok(output) => {
                     let _ = tx.send(AgentEvent::Done { output }).await;
@@ -183,6 +367,215 @@ impl AgentRuntime {
     }
 }
 
+fn role_label(role: &LlmRole) -> &'static str {
+    match role {
+        LlmRole::System => "system",
+        LlmRole::User => "user",
+        LlmRole::Assistant => "assistant",
+        LlmRole::Tool => "tool",
+    }
+}
+
+fn content_to_plain(content: &Content) -> String {
+    let mut out = String::new();
+    for part in &content.parts {
+        match part {
+            Part::Text(t) => out.push_str(t),
+            Part::ToolCall { name, args, .. } => {
+                out.push_str(&format!("[tool:{name} {}]", args));
+            }
+            Part::ToolResult {
+                content: c,
+                is_error,
+                ..
+            } => {
+                out.push_str(&format!(
+                    "[tool_result{}] {}",
+                    if *is_error { ":error" } else { "" },
+                    c
+                ));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+fn extract_text_response(content: &Content) -> String {
+    content
+        .parts
+        .iter()
+        .filter_map(|p| match p {
+            Part::Text(t) => Some(t.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Match a tool name against a hook pattern.
+///
+/// Supports: exact match, `*` (matches everything), or `prefix*` (starts-with).
+fn match_tool_pattern(pattern: &str, name: &str) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+    if let Some(prefix) = pattern.strip_suffix('*') {
+        return name.starts_with(prefix);
+    }
+    pattern == name
+}
+
+/// Run pre-tool-use hooks from a snapshot (for use in free functions).
+fn run_hooks_pre(
+    hooks: &[(ToolHookConfig, HookHandler)],
+    tool_name: &str,
+    args: &serde_json::Value,
+) -> std::result::Result<serde_json::Value, String> {
+    let mut current_args = args.clone();
+    for (cfg, handler) in hooks {
+        if cfg.hook_point != HookPoint::PreToolUse {
+            continue;
+        }
+        if !match_tool_pattern(&cfg.tool_pattern, tool_name) {
+            continue;
+        }
+        match handler(tool_name, &current_args) {
+            HookDecision::Allow => {}
+            HookDecision::Modify(new_args) => {
+                debug!(hook_id = %cfg.id, %tool_name, "pre-hook modified args");
+                current_args = new_args;
+            }
+            HookDecision::Deny(reason) => {
+                debug!(hook_id = %cfg.id, %tool_name, %reason, "pre-hook denied tool call");
+                return Err(reason);
+            }
+        }
+    }
+    Ok(current_args)
+}
+
+/// Run post-tool-use hooks from a snapshot (informational, results ignored).
+fn run_hooks_post(
+    hooks: &[(ToolHookConfig, HookHandler)],
+    tool_name: &str,
+    args: &serde_json::Value,
+) {
+    for (cfg, handler) in hooks {
+        if cfg.hook_point != HookPoint::PostToolUse {
+            continue;
+        }
+        if !match_tool_pattern(&cfg.tool_pattern, tool_name) {
+            continue;
+        }
+        let _ = handler(tool_name, args);
+    }
+}
+
+/// Ensures the kept suffix does not start with a lone [`LlmRole::Tool`] message (invalid ordering).
+fn adjust_suffix_start(messages: &[LlmMessage], keep: usize) -> usize {
+    if messages.is_empty() {
+        return 0;
+    }
+    let mut start = messages.len().saturating_sub(keep);
+    while start < messages.len() && messages[start].role == LlmRole::Tool {
+        if start == 0 {
+            break;
+        }
+        start -= 1;
+    }
+    start
+}
+
+/// If `messages.len() > COMPACT_THRESHOLD`, takes the oldest messages (all except the
+/// last [`COMPACT_KEEP_RECENT`]), formats them as text, sends a summarization prompt to
+/// the LLM with `rusvel.model_tier: fast`, and replaces those messages with a single
+/// System summary message while keeping the most recent messages intact.
+async fn compact_messages(llm: &dyn LlmPort, messages: &mut Vec<LlmMessage>) {
+    if messages.len() <= COMPACT_THRESHOLD {
+        return;
+    }
+
+    let system_len = messages
+        .first()
+        .is_some_and(|m| m.role == LlmRole::System)
+        .then_some(1)
+        .unwrap_or(0);
+
+    let suffix_start = adjust_suffix_start(messages, COMPACT_KEEP_RECENT);
+    if suffix_start <= system_len {
+        return;
+    }
+
+    let mut block_text = String::new();
+    for m in &messages[system_len..suffix_start] {
+        block_text.push_str(&format!(
+            "[{}] {}\n",
+            role_label(&m.role),
+            content_to_plain(&m.content)
+        ));
+    }
+
+    let summarize_req = LlmRequest {
+        model: ModelRef {
+            provider: ModelProvider::Claude,
+            model: "claude-sonnet-4-20250514".into(),
+        },
+        messages: vec![
+            LlmMessage {
+                role: LlmRole::System,
+                content: Content::text(
+                    "Summarize the prior conversation turns below into a concise summary for context. \
+Preserve key facts, user goals, tool calls and outcomes, and decisions. \
+Output plain text only, no preamble.",
+                ),
+            },
+            LlmMessage {
+                role: LlmRole::User,
+                content: Content::text(block_text),
+            },
+        ],
+        tools: vec![],
+        temperature: Some(0.2),
+        max_tokens: Some(2048),
+        metadata: serde_json::json!({
+            "rusvel.model_tier": "fast",
+        }),
+    };
+
+    let summary_text = match llm.generate(summarize_req).await {
+        Ok(resp) => {
+            let t = extract_text_response(&resp.content);
+            if t.trim().is_empty() {
+                warn!("context compaction returned empty summary; using placeholder");
+                "[Earlier conversation summarized (empty model output).]".to_string()
+            } else {
+                t
+            }
+        }
+        Err(e) => {
+            warn!(%e, "context compaction summary failed; using placeholder");
+            "[Earlier messages omitted (summary unavailable).]".to_string()
+        }
+    };
+
+    let mut new_messages = Vec::with_capacity(system_len + 1 + messages.len().saturating_sub(suffix_start));
+    if system_len > 0 {
+        new_messages.push(messages[0].clone());
+    }
+    new_messages.push(LlmMessage {
+        role: LlmRole::System,
+        content: Content::text(format!("[Earlier conversation summary]\n{summary_text}")),
+    });
+    new_messages.extend(messages[suffix_start..].iter().cloned());
+    *messages = new_messages;
+
+    debug!(
+        new_len = messages.len(),
+        "context compaction applied"
+    );
+}
+
 /// Inner streaming agent loop, factored out so it can be spawned as a task.
 async fn run_streaming_loop(
     llm: &Arc<dyn LlmPort>,
@@ -191,6 +584,7 @@ async fn run_streaming_loop(
     run_id: &RunId,
     input: Content,
     tx: &tokio::sync::mpsc::Sender<AgentEvent>,
+    hooks: &[(ToolHookConfig, HookHandler)],
 ) -> Result<AgentOutput> {
     let mut messages: Vec<LlmMessage> = Vec::new();
     if let Some(ref instructions) = config.instructions {
@@ -218,6 +612,8 @@ async fn run_streaming_loop(
     for iteration in 0..MAX_ITERATIONS {
         debug!(%run_id, iteration, "streaming agent loop iteration");
 
+        compact_messages(llm.as_ref(), &mut messages).await;
+
         let request = AgentRuntime::build_request(config, &messages, &tool_defs);
 
         // Use stream() for incremental deltas
@@ -229,11 +625,12 @@ async fn run_streaming_loop(
                 LlmStreamEvent::Delta(text) => {
                     let _ = tx.send(AgentEvent::TextDelta { text }).await;
                 }
-                LlmStreamEvent::ToolUse { id: _, name, args } => {
+                LlmStreamEvent::ToolUse { id, name, args } => {
                     // Tool use events from stream are informational;
                     // we handle them via the Done response below.
                     let _ = tx
                         .send(AgentEvent::ToolCall {
+                            tool_call_id: id.clone(),
                             name: name.clone(),
                             args: args.clone(),
                         })
@@ -281,8 +678,38 @@ async fn run_streaming_loop(
                     content: response.content,
                 });
 
-                let tool_result = tools.call(&tool_name, tool_args.clone()).await;
+                // Run pre-tool-use hooks.
+                let effective_args = match run_hooks_pre(hooks, &tool_name, &tool_args) {
+                    Ok(args) => args,
+                    Err(reason) => {
+                        tool_calls += 1;
+                        let _ = tx
+                            .send(AgentEvent::ToolResult {
+                                tool_call_id: tool_call_id.clone(),
+                                name: tool_name.clone(),
+                                output: reason.clone(),
+                                is_error: true,
+                            })
+                            .await;
+                        messages.push(LlmMessage {
+                            role: LlmRole::Tool,
+                            content: Content {
+                                parts: vec![Part::ToolResult {
+                                    tool_call_id,
+                                    content: format!("Tool denied by hook: {reason}"),
+                                    is_error: true,
+                                }],
+                            },
+                        });
+                        continue;
+                    }
+                };
+
+                let tool_result = tools.call(&tool_name, effective_args).await;
                 tool_calls += 1;
+
+                // Run post-tool-use hooks (informational).
+                run_hooks_post(hooks, &tool_name, &tool_args);
 
                 // Deferred tool loading: when tool_search is called,
                 // inject discovered tools into subsequent LLM requests.
@@ -325,6 +752,7 @@ async fn run_streaming_loop(
 
                 let _ = tx
                     .send(AgentEvent::ToolResult {
+                        tool_call_id: tool_call_id.clone(),
                         name: tool_name,
                         output: result_text.clone(),
                         is_error,
@@ -432,6 +860,8 @@ impl AgentPort for AgentRuntime {
                 }
             }
 
+            compact_messages(self.llm.as_ref(), &mut messages).await;
+
             let request = Self::build_request(&config, &messages, &tool_defs);
             let response = self.llm.generate(request).await?;
 
@@ -478,9 +908,34 @@ impl AgentPort for AgentRuntime {
                         content: response.content,
                     });
 
+                    // Run pre-tool-use hooks.
+                    let effective_args = match self.run_pre_hooks(&tool_name, &tool_args).await {
+                        Ok(args) => args,
+                        Err(reason) => {
+                            tool_calls += 1;
+                            messages.push(LlmMessage {
+                                role: LlmRole::Tool,
+                                content: Content {
+                                    parts: vec![Part::ToolResult {
+                                        tool_call_id,
+                                        content: format!("Tool denied by hook: {reason}"),
+                                        is_error: true,
+                                    }],
+                                },
+                            });
+                            self.runs.write().await.entry(*run_id).and_modify(|s| {
+                                s.status = AgentStatus::Running;
+                            });
+                            continue;
+                        }
+                    };
+
                     // Execute the tool.
-                    let tool_result = self.tools.call(&tool_name, tool_args.clone()).await;
+                    let tool_result = self.tools.call(&tool_name, effective_args).await;
                     tool_calls += 1;
+
+                    // Run post-tool-use hooks (informational).
+                    self.run_post_hooks(&tool_name, &tool_args).await;
 
                     // Deferred tool loading: inject discovered tools.
                     if tool_name == "tool_search" {

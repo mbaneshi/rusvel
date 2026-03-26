@@ -12,12 +12,11 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
 use chrono::Utc;
-use futures::stream::Stream;
+use futures::stream::{self, Stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 
-use rusvel_agent::AgentEvent;
+use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
 use rusvel_core::domain::{AgentConfig, Content, ModelProvider, ModelRef};
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{AgentPort, StoragePort};
@@ -137,81 +136,78 @@ pub async fn chat_handler(
 
     let storage = state.storage.clone();
     let conv_id = conversation_id.clone();
+    let run_id_str = run_id.to_string();
+    let rid_for_start = run_id_str.clone();
+    let conv_for_start = conv_id.clone();
+
+    let prelude = stream::once(async move {
+        let ev = AgUiEvent::RunStarted {
+            run_id: rid_for_start,
+            timestamp: Utc::now().to_rfc3339(),
+        };
+        Ok::<Event, Infallible>(
+            Event::default()
+                .event(ev.sse_name())
+                .data(ag_ui_json_with_conversation(&ev, &conv_for_start)),
+        )
+    });
+
+    let main = ReceiverStream::new(rx).map(move |event| {
+        Ok::<Event, Infallible>(match event {
+            AgentEvent::Done { output } => {
+                let full_text: String = output
+                    .content
+                    .parts
+                    .iter()
+                    .filter_map(|p| match p {
+                        rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("");
+                let cost = output.cost_estimate;
+
+                let storage = storage.clone();
+                let conv_id_inner = conv_id.clone();
+                let text = full_text.clone();
+                tokio::spawn(async move {
+                    let msg = ChatMessage {
+                        id: uuid::Uuid::now_v7().to_string(),
+                        conversation_id: conv_id_inner,
+                        role: "assistant".into(),
+                        content: text,
+                        created_at: Utc::now().to_rfc3339(),
+                    };
+                    let _ = store_message(&storage, &msg).await;
+                });
+
+                let ev = AgUiEvent::RunCompleted {
+                    run_id: run_id_str.clone(),
+                    output: full_text,
+                };
+                let mut v = serde_json::to_value(&ev).unwrap_or(serde_json::json!({}));
+                if let Some(obj) = v.as_object_mut() {
+                    obj.insert("cost_usd".into(), serde_json::json!(cost));
+                    obj.insert(
+                        "conversation_id".into(),
+                        serde_json::Value::String(conv_id.clone()),
+                    );
+                }
+                Event::default()
+                    .event(ev.sse_name())
+                    .data(v.to_string())
+            }
+            other => {
+                let ag = agent_event_to_ag_ui(&run_id_str, other);
+                Event::default()
+                    .event(ag.sse_name())
+                    .data(ag_ui_json_with_conversation(&ag, &conv_id))
+            }
+        })
+    });
 
     let stream: Pin<Box<dyn Stream<Item = Result<Event, Infallible>> + Send>> =
-        Box::pin(ReceiverStream::new(rx).map(move |event| {
-            let sse_event = match event {
-                AgentEvent::TextDelta { text } => Event::default()
-                    .event("delta")
-                    .data(
-                        serde_json::json!({"text": text, "conversation_id": conv_id}).to_string(),
-                    ),
-                AgentEvent::ToolCall { name, args } => {
-                    Event::default().event("tool_call").data(
-                        serde_json::json!({
-                            "name": name,
-                            "args": args,
-                            "conversation_id": conv_id,
-                        })
-                        .to_string(),
-                    )
-                }
-                AgentEvent::ToolResult {
-                    name,
-                    output,
-                    is_error,
-                } => Event::default().event("tool_result").data(
-                    serde_json::json!({
-                        "name": name,
-                        "result": output,
-                        "is_error": is_error,
-                        "conversation_id": conv_id,
-                    })
-                    .to_string(),
-                ),
-                AgentEvent::Done { output } => {
-                    let full_text: String = output
-                        .content
-                        .parts
-                        .iter()
-                        .filter_map(|p| match p {
-                            rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
-                            _ => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join("");
-                    let cost = output.cost_estimate;
-
-                    // Store assistant message (fire and forget)
-                    let storage = storage.clone();
-                    let conv_id_inner = conv_id.clone();
-                    let text = full_text.clone();
-                    tokio::spawn(async move {
-                        let msg = ChatMessage {
-                            id: uuid::Uuid::now_v7().to_string(),
-                            conversation_id: conv_id_inner,
-                            role: "assistant".into(),
-                            content: text,
-                            created_at: Utc::now().to_rfc3339(),
-                        };
-                        let _ = store_message(&storage, &msg).await;
-                    });
-
-                    Event::default().event("done").data(
-                        serde_json::json!({
-                            "text": full_text,
-                            "cost_usd": cost,
-                            "conversation_id": conv_id
-                        })
-                        .to_string(),
-                    )
-                }
-                AgentEvent::Error { message } => Event::default()
-                    .event("error")
-                    .data(serde_json::json!({"message": message}).to_string()),
-            };
-            Ok(sse_event)
-        }));
+        Box::pin(prelude.chain(main));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }

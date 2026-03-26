@@ -259,14 +259,34 @@ export async function streamDeptChat(
 	await parseSSE(
 		res,
 		(p) => {
-			if (p.name !== undefined && p.args !== undefined && onToolCall)
-				onToolCall(p.id as string, p.name as string, p.args as Record<string, unknown>, p.conversation_id as string);
-			else if (p.result !== undefined && p.id !== undefined && p.name !== undefined && onToolResult)
-				onToolResult(p.id as string, p.name as string, p.result as string, (p.is_error as boolean) ?? false, p.conversation_id as string);
-			else if (p.text !== undefined && p.cost_usd === undefined)
+			const t = p.type as string | undefined;
+			if (t === 'tool_call_start' && onToolCall) {
+				onToolCall(
+					p.tool_call_id as string,
+					p.tool_name as string,
+					p.args as Record<string, unknown>,
+					p.conversation_id as string
+				);
+			} else if (t === 'tool_call_end' && onToolResult) {
+				onToolResult(
+					p.tool_call_id as string,
+					p.tool_name as string,
+					p.output as string,
+					(p.is_error as boolean) ?? false,
+					p.conversation_id as string
+				);
+			} else if (
+				t === 'text_delta' ||
+				(p.text !== undefined && p.cost_usd === undefined && t !== 'run_completed' && t !== 'run_failed')
+			) {
 				onDelta(p.text as string, p.conversation_id as string);
-			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
-			else if (p.message) onError(p.message as string);
+			} else if (t === 'run_completed' || (p.cost_usd !== undefined && p.text !== undefined)) {
+				const full =
+					t === 'run_completed' ? (p.output as string) : (p.text as string);
+				onDone(full, p.conversation_id as string);
+			} else if (t === 'run_failed') {
+				onError((p.error as string) ?? 'run failed');
+			} else if (p.message) onError(p.message as string);
 		},
 		onError
 	);
@@ -611,14 +631,34 @@ export async function streamChat(
 	await parseSSE(
 		res,
 		(p) => {
-			if (p.name !== undefined && p.args !== undefined && onToolCall)
-				onToolCall(p.id as string, p.name as string, p.args as Record<string, unknown>, p.conversation_id as string);
-			else if (p.result !== undefined && p.id !== undefined && p.name !== undefined && onToolResult)
-				onToolResult(p.id as string, p.name as string, p.result as string, (p.is_error as boolean) ?? false, p.conversation_id as string);
-			else if (p.text !== undefined && p.cost_usd === undefined)
+			const t = p.type as string | undefined;
+			if (t === 'tool_call_start' && onToolCall) {
+				onToolCall(
+					p.tool_call_id as string,
+					p.tool_name as string,
+					p.args as Record<string, unknown>,
+					p.conversation_id as string
+				);
+			} else if (t === 'tool_call_end' && onToolResult) {
+				onToolResult(
+					p.tool_call_id as string,
+					p.tool_name as string,
+					p.output as string,
+					(p.is_error as boolean) ?? false,
+					p.conversation_id as string
+				);
+			} else if (
+				t === 'text_delta' ||
+				(p.text !== undefined && p.cost_usd === undefined && t !== 'run_completed' && t !== 'run_failed')
+			) {
 				onDelta(p.text as string, p.conversation_id as string);
-			else if (p.cost_usd !== undefined) onDone(p.text as string, p.conversation_id as string);
-			else if (p.message) onError(p.message as string);
+			} else if (t === 'run_completed' || (p.cost_usd !== undefined && p.text !== undefined)) {
+				const full =
+					t === 'run_completed' ? (p.output as string) : (p.text as string);
+				onDone(full, p.conversation_id as string);
+			} else if (t === 'run_failed') {
+				onError((p.error as string) ?? 'run failed');
+			} else if (p.message) onError(p.message as string);
 		},
 		onError
 	);
