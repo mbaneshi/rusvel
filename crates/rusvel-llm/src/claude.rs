@@ -9,6 +9,17 @@ use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::LlmPort;
 
+/// Beta header for Claude computer use (tool type `computer_20250124`).
+const ANTHROPIC_BETA_COMPUTER_USE: &str = "computer-use-2025-01-24";
+
+fn request_needs_computer_beta(tools: &[serde_json::Value]) -> bool {
+    tools.iter().any(|t| {
+        t.get("type")
+            .and_then(|v| v.as_str())
+            == Some("computer_20250124")
+    })
+}
+
 // ════════════════════════════════════════════════════════════════════
 //  ClaudeProvider
 // ════════════════════════════════════════════════════════════════════
@@ -50,12 +61,16 @@ impl LlmPort for ClaudeProvider {
 
         debug!(model = %request.model.model, "claude generate");
 
-        let http_resp = self
+        let mut req = self
             .client
             .post(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
+            .header("content-type", "application/json");
+        if request_needs_computer_beta(&request.tools) {
+            req = req.header("anthropic-beta", ANTHROPIC_BETA_COMPUTER_USE);
+        }
+        let http_resp = req
             .json(&claude_req)
             .send()
             .await
@@ -130,24 +145,11 @@ struct ClaudeMessage {
 #[derive(Deserialize)]
 struct ClaudeResponse {
     #[serde(default)]
-    content: Vec<ClaudeContentBlock>,
+    content: Vec<serde_json::Value>,
     #[serde(default)]
     stop_reason: Option<String>,
     #[serde(default)]
     usage: ClaudeUsage,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type")]
-enum ClaudeContentBlock {
-    #[serde(rename = "text")]
-    Text { text: String },
-    #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: serde_json::Value,
-    },
 }
 
 #[derive(Default, Deserialize)]
@@ -162,6 +164,135 @@ struct ClaudeUsage {
 //  Mapping helpers
 // ════════════════════════════════════════════════════════════════════
 
+fn parse_claude_content_block(block: &serde_json::Value) -> Option<Part> {
+    let ty = block.get("type").and_then(|t| t.as_str())?;
+    match ty {
+        "text" => {
+            let text = block.get("text").and_then(|v| v.as_str())?.to_string();
+            Some(Part::Text(text))
+        }
+        "tool_use" | "server_tool_use" => {
+            let id = block.get("id").and_then(|v| v.as_str())?.to_string();
+            let name = block.get("name").and_then(|v| v.as_str())?.to_string();
+            let input = block
+                .get("input")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+            Some(Part::ToolCall { id, name, args: input })
+        }
+        "image" => {
+            let source = block.get("source")?;
+            if source.get("type").and_then(|v| v.as_str()) != Some("base64") {
+                return None;
+            }
+            let data = source.get("data").and_then(|v| v.as_str())?.to_string();
+            let media_type = source
+                .get("media_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("image/png")
+                .to_string();
+            Some(Part::ImageBase64 {
+                base64: data,
+                media_type,
+            })
+        }
+        _ => None,
+    }
+}
+
+fn user_content_to_claude_value(content: &Content) -> serde_json::Value {
+    let blocks: Vec<serde_json::Value> = content
+        .parts
+        .iter()
+        .filter_map(part_to_user_claude_block)
+        .collect();
+    if blocks.is_empty() {
+        return serde_json::Value::String(extract_text(content));
+    }
+    if blocks.len() == 1 && content.parts.len() == 1 {
+        if let Part::Text(t) = &content.parts[0] {
+            return serde_json::Value::String(t.clone());
+        }
+    }
+    serde_json::Value::Array(blocks)
+}
+
+fn part_to_user_claude_block(p: &Part) -> Option<serde_json::Value> {
+    match p {
+        Part::Text(t) => Some(serde_json::json!({
+            "type": "text",
+            "text": t
+        })),
+        Part::ImageBase64 { base64, media_type } => Some(serde_json::json!({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": base64
+            }
+        })),
+        _ => None,
+    }
+}
+
+fn tool_message_to_claude_blocks(content: &Content) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    let parts = &content.parts;
+    let mut i = 0;
+    while i < parts.len() {
+        match &parts[i] {
+            Part::ToolResult {
+                tool_call_id,
+                content: text,
+                is_error,
+            } => {
+                let mut j = i + 1;
+                let mut imgs: Vec<(String, String)> = Vec::new();
+                while j < parts.len() {
+                    match &parts[j] {
+                        Part::ImageBase64 { base64, media_type } => {
+                            imgs.push((base64.clone(), media_type.clone()));
+                            j += 1;
+                        }
+                        Part::ToolResult { .. } => break,
+                        _ => break,
+                    }
+                }
+                let content_val = if imgs.is_empty() {
+                    serde_json::Value::String(text.clone())
+                } else {
+                    let mut arr = vec![serde_json::json!({
+                        "type": "text",
+                        "text": text.clone()
+                    })];
+                    for (b64, mt) in imgs {
+                        arr.push(serde_json::json!({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": mt,
+                                "data": b64
+                            }
+                        }));
+                    }
+                    serde_json::Value::Array(arr)
+                };
+                out.push(serde_json::json!({
+                    "type": "tool_result",
+                    "tool_use_id": tool_call_id,
+                    "content": content_val,
+                    "is_error": is_error,
+                }));
+                i = j;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
 fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
     let mut system: Option<String> = None;
     let mut messages = Vec::new();
@@ -173,7 +304,7 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
             }
             LlmRole::User => messages.push(ClaudeMessage {
                 role: "user".into(),
-                content: serde_json::Value::String(extract_text(&m.content)),
+                content: user_content_to_claude_value(&m.content),
             }),
             LlmRole::Assistant => {
                 // Assistant messages may contain both text and tool_use blocks.
@@ -193,6 +324,16 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
                                 "input": args,
                             }))
                         }
+                        Part::ImageBase64 { base64, media_type } => {
+                            Some(serde_json::json!({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": base64
+                                }
+                            }))
+                        }
                         _ => None,
                     })
                     .collect();
@@ -203,29 +344,8 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
                 });
             }
             LlmRole::Tool => {
-                // Tool result messages. Extract tool_call_id from ToolResult parts,
-                // or fall back to extracting text.
-                let blocks: Vec<serde_json::Value> = m
-                    .content
-                    .parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        Part::ToolResult {
-                            tool_call_id,
-                            content,
-                            is_error,
-                        } => Some(serde_json::json!({
-                            "type": "tool_result",
-                            "tool_use_id": tool_call_id,
-                            "content": content,
-                            "is_error": is_error,
-                        })),
-                        _ => None,
-                    })
-                    .collect();
-
+                let blocks = tool_message_to_claude_blocks(&m.content);
                 if blocks.is_empty() {
-                    // Legacy fallback: plain text tool result.
                     messages.push(ClaudeMessage {
                         role: "user".into(),
                         content: serde_json::json!([{
@@ -258,17 +378,8 @@ fn from_claude_response(resp: ClaudeResponse) -> LlmResponse {
     let mut parts = Vec::new();
 
     for block in &resp.content {
-        match block {
-            ClaudeContentBlock::Text { text } => {
-                parts.push(Part::Text(text.clone()));
-            }
-            ClaudeContentBlock::ToolUse { id, name, input } => {
-                parts.push(Part::ToolCall {
-                    id: id.clone(),
-                    name: name.clone(),
-                    args: input.clone(),
-                });
-            }
+        if let Some(p) = parse_claude_content_block(block) {
+            parts.push(p);
         }
     }
 
@@ -644,9 +755,10 @@ mod tests {
     #[test]
     fn from_claude_response_text() {
         let resp = ClaudeResponse {
-            content: vec![ClaudeContentBlock::Text {
-                text: "Hi there!".into(),
-            }],
+            content: vec![serde_json::json!({
+                "type": "text",
+                "text": "Hi there!"
+            })],
             stop_reason: Some("end_turn".into()),
             usage: ClaudeUsage {
                 input_tokens: 10,
@@ -665,11 +777,12 @@ mod tests {
     #[test]
     fn from_claude_response_tool_use() {
         let resp = ClaudeResponse {
-            content: vec![ClaudeContentBlock::ToolUse {
-                id: "call_1".into(),
-                name: "get_weather".into(),
-                input: serde_json::json!({"city": "London"}),
-            }],
+            content: vec![serde_json::json!({
+                "type": "tool_use",
+                "id": "call_1",
+                "name": "get_weather",
+                "input": {"city": "London"}
+            })],
             stop_reason: Some("tool_use".into()),
             usage: ClaudeUsage::default(),
         };
@@ -684,6 +797,80 @@ mod tests {
             }
             other => panic!("expected ToolCall, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn from_claude_response_image_base64() {
+        let resp = ClaudeResponse {
+            content: vec![serde_json::json!({
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "Zm9v"
+                }
+            })],
+            stop_reason: Some("end_turn".into()),
+            usage: ClaudeUsage::default(),
+        };
+        let llm_resp = from_claude_response(resp);
+        match &llm_resp.content.parts[0] {
+            Part::ImageBase64 { base64, media_type } => {
+                assert_eq!(base64, "Zm9v");
+                assert_eq!(media_type, "image/png");
+            }
+            other => panic!("expected ImageBase64, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn to_claude_request_computer_tool_triggers_beta_scan() {
+        assert!(!request_needs_computer_beta(&[]));
+        assert!(request_needs_computer_beta(&[serde_json::json!({
+            "type": "computer_20250124",
+            "name": "computer",
+            "display_width_px": 1024,
+            "display_height_px": 768
+        })]));
+    }
+
+    #[test]
+    fn to_claude_request_tool_result_merges_image_parts() {
+        let req = LlmRequest {
+            model: ModelRef {
+                provider: ModelProvider::Claude,
+                model: "claude-sonnet-4-20250514".into(),
+            },
+            messages: vec![LlmMessage {
+                role: LlmRole::Tool,
+                content: Content {
+                    parts: vec![
+                        Part::ToolResult {
+                            tool_call_id: "tu_1".into(),
+                            content: "ok".into(),
+                            is_error: false,
+                        },
+                        Part::ImageBase64 {
+                            base64: "YmFy".into(),
+                            media_type: "image/png".into(),
+                        },
+                    ],
+                },
+            }],
+            tools: vec![],
+            temperature: None,
+            max_tokens: Some(1024),
+            metadata: serde_json::json!({}),
+        };
+        let wire = to_claude_request(&req);
+        let msg = &wire.messages[0];
+        let arr = msg.content.as_array().expect("array");
+        assert_eq!(arr[0]["type"], "tool_result");
+        assert!(arr[0]["content"].is_array());
+        let blocks = arr[0]["content"].as_array().unwrap();
+        assert_eq!(blocks[0]["type"], "text");
+        assert_eq!(blocks[1]["type"], "image");
+        assert_eq!(blocks[1]["source"]["data"], "YmFy");
     }
 
     #[test]

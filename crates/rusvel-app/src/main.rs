@@ -868,6 +868,7 @@ async fn main() -> Result<()> {
     let harvest_cfg = build_harvest_config(config.as_ref(), &data_dir.join("profile.toml"));
     let cdp_client = Arc::new(rusvel_cdp::CdpClient::new());
     let browser_port: Arc<dyn rusvel_core::ports::BrowserPort> = cdp_client.clone();
+    rusvel_builtin_tools::register_browser_tools(&tool_registry, browser_port.clone()).await;
     let harvest_engine = Arc::new(
         harvest_engine::HarvestEngine::new(db.clone() as Arc<dyn StoragePort>)
             .with_events(events.clone())
@@ -895,7 +896,7 @@ async fn main() -> Result<()> {
         events.clone(),
         agent_for_flow,
         Some(terminal_for_flow.clone()),
-        Some(browser_port),
+        Some(browser_port.clone()),
     ));
     tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow");
 

@@ -8,13 +8,16 @@ pub mod flow;
 pub mod terminal_tools;
 mod file_ops;
 mod git;
+pub mod browser;
 pub mod memory;
 mod shell;
 pub mod tool_search;
 
 use std::sync::Arc;
 
-use rusvel_core::ports::{AgentPort, EventPort, MemoryPort, StoragePort, TerminalPort};
+use rusvel_core::ports::{
+    AgentPort, BrowserPort, EventPort, MemoryPort, StoragePort, TerminalPort,
+};
 use rusvel_tool::ToolRegistry;
 
 /// Register all built-in tools into the given registry.
@@ -54,4 +57,12 @@ pub async fn register_flow_tools(
     agent: Arc<dyn AgentPort>,
 ) {
     flow::register(registry, storage, events, agent).await;
+}
+
+/// Register `browser_observe`, `browser_search`, and `browser_act` (CDP / [`BrowserPort`]).
+pub async fn register_browser_tools(
+    registry: &ToolRegistry,
+    browser_port: Arc<dyn BrowserPort>,
+) {
+    browser::register(registry, browser_port).await;
 }

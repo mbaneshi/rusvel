@@ -40,6 +40,11 @@ impl Content {
 pub enum Part {
     Text(String),
     Image(Vec<u8>),
+    /// Base64 image with explicit MIME type (Claude computer use / vision tool results).
+    ImageBase64 {
+        base64: String,
+        media_type: String,
+    },
     Audio(Vec<u8>),
     Video(Vec<u8>),
     File { name: String, data: Vec<u8> },
