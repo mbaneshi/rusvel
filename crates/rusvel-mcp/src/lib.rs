@@ -3,17 +3,20 @@
 //! Exposes Forge Engine capabilities as MCP tools over JSON-RPC/stdio.
 //! This is a lightweight JSON-RPC implementation that reads newline-delimited
 //! JSON from stdin and writes responses to stdout.
+//!
+//! HTTP transport: [`http::nest_mcp_http`] (POST `/mcp`, GET `/mcp/sse`).
 
 use std::sync::Arc;
 
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use forge_engine::ForgeEngine;
 use rusvel_core::domain::*;
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::SessionPort;
+
+pub mod http;
 
 // ════════════════════════════════════════════════════════════════════
 //  Error
@@ -34,51 +37,70 @@ pub enum McpError {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  JSON-RPC types
+//  JSON-RPC (stdio + HTTP)
 // ════════════════════════════════════════════════════════════════════
 
-#[derive(Debug, Deserialize)]
-struct JsonRpcRequest {
-    #[allow(dead_code)]
-    jsonrpc: String,
-    id: serde_json::Value,
-    method: String,
-    #[serde(default)]
-    params: serde_json::Value,
-}
+pub(crate) mod jsonrpc {
+    use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: serde_json::Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    result: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<JsonRpcError>,
-}
+    use super::{McpError, RusvelMcp};
 
-#[derive(Debug, Serialize)]
-struct JsonRpcError {
-    code: i32,
-    message: String,
-}
+    #[derive(Debug, Clone, Deserialize)]
+    pub struct JsonRpcRequest {
+        #[allow(dead_code)]
+        pub jsonrpc: String,
+        pub id: serde_json::Value,
+        pub method: String,
+        #[serde(default)]
+        pub params: serde_json::Value,
+    }
 
-impl JsonRpcResponse {
-    fn success(id: serde_json::Value, result: serde_json::Value) -> Self {
-        Self {
-            jsonrpc: "2.0".into(),
-            id,
-            result: Some(result),
-            error: None,
+    #[derive(Debug, Serialize)]
+    pub struct JsonRpcResponse {
+        jsonrpc: String,
+        id: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        result: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<JsonRpcError>,
+    }
+
+    #[derive(Debug, Serialize)]
+    struct JsonRpcError {
+        code: i32,
+        message: String,
+    }
+
+    impl JsonRpcResponse {
+        pub fn success(id: serde_json::Value, result: serde_json::Value) -> Self {
+            Self {
+                jsonrpc: "2.0".into(),
+                id,
+                result: Some(result),
+                error: None,
+            }
+        }
+        pub fn error(id: serde_json::Value, code: i32, message: String) -> Self {
+            Self {
+                jsonrpc: "2.0".into(),
+                id,
+                result: None,
+                error: Some(JsonRpcError { code, message }),
+            }
         }
     }
-    fn error(id: serde_json::Value, code: i32, message: String) -> Self {
-        Self {
-            jsonrpc: "2.0".into(),
-            id,
-            result: None,
-            error: Some(JsonRpcError { code, message }),
+
+    pub async fn dispatch(mcp: &RusvelMcp, req: JsonRpcRequest) -> Result<Option<JsonRpcResponse>, McpError> {
+        let is_notification = req.method.starts_with("notifications/");
+        if is_notification {
+            mcp.handle_method(&req.method, req.params).await?;
+            return Ok(None);
         }
+        let resp = match mcp.handle_method(&req.method, req.params).await {
+            Ok(result) => JsonRpcResponse::success(req.id, result),
+            Err(e) => JsonRpcResponse::error(req.id, -32603, e.to_string()),
+        };
+        Ok(Some(resp))
     }
 }
 
@@ -184,7 +206,7 @@ impl RusvelMcp {
     ) -> Result<serde_json::Value, McpError> {
         match method {
             "initialize" => Ok(serde_json::json!({
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": "2025-11-25",
                 "serverInfo": { "name": "rusvel-mcp", "version": "0.1.0" },
                 "capabilities": { "tools": {} }
             })),
@@ -325,10 +347,10 @@ pub async fn run_stdio(mcp: Arc<RusvelMcp>) -> Result<(), McpError> {
             continue;
         }
 
-        let req: JsonRpcRequest = match serde_json::from_str(&line) {
+        let req: jsonrpc::JsonRpcRequest = match serde_json::from_str(&line) {
             Ok(r) => r,
             Err(e) => {
-                let resp = JsonRpcResponse::error(
+                let resp = jsonrpc::JsonRpcResponse::error(
                     serde_json::Value::Null,
                     -32700,
                     format!("parse error: {e}"),
@@ -341,19 +363,15 @@ pub async fn run_stdio(mcp: Arc<RusvelMcp>) -> Result<(), McpError> {
             }
         };
 
-        // Notifications have no id — don't send a response.
-        let is_notification = req.method.starts_with("notifications/");
-
-        let resp = match mcp.handle_method(&req.method, req.params).await {
-            Ok(result) => JsonRpcResponse::success(req.id, result),
-            Err(e) => JsonRpcResponse::error(req.id, -32603, e.to_string()),
-        };
-
-        if !is_notification {
-            let mut out = serde_json::to_string(&resp)?;
-            out.push('\n');
-            stdout.write_all(out.as_bytes()).await?;
-            stdout.flush().await?;
+        match jsonrpc::dispatch(&mcp, req).await {
+            Ok(None) => {}
+            Ok(Some(resp)) => {
+                let mut out = serde_json::to_string(&resp)?;
+                out.push('\n');
+                stdout.write_all(out.as_bytes()).await?;
+                stdout.flush().await?;
+            }
+            Err(_) => {}
         }
     }
 

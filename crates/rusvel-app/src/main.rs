@@ -948,6 +948,17 @@ async fn main() -> Result<()> {
     let deploy: Arc<dyn DeployPort> = Arc::new(rusvel_deploy::FlyDeployPort::new(config_port));
     let terminal_for_flow: Arc<dyn rusvel_core::ports::TerminalPort> =
         Arc::new(TerminalManager::new(events.clone(), db.clone()));
+    rusvel_builtin_tools::register_delegate_tool(
+        &tool_registry,
+        agent_runtime.clone(),
+        Some(terminal_for_flow.clone()),
+    )
+    .await;
+    rusvel_builtin_tools::register_terminal_tools(
+        &tool_registry,
+        Some(terminal_for_flow.clone()),
+    )
+    .await;
     let flow_engine = Arc::new(flow_engine::FlowEngine::new(
         db.clone() as Arc<dyn StoragePort>,
         events.clone(),
@@ -1170,7 +1181,11 @@ async fn main() -> Result<()> {
                 None
             }
         }
-    } else if cli.command.is_none() && !cli.mcp && std::io::stdin().is_terminal() {
+    } else if cli.command.is_none()
+        && !cli.mcp
+        && !cli.mcp_http
+        && std::io::stdin().is_terminal()
+    {
         // First run + interactive terminal + no subcommand → run wizard
         match first_run_wizard(&data_dir, &sessions).await {
             Ok(p) => p,
@@ -1253,14 +1268,31 @@ async fn main() -> Result<()> {
             .filter_map(|v| serde_json::from_value(v).ok())
             .collect();
 
+        let session_id = std::fs::read_to_string(crate::rusvel_dir().join("active_session"))
+            .ok()
+            .and_then(|s| Uuid::parse_str(s.trim()).ok())
+            .map(SessionId::from_uuid)
+            .unwrap_or_else(SessionId::new);
+
+        let terminal_panes: Vec<rusvel_tui::TuiTerminalPane> = terminal_for_flow
+            .list_panes_for_session(&session_id)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(rusvel_tui::TuiTerminalPane::from_pane)
+            .collect();
+
         let tui_data = rusvel_tui::TuiData {
             session_name,
             goals,
             tasks,
             opportunities,
             recent_events,
+            terminal_panes,
         };
         rusvel_tui::run_tui(tui_data).await?;
+    } else if cli.mcp && cli.mcp_http {
+        anyhow::bail!("Use either --mcp (stdio) or --mcp-http (HTTP on the web server), not both.");
     } else if cli.mcp {
         // --mcp flag: start MCP server over stdio (JSON-RPC)
         tracing::info!("Starting MCP server on stdio...");
@@ -1268,6 +1300,97 @@ async fn main() -> Result<()> {
         rusvel_mcp::run_stdio(mcp)
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
+    } else if cli.mcp_http {
+        tracing::info!("MCP streamable HTTP enabled at POST /mcp, GET /mcp/sse");
+        let registry = dept_registry;
+        let (embedding, embed_dims): (Option<Arc<dyn rusvel_core::ports::EmbeddingPort>>, usize) =
+            match FastEmbedAdapter::new() {
+                Ok(adapter) => {
+                    let dims = adapter.dimensions();
+                    tracing::info!(
+                        "Embedding adapter ready ({}, {}d)",
+                        adapter.model_name(),
+                        dims
+                    );
+                    (Some(Arc::new(adapter)), dims)
+                }
+                Err(e) => {
+                    tracing::warn!("Embedding adapter unavailable: {e}");
+                    (None, 384)
+                }
+            };
+
+        let vector_store: Option<Arc<dyn rusvel_core::ports::VectorStorePort>> = {
+            let lance_path = data_dir.join("knowledge.lance");
+            let lance_str = lance_path.to_string_lossy().to_string();
+            match LanceVectorStore::open(&lance_str, embed_dims).await {
+                Ok(vs) => {
+                    tracing::info!("Vector store ready at {}", lance_path.display());
+                    Some(Arc::new(vs))
+                }
+                Err(e) => {
+                    tracing::warn!("Vector store unavailable: {e}");
+                    None
+                }
+            }
+        };
+
+        let state = AppState {
+            forge: forge.clone(),
+            code_engine: Some(code_engine.clone()),
+            content_engine: Some(content_engine.clone()),
+            harvest_engine: Some(harvest_engine.clone()),
+            flow_engine: Some(flow_engine.clone()),
+            sessions: sessions.clone(),
+            events: events.clone(),
+            jobs: jobs.clone(),
+            database: db.clone(),
+            storage: db.clone() as Arc<dyn StoragePort>,
+            profile,
+            registry,
+            embedding,
+            vector_store,
+            memory: memory.clone(),
+            deploy: Some(deploy),
+            agent_runtime: agent_runtime.clone(),
+            tools: tools.clone(),
+            terminal: Some(terminal_for_flow.clone()),
+        };
+
+        let frontend_dir = [
+            PathBuf::from("frontend/build"),
+            data_dir.join("frontend"),
+            std::env::current_exe()
+                .unwrap_or_default()
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("frontend"),
+        ]
+        .into_iter()
+        .find(|p| p.join("index.html").exists())
+        .or_else(|| {
+            tracing::info!("No frontend build on disk, trying embedded assets...");
+            extract_embedded_frontend()
+        });
+
+        if let Some(ref dir) = frontend_dir {
+            tracing::info!("Serving frontend from {}", dir.display());
+        } else {
+            tracing::warn!("No frontend found — UI will not be available");
+        }
+        let base = rusvel_api::build_router_with_frontend(state, frontend_dir);
+        let mcp_srv = Arc::new(RusvelMcp::new(forge.clone(), sessions.clone()));
+        let router = rusvel_mcp::http::nest_mcp_http(base, mcp_srv, rusvel_mcp::http::McpAuth::from_env());
+        let addr: SocketAddr = "127.0.0.1:3000".parse()?;
+        tracing::info!("RUSVEL starting on http://{addr} (MCP HTTP)");
+
+        let server = rusvel_api::start_server(router, addr);
+        let shutdown = tokio::signal::ctrl_c();
+
+        tokio::select! {
+            result = server => result.map_err(|e| anyhow::anyhow!("{e}"))?,
+            _ = shutdown => tracing::info!("Shutdown signal received, exiting"),
+        }
     } else {
         // Default: start the API web server with graceful shutdown
         // Use registry generated by department boot (ADR-014)

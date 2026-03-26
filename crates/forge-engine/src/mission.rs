@@ -413,6 +413,170 @@ impl ForgeEngine {
             .await?;
         Ok(review)
     }
+
+    /// Cross-department daily digest: one LLM call per department (persona-mapped), then a strategist pass for summary + actions.
+    pub async fn generate_brief(&self, session_id: &SessionId) -> Result<ExecutiveBrief> {
+        let today = Utc::now().date_naive();
+        let mut sections = Vec::new();
+
+        for dept in BRIEF_DEPARTMENT_IDS {
+            let section = match self.dept_brief_section(session_id, dept).await {
+                Ok(s) => s,
+                Err(e) => BriefSection {
+                    department: (*dept).to_string(),
+                    status: "red".into(),
+                    highlights: vec![format!("Brief section failed: {e}")],
+                    metrics: serde_json::json!({}),
+                },
+            };
+            sections.push(section);
+        }
+
+        let sections_json =
+            serde_json::to_string(&sections).unwrap_or_else(|_| "[]".to_string());
+        let strategist_prompt = format!(
+            "You are an executive strategist. Here are department brief sections (JSON):\n{sections_json}\n\n\
+             Write a 2–3 sentence executive summary and list the top 3–5 cross-cutting action items.\n\
+             Respond with JSON only, no markdown fences: \
+             {{\"summary\": \"...\", \"action_items\": [\"...\", \"...\"]}}"
+        );
+
+        let mut config = self.hire_persona("Architect", session_id)?;
+        let base = config.instructions.clone().unwrap_or_default();
+        config.instructions = Some(format!(
+            "{base}\nYou synthesize executive briefs. Return valid JSON only."
+        ));
+
+        let output = self
+            .run_agent_with_mission_safety(*session_id, config, Content::text(strategist_prompt))
+            .await?;
+
+        let raw = extract_text(&output.content);
+        let text = strip_code_fences(&raw);
+        let parsed: StrategistBriefResponse = serde_json::from_str(text).unwrap_or(StrategistBriefResponse {
+            summary: "Review department sections below for details.".into(),
+            action_items: vec!["Align on priorities across departments".into()],
+        });
+
+        Ok(ExecutiveBrief {
+            id: uuid::Uuid::now_v7().to_string(),
+            date: today,
+            sections,
+            summary: parsed.summary,
+            action_items: parsed.action_items,
+            created_at: Utc::now(),
+        })
+    }
+
+    async fn dept_brief_section(
+        &self,
+        session_id: &SessionId,
+        department_id: &str,
+    ) -> Result<BriefSection> {
+        let persona_name = persona_for_department(department_id);
+        let mut config = self.hire_persona(persona_name, session_id)?;
+        let base = config.instructions.clone().unwrap_or_default();
+        config.instructions = Some(format!(
+            "{base}\n\nYou are reporting a concise snapshot for the **{department_id}** department.\n\
+             Respond with JSON only, no markdown fences: \
+             {{\"status\":\"green|yellow|red\",\"highlights\":[\"...\",\"...\"],\"metrics\":{{}}}}\n\
+             Cover: What happened today (or in the last 24h) relevant to this department? \
+             Key metrics or signals? What needs attention?"
+        ));
+
+        let output = self
+            .run_agent_with_mission_safety(
+                *session_id,
+                config,
+                Content::text(format!(
+                    "Produce today's department brief JSON for `{department_id}`."
+                )),
+            )
+            .await?;
+
+        let raw = extract_text(&output.content);
+        let text = strip_code_fences(&raw);
+        let parsed: DeptBriefJson = serde_json::from_str(text).unwrap_or(DeptBriefJson {
+            status: "yellow".into(),
+            highlights: vec![truncate_highlight(&raw)],
+            metrics: serde_json::json!({}),
+        });
+
+        Ok(BriefSection {
+            department: department_id.to_string(),
+            status: normalize_status(&parsed.status),
+            highlights: if parsed.highlights.is_empty() {
+                vec![truncate_highlight(&raw)]
+            } else {
+                parsed.highlights
+            },
+            metrics: parsed.metrics,
+        })
+    }
+}
+
+/// Departments included in the executive brief (aligned with the default registry).
+const BRIEF_DEPARTMENT_IDS: &[&str] = &[
+    "forge", "code", "harvest", "content", "gtm", "finance", "growth", "distro", "legal",
+    "support", "infra", "product",
+];
+
+fn persona_for_department(dept_id: &str) -> &'static str {
+    match dept_id {
+        "code" => "CodeWriter",
+        "content" | "growth" | "distro" | "gtm" => "ContentWriter",
+        "harvest" | "finance" | "legal" => "Researcher",
+        "support" => "Documenter",
+        "forge" | "infra" | "product" => "Architect",
+        _ => "Architect",
+    }
+}
+
+fn normalize_status(s: &str) -> String {
+    match s.to_lowercase().as_str() {
+        "green" | "yellow" | "red" => s.to_lowercase(),
+        _ => "yellow".into(),
+    }
+}
+
+fn truncate_highlight(s: &str) -> String {
+    let t = s.trim();
+    let mut out: String = t.chars().take(400).collect();
+    if t.chars().count() > 400 {
+        out.push('…');
+    }
+    out
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BriefSection {
+    pub department: String,
+    pub status: String,
+    pub highlights: Vec<String>,
+    pub metrics: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExecutiveBrief {
+    pub id: String,
+    pub date: NaiveDate,
+    pub sections: Vec<BriefSection>,
+    pub summary: String,
+    pub action_items: Vec<String>,
+    pub created_at: chrono::DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+struct DeptBriefJson {
+    status: String,
+    highlights: Vec<String>,
+    metrics: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct StrategistBriefResponse {
+    summary: String,
+    action_items: Vec<String>,
 }
 
 #[derive(Deserialize)]

@@ -18,6 +18,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true

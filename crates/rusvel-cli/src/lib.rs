@@ -58,6 +58,10 @@ pub struct Cli {
     #[arg(long)]
     pub mcp: bool,
 
+    /// Serve MCP over HTTP on the main web server (POST /mcp, GET /mcp/sse) instead of stdio.
+    #[arg(long)]
+    pub mcp_http: bool,
+
     /// Launch the TUI dashboard.
     #[arg(long)]
     pub tui: bool,
@@ -78,6 +82,8 @@ pub enum Commands {
         #[command(subcommand)]
         action: ForgeCmd,
     },
+    /// Cross-department executive brief (daily digest).
+    Brief,
     /// Launch interactive REPL shell.
     Shell,
 
@@ -226,6 +232,7 @@ pub async fn run(
         }
         Some(Commands::Session { action }) => handle_session(action, session_port).await,
         Some(Commands::Forge { action }) => handle_forge(action, engine).await,
+        Some(Commands::Brief) => handle_brief(engine).await,
         Some(Commands::Shell) => {
             let ctx = shell::ShellContext {
                 sessions: session_port,
@@ -345,6 +352,33 @@ async fn handle_forge(cmd: ForgeCmd, engine: Arc<ForgeEngine>) -> Result<()> {
     match cmd {
         ForgeCmd::Mission { action } => handle_mission(action, engine).await,
     }
+}
+
+async fn handle_brief(engine: Arc<ForgeEngine>) -> Result<()> {
+    let session_id = load_active_session()?;
+    println!("Generating executive brief...\n");
+    let brief = engine.generate_brief(&session_id).await?;
+    println!("Executive Brief — {}\n{}", brief.date, "=".repeat(50));
+    println!("{}\n", brief.summary);
+    for s in &brief.sections {
+        println!(
+            "[{}] status={}  metrics={}",
+            s.department,
+            s.status,
+            serde_json::to_string(&s.metrics).unwrap_or_default()
+        );
+        for h in &s.highlights {
+            println!("  • {h}");
+        }
+    }
+    if !brief.action_items.is_empty() {
+        println!("\nAction items:");
+        for a in &brief.action_items {
+            println!("  - {a}");
+        }
+    }
+    println!("\n(id: {}, created: {})", brief.id, brief.created_at);
+    Ok(())
 }
 
 async fn handle_mission(cmd: MissionCmd, engine: Arc<ForgeEngine>) -> Result<()> {

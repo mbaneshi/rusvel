@@ -11,7 +11,9 @@ use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
 
-use rusvel_core::domain::{CodeAnalysisSummary, ContentItem, ContentKind, Opportunity};
+use rusvel_core::domain::{
+    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, Opportunity,
+};
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContentId, SessionId};
 
@@ -33,6 +35,46 @@ fn parse_content_id(id: &str) -> Result<ContentId, (StatusCode, String)> {
 
 fn engine_err(e: impl std::fmt::Display) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+}
+
+// ── Executive brief (Forge) ────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct BriefSessionQuery {
+    pub session_id: String,
+}
+
+/// GET /api/brief?session_id= — generate and return today’s executive brief.
+pub async fn brief_get(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<BriefSessionQuery>,
+) -> ApiResult<ExecutiveBrief> {
+    let sid = parse_session_id(&q.session_id)?;
+    let brief = state
+        .forge
+        .generate_brief(&sid)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(brief))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BriefGenerateBody {
+    pub session_id: String,
+}
+
+/// POST /api/brief/generate — same as GET; explicit trigger for clients that prefer POST.
+pub async fn brief_generate(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<BriefGenerateBody>,
+) -> ApiResult<ExecutiveBrief> {
+    let sid = parse_session_id(&body.session_id)?;
+    let brief = state
+        .forge
+        .generate_brief(&sid)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(brief))
 }
 
 // ── Code Engine ──────────────────────────────────────────────────
