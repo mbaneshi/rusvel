@@ -145,6 +145,25 @@ impl ForgeEngine {
         match self.agent.run(&run_id, prompt).await {
             Ok(output) => {
                 self.safety.record_spend(output.cost_estimate);
+                if let Some((spent, limit)) = self.safety.take_budget_warning_if_needed() {
+                    let _ = self
+                        .events
+                        .emit(Event {
+                            id: EventId::new(),
+                            session_id: Some(session_id),
+                            run_id: Some(run_id),
+                            source: "forge".into(),
+                            kind: events::SAFETY_BUDGET_WARNING.into(),
+                            payload: serde_json::json!({
+                                "spent": spent,
+                                "limit": limit,
+                                "threshold_ratio": 0.8
+                            }),
+                            created_at: Utc::now(),
+                            metadata: serde_json::json!({}),
+                        })
+                        .await;
+                }
                 self.safety.record_success();
                 Ok(output)
             }

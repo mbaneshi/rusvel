@@ -33,6 +33,7 @@ pub struct SafetyGuard {
     active_runs: Mutex<usize>,
     consecutive_failures: Mutex<u32>,
     failure_threshold: u32,
+    budget_warning_emitted: Mutex<bool>,
 }
 
 impl SafetyGuard {
@@ -45,7 +46,29 @@ impl SafetyGuard {
             active_runs: Mutex::new(0),
             consecutive_failures: Mutex::new(0),
             failure_threshold,
+            budget_warning_emitted: Mutex::new(false),
         }
+    }
+
+    /// Configured aggregate spend ceiling.
+    pub fn cost_limit(&self) -> f64 {
+        self.cost_limit
+    }
+
+    /// After [`record_spend`](Self::record_spend), call to emit at most one budget warning when
+    /// cumulative spend reaches **≥ 80%** of [`cost_limit`](Self::cost_limit).
+    pub fn take_budget_warning_if_needed(&self) -> Option<(f64, f64)> {
+        let spent = *self.total_spent.lock().unwrap();
+        let threshold = self.cost_limit * 0.8;
+        if spent < threshold {
+            return None;
+        }
+        let mut w = self.budget_warning_emitted.lock().unwrap();
+        if *w {
+            return None;
+        }
+        *w = true;
+        Some((spent, self.cost_limit))
     }
 
     /// Check whether the estimated cost would exceed the budget.
@@ -190,5 +213,17 @@ mod tests {
         assert!(g.check_circuit().is_err());
         g.record_success();
         assert_eq!(g.circuit_state(), CircuitState::Closed);
+    }
+
+    #[test]
+    fn budget_warning_fires_once_at_eighty_percent() {
+        let g = SafetyGuard::new(10.0, 4, 5);
+        assert!(g.take_budget_warning_if_needed().is_none());
+        g.record_spend(7.0);
+        assert!(g.take_budget_warning_if_needed().is_none());
+        g.record_spend(1.0);
+        let w = g.take_budget_warning_if_needed();
+        assert_eq!(w, Some((8.0, 10.0)));
+        assert!(g.take_budget_warning_if_needed().is_none());
     }
 }
