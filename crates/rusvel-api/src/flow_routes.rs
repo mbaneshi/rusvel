@@ -8,7 +8,8 @@ use axum::http::StatusCode;
 use serde::Deserialize;
 
 use rusvel_core::domain::FlowDef;
-use rusvel_core::id::FlowId;
+use rusvel_core::id::{FlowExecutionId, FlowId};
+use rusvel_core::terminal::Pane;
 
 use crate::AppState;
 
@@ -146,6 +147,71 @@ pub async fn get_execution(
         .map_err(engine_err)?
         .ok_or((StatusCode::NOT_FOUND, "execution not found".into()))?;
     Ok(Json(serde_json::to_value(exec).map_err(engine_err)?))
+}
+
+pub async fn list_flow_execution_panes(
+    State(state): State<Arc<AppState>>,
+    Path((flow_id, exec_id)): Path<(String, String)>,
+) -> ApiResult<Vec<Pane>> {
+    let terminal = state
+        .terminal
+        .as_ref()
+        .ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Terminal not configured".into(),
+        ))?;
+    let engine = flow_engine(&state)?;
+    let flow_uuid = flow_id
+        .parse::<uuid::Uuid>()
+        .map(FlowId::from_uuid)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid flow id".into()))?;
+    let exec_uuid = exec_id
+        .parse::<uuid::Uuid>()
+        .map(FlowExecutionId::from_uuid)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid execution id".into()))?;
+    let exec = engine
+        .get_execution(&exec_uuid)
+        .await
+        .map_err(engine_err)?
+        .ok_or((StatusCode::NOT_FOUND, "execution not found".into()))?;
+    if exec.flow_id != flow_uuid {
+        return Err((StatusCode::NOT_FOUND, "execution not found".into()));
+    }
+    let panes = terminal
+        .panes_for_flow(&exec_uuid)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(panes))
+}
+
+pub async fn resume_flow(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> ApiResult<serde_json::Value> {
+    let engine = flow_engine(&state)?;
+    let execution = engine.resume_flow(&id).await.map_err(engine_err)?;
+    Ok(Json(serde_json::to_value(execution).map_err(engine_err)?))
+}
+
+pub async fn retry_node(
+    State(state): State<Arc<AppState>>,
+    Path((id, node_id)): Path<(String, String)>,
+) -> ApiResult<serde_json::Value> {
+    let engine = flow_engine(&state)?;
+    let result = engine.retry_node(&id, &node_id).await.map_err(engine_err)?;
+    Ok(Json(serde_json::to_value(result).map_err(engine_err)?))
+}
+
+pub async fn get_checkpoint(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> ApiResult<serde_json::Value> {
+    let engine = flow_engine(&state)?;
+    let ck = engine.get_checkpoint(&id).await.map_err(engine_err)?;
+    match ck {
+        Some(c) => Ok(Json(serde_json::to_value(c).map_err(engine_err)?)),
+        None => Err((StatusCode::NOT_FOUND, "no checkpoint for this execution".into())),
+    }
 }
 
 // ── Node Types ───────────────────────────────────────────────────

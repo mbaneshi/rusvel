@@ -3,6 +3,7 @@
 //! Each node implements `NodeHandler` and is registered in `NodeRegistry`.
 
 pub mod agent;
+pub mod browser;
 pub mod code;
 pub mod condition;
 

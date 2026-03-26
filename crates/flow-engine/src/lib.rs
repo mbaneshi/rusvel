@@ -3,11 +3,13 @@
 //! Executes directed acyclic graphs of nodes (agent, code, condition)
 //! with parallel branch execution and error routing.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use rusvel_core::domain::*;
-use rusvel_core::error::Result;
-use rusvel_core::ports::{AgentPort, EventPort, StoragePort};
+use rusvel_core::error::{Result, RusvelError};
+use rusvel_core::id::{FlowExecutionId, FlowId, FlowNodeId};
+use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort, TerminalPort};
 
 pub mod executor;
 pub mod expression;
@@ -20,26 +22,36 @@ pub struct FlowEngine {
     storage: Arc<dyn StoragePort>,
     events: Arc<dyn EventPort>,
     registry: NodeRegistry,
+    terminal: Option<Arc<dyn TerminalPort>>,
+    #[allow(dead_code)]
+    browser: Option<Arc<dyn BrowserPort>>,
 }
 
 const FLOW_STORE: &str = "flows";
 const EXECUTION_STORE: &str = "flow_executions";
+pub(crate) const CHECKPOINT_STORE: &str = "flow_checkpoints";
 
 impl FlowEngine {
     pub fn new(
         storage: Arc<dyn StoragePort>,
         events: Arc<dyn EventPort>,
         agent: Arc<dyn AgentPort>,
+        terminal: Option<Arc<dyn TerminalPort>>,
+        browser: Option<Arc<dyn BrowserPort>>,
     ) -> Self {
         let mut registry = NodeRegistry::new();
         registry.register(Arc::new(nodes::code::CodeNode));
         registry.register(Arc::new(nodes::condition::ConditionNode));
         registry.register(Arc::new(nodes::agent::AgentNode::new(agent)));
+        registry.register(Arc::new(nodes::browser::BrowserTriggerNode));
+        registry.register(Arc::new(nodes::browser::BrowserActionNode::new(browser.clone())));
 
         Self {
             storage,
             events,
             registry,
+            terminal,
+            browser,
         }
     }
 
@@ -110,16 +122,43 @@ impl FlowEngine {
                 id: id.to_string(),
             })?;
 
-        let execution = executor::execute_flow(&flow, trigger_data, &self.registry).await?;
+        let execution_id = FlowExecutionId::new();
+        let started_at = chrono::Utc::now();
+        let checkpoint = executor::CheckpointCtx {
+            storage: &self.storage,
+            flow: &flow,
+            execution_id,
+            trigger_data: trigger_data.clone(),
+            started_at,
+        };
+        let execution = executor::execute_flow_with_config(
+            &flow,
+            trigger_data,
+            &self.registry,
+            executor::ExecuteFlowConfig {
+                execution_id,
+                started_at,
+                resume: None,
+                checkpoint: Some(checkpoint),
+                terminal: self.terminal.clone(),
+            },
+        )
+        .await?;
 
-        // Persist execution
+        if execution.status == FlowExecutionStatus::Succeeded {
+            let _ = self
+                .storage
+                .objects()
+                .delete(CHECKPOINT_STORE, &execution.id.to_string())
+                .await;
+        }
+
         let exec_value = serde_json::to_value(&execution)?;
         self.storage
             .objects()
             .put(EXECUTION_STORE, &execution.id.to_string(), exec_value)
             .await?;
 
-        // Emit event
         let _ = self
             .events
             .emit(Event {
@@ -139,6 +178,192 @@ impl FlowEngine {
             .await;
 
         Ok(execution)
+    }
+
+    /// Resume a flow from a persisted checkpoint (same `execution_id`).
+    pub async fn resume_flow(&self, execution_id: &str) -> Result<FlowExecution> {
+        let exec_uuid = uuid::Uuid::parse_str(execution_id).map_err(|_| {
+            RusvelError::Validation("invalid execution id".into())
+        })?;
+        let exec_id = FlowExecutionId::from_uuid(exec_uuid);
+
+        let raw = self
+            .storage
+            .objects()
+            .get(CHECKPOINT_STORE, execution_id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "flow_checkpoint".into(),
+                id: execution_id.into(),
+            })?;
+        let ck: FlowCheckpoint = serde_json::from_value(raw)?;
+
+        let flow_id = uuid::Uuid::parse_str(&ck.flow_id)
+            .map(FlowId::from_uuid)
+            .map_err(|_| RusvelError::Validation("invalid flow_id in checkpoint".into()))?;
+
+        let flow = self
+            .get_flow(&flow_id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "flow".into(),
+                id: ck.flow_id.clone(),
+            })?;
+
+        let resume = executor::ResumeState::from_checkpoint(&ck)?;
+        let started_at = ck.started_at.unwrap_or(ck.created_at);
+        let trigger_data = ck.trigger_data.clone();
+
+        let checkpoint = executor::CheckpointCtx {
+            storage: &self.storage,
+            flow: &flow,
+            execution_id: exec_id,
+            trigger_data: trigger_data.clone(),
+            started_at,
+        };
+
+        let execution = executor::execute_flow_with_config(
+            &flow,
+            trigger_data,
+            &self.registry,
+            executor::ExecuteFlowConfig {
+                execution_id: exec_id,
+                started_at,
+                resume: Some(resume),
+                checkpoint: Some(checkpoint),
+                terminal: self.terminal.clone(),
+            },
+        )
+        .await?;
+
+        if execution.status == FlowExecutionStatus::Succeeded {
+            let _ = self
+                .storage
+                .objects()
+                .delete(CHECKPOINT_STORE, execution_id)
+                .await;
+        }
+
+        let exec_value = serde_json::to_value(&execution)?;
+        self.storage
+            .objects()
+            .put(EXECUTION_STORE, &execution.id.to_string(), exec_value)
+            .await?;
+
+        let _ = self
+            .events
+            .emit(Event {
+                id: rusvel_core::id::EventId::new(),
+                session_id: None,
+                run_id: None,
+                source: "flow".into(),
+                kind: "flow.execution.completed".into(),
+                payload: serde_json::json!({
+                    "flow_id": flow_id.to_string(),
+                    "execution_id": execution.id.to_string(),
+                    "status": format!("{:?}", execution.status),
+                }),
+                created_at: chrono::Utc::now(),
+                metadata: serde_json::json!({}),
+            })
+            .await;
+
+        Ok(execution)
+    }
+
+    /// Re-run a single node using upstream outputs from the checkpoint.
+    pub async fn retry_node(
+        &self,
+        execution_id: &str,
+        node_id: &str,
+    ) -> Result<FlowNodeResult> {
+        let raw = self
+            .storage
+            .objects()
+            .get(CHECKPOINT_STORE, execution_id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "flow_checkpoint".into(),
+                id: execution_id.into(),
+            })?;
+        let mut ck: FlowCheckpoint = serde_json::from_value(raw)?;
+
+        let flow_id = uuid::Uuid::parse_str(&ck.flow_id)
+            .map(FlowId::from_uuid)
+            .map_err(|_| RusvelError::Validation("invalid flow_id in checkpoint".into()))?;
+
+        let flow = self
+            .get_flow(&flow_id)
+            .await?
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "flow".into(),
+                id: ck.flow_id.clone(),
+            })?;
+
+        let node_uuid = uuid::Uuid::parse_str(node_id).map_err(|_| {
+            RusvelError::Validation("invalid node id".into())
+        })?;
+        let node_fid = FlowNodeId::from_uuid(node_uuid);
+        if !flow.nodes.iter().any(|n| n.id == node_fid) {
+            return Err(RusvelError::Validation("node not in flow".into()));
+        }
+
+        let mut outputs: HashMap<FlowNodeId, serde_json::Value> = HashMap::new();
+        for (k, v) in &ck.node_outputs {
+            let uuid = uuid::Uuid::parse_str(k).map_err(|_| {
+                RusvelError::Validation(format!("invalid node id in checkpoint: {k}"))
+            })?;
+            outputs.insert(FlowNodeId::from_uuid(uuid), v.clone());
+        }
+
+        let result = executor::execute_single_node(
+            &flow,
+            node_fid,
+            &outputs,
+            &ck.trigger_data,
+            &self.registry,
+        )
+        .await?;
+
+        ck.node_results.insert(node_id.to_string(), result.clone());
+        if result.status == FlowNodeStatus::Succeeded {
+            if let Some(out) = result.output.clone() {
+                ck.node_outputs.insert(node_id.to_string(), out);
+            }
+            if !ck.completed_nodes.contains(&node_id.to_string()) {
+                ck.completed_nodes.push(node_id.to_string());
+            }
+            ck.failed_node = None;
+            ck.error = None;
+        } else {
+            ck.failed_node = Some(node_id.to_string());
+            ck.error = result.error.clone();
+        }
+        ck.created_at = chrono::Utc::now();
+
+        let val = serde_json::to_value(&ck)?;
+        self.storage
+            .objects()
+            .put(CHECKPOINT_STORE, execution_id, val)
+            .await?;
+
+        Ok(result)
+    }
+
+    /// Load the current checkpoint for an execution (if any).
+    pub async fn get_checkpoint(
+        &self,
+        execution_id: &str,
+    ) -> Result<Option<FlowCheckpoint>> {
+        let raw = self
+            .storage
+            .objects()
+            .get(CHECKPOINT_STORE, execution_id)
+            .await?;
+        match raw {
+            Some(v) => Ok(Some(serde_json::from_value(v)?)),
+            None => Ok(None),
+        }
     }
 
     /// Get an execution by ID.
@@ -231,7 +456,7 @@ mod tests {
     async fn linear_flow_executes() {
         let flow = make_linear_flow();
         let reg = make_registry();
-        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg)
+        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg, None)
             .await
             .unwrap();
         assert_eq!(exec.status, FlowExecutionStatus::Succeeded);
@@ -296,7 +521,7 @@ mod tests {
         };
 
         let reg = make_registry();
-        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg)
+        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg, None)
             .await
             .unwrap();
 
@@ -327,7 +552,7 @@ mod tests {
         };
 
         let reg = make_registry();
-        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg)
+        let exec = executor::execute_flow(&flow, serde_json::json!({}), &reg, None)
             .await
             .unwrap();
 
@@ -361,7 +586,7 @@ mod tests {
         };
 
         let reg = make_registry();
-        let result = executor::execute_flow(&flow, serde_json::json!({}), &reg).await;
+        let result = executor::execute_flow(&flow, serde_json::json!({}), &reg, None).await;
         assert!(result.is_err());
     }
 
