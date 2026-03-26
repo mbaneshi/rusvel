@@ -9,6 +9,8 @@ use rusvel_core::domain::{
     Event, Goal, GoalStatus, Opportunity, OpportunityStage, Task, TaskStatus,
 };
 
+use crate::TuiTerminalPane;
+
 pub fn header_widget(session_name: &str) -> Paragraph<'_> {
     Paragraph::new(Line::from(vec![
         Span::styled(
@@ -133,6 +135,80 @@ pub fn events_widget(events: &[Event]) -> List<'_> {
         .collect();
 
     List::new(items).block(Block::default().title(" Events ").borders(Borders::ALL))
+}
+
+pub fn terminal_pane_list_widget(
+    panes: &[TuiTerminalPane],
+    selected: usize,
+    terminal_focus: bool,
+) -> List<'_> {
+    let items: Vec<ListItem<'_>> = if panes.is_empty() {
+        vec![ListItem::new(Line::from("(no terminal panes)"))]
+    } else {
+        panes
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let sel = i == selected && terminal_focus;
+                let style = if sel {
+                    Style::default()
+                        .bg(Color::DarkGray)
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                let line = Line::from(vec![
+                    Span::styled(format!("{} ", p.title), style),
+                    Span::styled(
+                        format!("{} · {} ", p.source, p.status),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]);
+                ListItem::new(line)
+            })
+            .collect()
+    };
+
+    let border = if terminal_focus {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    List::new(items).block(
+        Block::default()
+            .title(" Terminal — panes ")
+            .borders(Borders::ALL)
+            .border_style(border),
+    )
+}
+
+pub fn terminal_output_widget(lines: &[String], terminal_focus: bool) -> Paragraph<'_> {
+    let border = if terminal_focus {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let text: Vec<Line> = if lines.is_empty() {
+        vec![Line::from(Span::styled(
+            "Select a pane (↑/↓). Live PTY/CDP output streams via WebSocket or API.",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    } else {
+        lines
+            .iter()
+            .map(|l| Line::from(Span::raw(l.as_str())))
+            .collect()
+    };
+
+    Paragraph::new(text).block(
+        Block::default()
+            .title(" Output ")
+            .borders(Borders::ALL)
+            .border_style(border),
+    )
 }
 
 /// Build pipeline stats from a slice of opportunities.

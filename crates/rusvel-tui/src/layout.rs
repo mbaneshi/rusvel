@@ -9,16 +9,18 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 /// │   Tasks        │    (table)      │
 /// ├────────────────┼─────────────────┤
 /// │   Pipeline     │    Events       │
-/// │   (bar chart)  │    (timeline)   │
-/// └────────────────┴─────────────────┘
+/// ├────────────────┴─────────────────┤
+/// │   Terminal (panes | output)       │
+/// └──────────────────────────────────┘
 /// ```
-pub fn dashboard_layout(area: Rect) -> (Rect, [Rect; 4]) {
+pub fn dashboard_layout(area: Rect) -> (Rect, [Rect; 4], Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header
-            Constraint::Min(8),    // top row
-            Constraint::Min(8),    // bottom row
+            Constraint::Length(3),
+            Constraint::Min(6),
+            Constraint::Min(6),
+            Constraint::Min(7),
         ])
         .split(area);
 
@@ -32,5 +34,14 @@ pub fn dashboard_layout(area: Rect) -> (Rect, [Rect; 4]) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(rows[2]);
 
-    (rows[0], [top[0], top[1], bottom[0], bottom[1]])
+    (rows[0], [top[0], top[1], bottom[0], bottom[1]], rows[3])
+}
+
+/// Split the terminal strip: pane list | output.
+pub fn terminal_split(area: Rect) -> [Rect; 2] {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(38), Constraint::Percentage(62)])
+        .split(area);
+    [chunks[0], chunks[1]]
 }

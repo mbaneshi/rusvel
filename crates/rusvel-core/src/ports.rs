@@ -20,6 +20,7 @@
 //! | [`ConfigPort`] | Settings + per-session overrides |
 //! | [`EmbeddingPort`] | Text → dense vector embeddings |
 //! | [`VectorStorePort`] | Similarity search over embeddings |
+//! | [`BrowserPort`] | Chrome DevTools Protocol: tabs, observe, evaluate, navigate |
 //!
 //! **Not here (ADR-006):** `HarvestPort` and `PublishPort` are
 //! engine-internal traits, not cross-cutting concerns.
@@ -487,6 +488,9 @@ pub trait TerminalPort: Send + Sync {
 
     async fn list_windows(&self, session_id: &SessionId) -> Result<Vec<Window>>;
 
+    /// All panes for windows in this session (creation order).
+    async fn list_panes_for_session(&self, session_id: &SessionId) -> Result<Vec<Pane>>;
+
     async fn close_window(&self, window_id: &WindowId) -> Result<()>;
 
     async fn create_pane(
@@ -499,6 +503,9 @@ pub trait TerminalPort: Send + Sync {
     ) -> Result<PaneId>;
 
     async fn write_pane(&self, pane_id: &PaneId, data: &[u8]) -> Result<()>;
+
+    /// Append bytes to the pane's output broadcast (for flow/playbook transcripts without PTY echo).
+    async fn inject_pane_output(&self, pane_id: &PaneId, data: &[u8]) -> Result<()>;
 
     async fn resize_pane(&self, pane_id: &PaneId, size: PaneSize) -> Result<()>;
 
@@ -514,4 +521,33 @@ pub trait TerminalPort: Send + Sync {
     async fn panes_for_run(&self, run_id: &RunId) -> Result<Vec<Pane>>;
 
     async fn panes_for_flow(&self, execution_id: &FlowExecutionId) -> Result<Vec<Pane>>;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  16. BrowserPort — Chrome DevTools Protocol (passive + agent-driven)
+// ════════════════════════════════════════════════════════════════════
+
+/// Chrome/Chromium session via CDP (WebSocket to `--remote-debugging-port`).
+///
+/// Implementations live in `rusvel-cdp`. Engines receive `Arc<dyn BrowserPort>`
+/// only through composition; they do not depend on the adapter crate (ADR-010).
+#[async_trait]
+pub trait BrowserPort: Send + Sync {
+    /// Connect to a running browser instance (`http://127.0.0.1:9222` or `ws://…` base).
+    async fn connect(&self, endpoint: &str) -> Result<()>;
+
+    async fn disconnect(&self) -> Result<()>;
+
+    /// List open targets of type `page` with optional platform hint from the URL.
+    async fn tabs(&self) -> Result<Vec<TabInfo>>;
+
+    /// Subscribe to events for a tab (network captures, navigations). Phase 1 may emit none.
+    async fn observe(
+        &self,
+        tab_id: &str,
+    ) -> Result<tokio::sync::broadcast::Receiver<BrowserEvent>>;
+
+    async fn evaluate_js(&self, tab_id: &str, script: &str) -> Result<serde_json::Value>;
+
+    async fn navigate(&self, tab_id: &str, url: &str) -> Result<()>;
 }

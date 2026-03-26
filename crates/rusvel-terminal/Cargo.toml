@@ -13,6 +13,8 @@ async-trait = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
 portable-pty = "0.8"
 
 [dev-dependencies]

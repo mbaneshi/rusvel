@@ -119,11 +119,23 @@ impl ManagerInner {
     fn extract_source_fields(source: &PaneSource) -> (Option<RunId>, Option<String>, Option<FlowExecutionId>) {
         match source {
             PaneSource::AgentTool { run_id } => (Some(*run_id), None, None),
-            PaneSource::Delegation { parent_run_id, .. } => (Some(*parent_run_id), None, None),
+            PaneSource::Delegation { delegated_run_id, .. } => (Some(*delegated_run_id), None, None),
             PaneSource::FlowNode {
                 execution_id,
                 node_id,
-            } => (None, Some(node_id.clone()), Some(*execution_id)),
+                ..
+            } => {
+                let exec = uuid::Uuid::parse_str(execution_id)
+                    .ok()
+                    .map(FlowExecutionId::from_uuid);
+                (None, Some(node_id.clone()), exec)
+            }
+            PaneSource::PlaybookStep { run_id, .. } => {
+                let rid = uuid::Uuid::parse_str(run_id)
+                    .ok()
+                    .map(RunId::from_uuid);
+                (rid, None, None)
+            }
             _ => (None, None, None),
         }
     }
@@ -222,6 +234,27 @@ impl TerminalPort for TerminalManager {
 
     async fn list_windows(&self, session_id: &SessionId) -> Result<Vec<Window>> {
         self.inner.list_windows_impl(session_id).await
+    }
+
+    async fn list_panes_for_session(&self, session_id: &SessionId) -> Result<Vec<Pane>> {
+        let window_ids = {
+            let idx = self.inner.session_windows.read().await;
+            idx.get(session_id).cloned().unwrap_or_default()
+        };
+        let windows = self.inner.windows.read().await;
+        let panes = self.inner.panes.read().await;
+        let mut out = Vec::new();
+        for wid in window_ids {
+            if let Some(w) = windows.get(&wid) {
+                for pid in &w.panes {
+                    if let Some(p) = panes.get(pid) {
+                        out.push(p.clone());
+                    }
+                }
+            }
+        }
+        out.sort_by_key(|p| p.created_at);
+        Ok(out)
     }
 
     async fn close_window(&self, window_id: &WindowId) -> Result<()> {
@@ -405,6 +438,18 @@ impl TerminalPort for TerminalManager {
         let mut w = rt.writer.lock().await;
         w.write_all(data).map_err(|e| RusvelError::Internal(e.to_string()))?;
         w.flush().ok();
+        Ok(())
+    }
+
+    async fn inject_pane_output(&self, pane_id: &PaneId, data: &[u8]) -> Result<()> {
+        let active = self.inner.active.read().await;
+        let rt = active
+            .get(pane_id)
+            .ok_or_else(|| RusvelError::NotFound {
+                kind: "Pane".into(),
+                id: pane_id.to_string(),
+            })?;
+        let _ = rt.out.send(data.to_vec());
         Ok(())
     }
 

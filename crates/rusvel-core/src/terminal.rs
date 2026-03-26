@@ -33,21 +33,30 @@ pub enum WindowSource {
 #[serde(tag = "type", content = "value")]
 pub enum PaneSource {
     Shell,
+    /// Pane tied to a department (e.g. dept panel terminal).
+    Department(String),
     AgentTool { run_id: RunId },
     Delegation {
+        /// Orchestrator run when known (optional in tool args; may equal `delegated_run_id`).
         parent_run_id: RunId,
+        /// Sub-agent run — indexed by [`Pane::run_id`] for `panes_for_run`.
+        delegated_run_id: RunId,
         persona: String,
     },
     FlowNode {
-        execution_id: FlowExecutionId,
+        flow_id: String,
         node_id: String,
+        execution_id: String,
     },
     PlaybookStep {
         playbook_id: String,
-        step_id: String,
+        step_index: usize,
+        run_id: String,
     },
     Browser {
         tab_id: String,
+        #[serde(default)]
+        platform: String,
     },
     Builder {
         agent_id: String,
