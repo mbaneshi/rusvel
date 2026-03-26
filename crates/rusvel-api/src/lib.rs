@@ -20,8 +20,10 @@ pub mod flow_routes;
 pub mod help;
 pub mod hook_dispatch;
 pub mod hooks;
+pub mod kits;
 pub mod knowledge;
 pub mod mcp_servers;
+pub mod playbooks;
 pub mod routes;
 pub mod rules;
 pub mod skills;
@@ -97,6 +99,8 @@ pub fn build_router_with_frontend(
 
     let api = Router::new()
         .route("/api/health", get(routes::health))
+        .route("/api/brief", get(engine_routes::brief_get))
+        .route("/api/brief/generate", post(engine_routes::brief_generate))
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
         .route("/api/sessions/{id}", get(routes::get_session))
@@ -239,7 +243,29 @@ pub fn build_router_with_frontend(
         .route("/api/flows/{id}/run", post(flow_routes::run_flow))
         .route("/api/flows/{id}/executions", get(flow_routes::list_executions))
         .route("/api/flows/executions/{id}", get(flow_routes::get_execution))
+        .route(
+            "/api/flows/executions/{id}/resume",
+            post(flow_routes::resume_flow),
+        )
+        .route(
+            "/api/flows/executions/{id}/retry/{node_id}",
+            post(flow_routes::retry_node),
+        )
+        .route(
+            "/api/flows/executions/{id}/checkpoint",
+            get(flow_routes::get_checkpoint),
+        )
         .route("/api/flows/node-types", get(flow_routes::list_node_types))
+        // Playbooks (multi-step pipelines)
+        .route("/api/playbooks/runs", get(playbooks::list_runs))
+        .route("/api/playbooks/runs/{run_id}", get(playbooks::get_run))
+        .route("/api/playbooks", get(playbooks::list_playbooks).post(playbooks::create_playbook))
+        .route("/api/playbooks/{id}", get(playbooks::get_playbook))
+        .route("/api/playbooks/{id}/run", post(playbooks::run_playbook))
+        // Starter kits
+        .route("/api/kits", get(kits::list_kits))
+        .route("/api/kits/{id}", get(kits::get_kit))
+        .route("/api/kits/{id}/install", post(kits::install_kit))
         // Capability Engine
         .route("/api/capability/build", post(capability::build_capability))
         // Analytics
@@ -269,6 +295,7 @@ pub fn build_router_with_frontend(
             post(knowledge::hybrid_search_knowledge),
         )
         .route("/api/knowledge/stats", get(knowledge::knowledge_stats))
+        .route("/api/knowledge/related", get(knowledge::related_knowledge))
         .route(
             "/api/knowledge/{id}",
             axum::routing::delete(knowledge::delete_knowledge),

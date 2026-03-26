@@ -10,17 +10,192 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use rusvel_core::domain::{
-    HybridHitSource, HybridSearchHit, VectorEntry, VectorSearchResult,
+    Event, HybridHitSource, HybridSearchHit, MemoryEntry, MemoryKind, VectorEntry,
+    VectorSearchResult,
 };
 use rusvel_core::id::SessionId;
+use rusvel_core::ports::{EmbeddingPort, MemoryPort, StoragePort, VectorStorePort};
 use rusvel_core::{reciprocal_rank_fusion, RRF_K_DEFAULT};
 
 use crate::AppState;
+
+/// Session used for FTS when the source event has no `session_id` (e.g. code analysis, flow).
+fn kb_session_id(event: &Event) -> SessionId {
+    event
+        .session_id
+        .unwrap_or_else(|| SessionId::from_uuid(Uuid::nil()))
+}
+
+/// Background task: subscribe to [`rusvel_event::EventBus`] and index matching engine events
+/// into session memory and (when configured) the vector store. Task #33.
+pub fn spawn_knowledge_indexer(
+    event_bus: Arc<rusvel_event::EventBus>,
+    memory: Arc<dyn MemoryPort>,
+    storage: Arc<dyn StoragePort>,
+    embedding: Option<Arc<dyn EmbeddingPort>>,
+    vector_store: Option<Arc<dyn VectorStorePort>>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut rx = event_bus.subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    if let Err(e) = index_event_for_kb(
+                        &memory,
+                        &storage,
+                        embedding.as_ref(),
+                        vector_store.as_ref(),
+                        &event,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            error = %e,
+                            kind = %event.kind,
+                            "knowledge auto-index skipped"
+                        );
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("knowledge indexer lagged {n} events");
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}
+
+async fn index_event_for_kb(
+    memory: &Arc<dyn MemoryPort>,
+    storage: &Arc<dyn StoragePort>,
+    embedding: Option<&Arc<dyn EmbeddingPort>>,
+    vector_store: Option<&Arc<dyn VectorStorePort>>,
+    event: &Event,
+) -> rusvel_core::error::Result<()> {
+    if !should_index_kind(&event.kind) {
+        return Ok(());
+    }
+
+    let Some(text) = indexable_text(storage, event).await
+        .map(|s| truncate_kb_text(s))
+    else {
+        tracing::debug!(kind = %event.kind, "knowledge indexer: no text to index");
+        return Ok(());
+    };
+
+    let session_id = kb_session_id(event);
+    let dept = event.source.clone();
+    let meta = serde_json::json!({
+        "department": dept,
+        "event_kind": event.kind,
+        "event_id": event.id.to_string(),
+        "indexed_at": Utc::now().to_rfc3339(),
+    });
+
+    let entry = MemoryEntry {
+        id: None,
+        session_id,
+        kind: MemoryKind::Custom("kb.auto".into()),
+        content: text.clone(),
+        embedding: None,
+        created_at: Utc::now(),
+        metadata: meta.clone(),
+    };
+    memory.store(entry).await?;
+
+    if let (Some(embed), Some(vs)) = (embedding, vector_store) {
+        let chunks = chunk_text(&text, 500);
+        for chunk in chunks {
+            if chunk.trim().is_empty() {
+                continue;
+            }
+            let emb = embed.embed_one(&chunk).await?;
+            let id = Uuid::now_v7().to_string();
+            let mut chunk_meta = meta.clone();
+            if let Some(obj) = chunk_meta.as_object_mut() {
+                obj.insert("chunk".into(), serde_json::Value::String(chunk.clone()));
+            }
+            vs.upsert(&id, &chunk, emb, chunk_meta).await?;
+        }
+    }
+
+    Ok(())
+}
+
+fn should_index_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "code.analyzed"
+            | "content.drafted"
+            | "content.published"
+            | "harvest.opportunity.discovered"
+            | "harvest.opportunity.scored"
+            | "flow.execution.completed"
+    )
+}
+
+const KB_TEXT_MAX: usize = 50_000;
+
+fn truncate_kb_text(s: String) -> String {
+    if s.len() <= KB_TEXT_MAX {
+        return s;
+    }
+    format!("{}…", &s[..KB_TEXT_MAX.saturating_sub(1)])
+}
+
+async fn indexable_text(storage: &Arc<dyn StoragePort>, event: &Event) -> Option<String> {
+    let objects = storage.objects();
+    match event.kind.as_str() {
+        "code.analyzed" => {
+            let sid = event.payload.get("snapshot_id")?.as_str()?;
+            let json = objects.get("code_analysis", sid).await.ok()??;
+            Some(format!(
+                "Code analysis snapshot `{}`:\n{}",
+                sid,
+                serde_json::to_string_pretty(&json).unwrap_or_else(|_| json.to_string())
+            ))
+        }
+        "content.drafted" | "content.published" => {
+            let cid = event.payload.get("content_id")?.as_str()?;
+            let v = objects.get("content", cid).await.ok()??;
+            let title = v.get("title")?.as_str()?;
+            let body = v.get("body_markdown")?.as_str()?;
+            let label = if event.kind.as_str() == "content.published" {
+                "Published content"
+            } else {
+                "Content draft"
+            };
+            Some(format!("{label}: {title}\n\n{body}"))
+        }
+        "harvest.opportunity.discovered" | "harvest.opportunity.scored" => {
+            let oid = event.payload.get("id")?.as_str()?;
+            let Some(v) = objects.get("opportunity", oid).await.ok().flatten() else {
+                let title = event.payload.get("title").and_then(|x| x.as_str()).unwrap_or(oid);
+                return Some(format!("Harvest opportunity (id {oid}): {title}"));
+            };
+            let title = v.get("title")?.as_str()?;
+            let desc = v.get("description")?.as_str()?;
+            let url = v.get("url").and_then(|x| x.as_str()).unwrap_or("");
+            Some(format!("Opportunity: {title}\nURL: {url}\n\n{desc}"))
+        }
+        "flow.execution.completed" => {
+            let flow_id = event.payload.get("flow_id")?.as_str()?;
+            let exec_id = event.payload.get("execution_id")?.as_str()?;
+            let status = event.payload.get("status")?.as_str()?;
+            Some(format!(
+                "Flow execution completed\nflow_id: {flow_id}\nexecution_id: {exec_id}\nstatus: {status}"
+            ))
+        }
+        _ => None,
+    }
+}
 
 /// Max candidates per leg and max fused results returned (explicit caps).
 pub const HYBRID_SEARCH_MAX_LIMIT: usize = 50;
@@ -68,6 +243,27 @@ pub struct KnowledgeStatsResponse {
     pub total_entries: usize,
     pub model_name: String,
     pub dimensions: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RelatedQuery {
+    pub query: String,
+    pub dept: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RelatedKnowledgeHit {
+    pub content: String,
+    pub department: String,
+    pub score: f64,
+    pub entry_id: String,
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RelatedKnowledgeResponse {
+    pub hits: Vec<RelatedKnowledgeHit>,
 }
 
 // ── Chunking helper ──────────────────────────────────────────
@@ -407,6 +603,80 @@ pub async fn knowledge_stats(
         model_name,
         dimensions,
     }))
+}
+
+/// GET /api/knowledge/related — vector search over auto-indexed entries; optional `dept` filters
+/// by emitting department (`event.source`, e.g. `code`, `content`).
+pub async fn related_knowledge(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<RelatedQuery>,
+) -> Result<Json<RelatedKnowledgeResponse>, (StatusCode, String)> {
+    let query = q.query.trim();
+    if query.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "query must not be empty".into()));
+    }
+
+    let embed_port = state.embedding.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Embedding service not available".into(),
+        )
+    })?;
+    let vector_store = state.vector_store.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Vector store not available".into(),
+        )
+    })?;
+
+    let out_limit = q.limit.unwrap_or(10).clamp(1, HYBRID_SEARCH_MAX_LIMIT);
+    let fetch_limit = (out_limit * 4).clamp(20, 80);
+
+    let query_embedding = embed_port.embed_one(query).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Embedding failed: {e}"),
+        )
+    })?;
+
+    let raw = vector_store
+        .search(&query_embedding, fetch_limit)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Search failed: {e}"),
+            )
+        })?;
+
+    let dept_filter = q.dept.as_ref().map(|s| s.trim().to_lowercase());
+
+    let mut hits = Vec::new();
+    for r in raw {
+        let dept_meta = r
+            .entry
+            .metadata
+            .get("department")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if let Some(ref want) = dept_filter {
+            if !want.is_empty() && dept_meta.to_lowercase() != *want {
+                continue;
+            }
+        }
+        hits.push(RelatedKnowledgeHit {
+            content: r.entry.content.clone(),
+            department: dept_meta.to_string(),
+            score: r.score,
+            entry_id: r.entry.id.clone(),
+            metadata: r.entry.metadata.clone(),
+        });
+        if hits.len() >= out_limit {
+            break;
+        }
+    }
+
+    Ok(Json(RelatedKnowledgeResponse { hits }))
 }
 
 #[cfg(test)]

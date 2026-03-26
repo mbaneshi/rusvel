@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 rusvel-core = { workspace = true }
 rusvel-db = { workspace = true }
+rusvel-event = { workspace = true }
 rusvel-schema = { workspace = true }
 rusvel-llm = { workspace = true }
 rusvel-agent = { workspace = true }
