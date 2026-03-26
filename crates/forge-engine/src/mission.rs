@@ -548,24 +548,6 @@ fn truncate_highlight(s: &str) -> String {
     out
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BriefSection {
-    pub department: String,
-    pub status: String,
-    pub highlights: Vec<String>,
-    pub metrics: serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExecutiveBrief {
-    pub id: String,
-    pub date: NaiveDate,
-    pub sections: Vec<BriefSection>,
-    pub summary: String,
-    pub action_items: Vec<String>,
-    pub created_at: chrono::DateTime<Utc>,
-}
-
 #[derive(Deserialize)]
 struct DeptBriefJson {
     status: String,
