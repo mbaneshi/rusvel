@@ -19,7 +19,7 @@ pub mod proposal;
 pub mod scorer;
 pub mod source;
 
-pub use cdp_source::CdpSource;
+pub use cdp_source::{extract_js_listing_cards, CdpSource, DEFAULT_CDP_EXTRACT_JS};
 
 use pipeline::{Pipeline, PipelineStats};
 use proposal::{Proposal, ProposalGenerator};

@@ -279,6 +279,9 @@ pub struct HarvestScanRequest {
     pub session_id: String,
     pub sources: Vec<String>,
     pub query: String,
+    /// Optional CDP extract script (must evaluate to a JSON array string). When omitted, the engine default is used.
+    #[serde(default)]
+    pub cdp_extract_js: Option<String>,
 }
 
 /// POST /api/dept/harvest/scan — run configured sources, score, persist opportunities.
@@ -313,7 +316,10 @@ pub async fn harvest_scan(
                     .map(|c| c as std::sync::Arc<dyn rusvel_core::ports::BrowserPort>);
                 let endpoint = std::env::var("RUSVEL_CDP_ENDPOINT")
                     .unwrap_or_else(|_| "http://127.0.0.1:9222".into());
-                let src = harvest_engine::CdpSource::new(browser, endpoint, body.query.clone());
+                let mut src = harvest_engine::CdpSource::new(browser, endpoint, body.query.clone());
+                if let Some(js) = body.cdp_extract_js.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                    src = src.with_extract_js(js.to_string());
+                }
                 let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
                 all.append(&mut v);
             }
