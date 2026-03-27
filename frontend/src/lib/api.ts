@@ -781,9 +781,22 @@ export async function postContentDraft(
 		})
 	});
 }
-export async function getContentList(sessionId: string): Promise<unknown> {
+/** Shape of `ContentItem` from the content engine list API. */
+export interface ContentItemRow {
+	id: string;
+	title: string;
+	body_markdown: string;
+	kind: string;
+	status: string;
+	approval?: string;
+	scheduled_at?: string | null;
+	published_at?: string | null;
+	metadata?: Record<string, unknown>;
+}
+
+export async function getContentList(sessionId: string): Promise<ContentItemRow[]> {
 	const sp = new URLSearchParams({ session_id: sessionId });
-	return request(`/api/dept/content/list?${sp}`);
+	return request<ContentItemRow[]>(`/api/dept/content/list?${sp}`);
 }
 export async function getHarvestPipeline(sessionId: string): Promise<unknown> {
 	const sp = new URLSearchParams({ session_id: sessionId });
