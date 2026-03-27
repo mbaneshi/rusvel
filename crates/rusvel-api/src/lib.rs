@@ -89,6 +89,8 @@ pub struct AppState {
     pub cdp: Option<Arc<rusvel_cdp::CdpClient>>,
     /// Bearer token auth (opt-in via `RUSVEL_API_TOKEN`); see [`auth::AuthConfig`].
     pub auth: auth::AuthConfig,
+    /// Incoming webhooks (HMAC + object-store registrations).
+    pub webhook_receiver: Arc<WebhookReceiver>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -255,6 +257,15 @@ pub fn build_router_with_frontend(
         .route(
             "/api/dept/gtm/deals/advance",
             post(engine_routes::gtm_deal_advance),
+        )
+        .route(
+            "/api/dept/gtm/outreach/sequences",
+            get(engine_routes::gtm_outreach_sequences_list)
+                .post(engine_routes::gtm_outreach_sequences_create),
+        )
+        .route(
+            "/api/dept/gtm/outreach/sequences/{id}/activate",
+            post(engine_routes::gtm_outreach_sequences_activate),
         )
         .route(
             "/api/dept/gtm/outreach/execute",

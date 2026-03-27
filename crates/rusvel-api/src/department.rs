@@ -373,6 +373,10 @@ pub async fn dept_chat(
                  - Create contact: POST /api/dept/gtm/contacts {session_id, name, email, company?, role?, tags?, links?}\n\
                  - List deals (with contact names for UI): GET /api/dept/gtm/deals?session_id=<id>&stage=<optional>\n\
                  - Advance deal stage: POST /api/dept/gtm/deals/advance {session_id, deal_id, stage} — stages: Lead, Qualified, Proposal, Negotiation, Won, Lost\n\
+                 - List outreach sequences: GET /api/dept/gtm/outreach/sequences?session_id=<id>\n\
+                 - Create sequence (draft): POST /api/dept/gtm/outreach/sequences {session_id, name, steps[{delay_days, channel, template}]}\n\
+                 - Activate sequence: POST /api/dept/gtm/outreach/sequences/{id}/activate {session_id}\n\
+                 - Run sequence on contact: POST /api/dept/gtm/outreach/execute {session_id, sequence_id, contact_id}\n\
                  - List invoices: GET /api/dept/gtm/invoices?session_id=<id>&status=<optional Draft|Sent|Paid|Overdue|Cancelled>\n\
                  - Create invoice: POST /api/dept/gtm/invoices {session_id, contact_id, items[{description, quantity, unit_price}], due_date RFC3339}\n\
                  - Invoice detail: GET /api/dept/gtm/invoices/{id}?session_id=<id>\n\

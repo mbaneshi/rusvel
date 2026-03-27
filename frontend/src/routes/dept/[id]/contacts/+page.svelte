@@ -134,6 +134,13 @@
 					<ArrowRight class="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
 				</a>
 				<a
+					href="/dept/gtm/outreach"
+					class="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					Outreach
+					<ArrowRight class="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
+				</a>
+				<a
 					href="/dept/gtm/invoices"
 					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
 				>

@@ -985,6 +985,74 @@ export async function postGtmInvoiceStatus(
 	});
 }
 
+/** Aligns with `gtm_engine::SequenceStatus` (S-033). */
+export type GtmSequenceStatus = 'Draft' | 'Active' | 'Paused' | 'Completed';
+
+export interface GtmSequenceStep {
+	delay_days: number;
+	channel: string;
+	template: string;
+}
+
+export interface GtmOutreachSequenceRow {
+	id: string;
+	session_id: string;
+	name: string;
+	steps: GtmSequenceStep[];
+	status: GtmSequenceStatus;
+	created_at: string;
+	metadata: Record<string, unknown>;
+}
+
+export async function getGtmOutreachSequences(
+	sessionId: string
+): Promise<GtmOutreachSequenceRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	return request(`/api/dept/gtm/outreach/sequences?${sp}`);
+}
+
+export async function postGtmOutreachSequence(
+	sessionId: string,
+	body: { name: string; steps: GtmSequenceStep[] }
+): Promise<{ id: string }> {
+	return request('/api/dept/gtm/outreach/sequences', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			name: body.name,
+			steps: body.steps
+		})
+	});
+}
+
+export async function postGtmOutreachSequenceActivate(
+	sessionId: string,
+	sequenceId: string
+): Promise<void> {
+	await request(
+		`/api/dept/gtm/outreach/sequences/${encodeURIComponent(sequenceId)}/activate`,
+		{
+			method: 'POST',
+			body: JSON.stringify({ session_id: sessionId })
+		}
+	);
+}
+
+export async function postGtmOutreachExecute(
+	sessionId: string,
+	sequenceId: string,
+	contactId: string
+): Promise<{ job_id: string; job_ids: string[]; count: number }> {
+	return request('/api/dept/gtm/outreach/execute', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			sequence_id: sequenceId,
+			contact_id: contactId
+		})
+	});
+}
+
 export interface OpportunityRow {
 	id: string;
 	title: string;

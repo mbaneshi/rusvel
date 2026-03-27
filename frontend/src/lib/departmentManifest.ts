@@ -98,6 +98,7 @@ export const deptExtraSections: Record<string, { segment: string; label: string 
 	content: [{ segment: 'calendar', label: 'Calendar' }],
 	gtm: [
 		{ segment: 'contacts', label: 'Contacts' },
+		{ segment: 'outreach', label: 'Outreach' },
 		{ segment: 'deals', label: 'Deals' },
 		{ segment: 'invoices', label: 'Invoices' }
 	]

@@ -13,7 +13,7 @@ use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use gtm_engine::events as gtm_events;
-use gtm_engine::{DealId, DealStage, SequenceId};
+use gtm_engine::{DealId, DealStage, OutreachSequence, SequenceId, SequenceStep};
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -968,6 +968,95 @@ pub async fn gtm_outreach_execute(
         "job_ids": [job_id.to_string()],
         "count": 1,
     })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmOutreachSequencesQuery {
+    pub session_id: String,
+}
+
+/// GET /api/dept/gtm/outreach/sequences?session_id= — list outreach sequences for the session (S-033).
+pub async fn gtm_outreach_sequences_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<GtmOutreachSequencesQuery>,
+) -> ApiResult<Vec<OutreachSequence>> {
+    let engine = state
+        .gtm_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let sid = parse_session_id(&q.session_id)?;
+    let rows = engine
+        .outreach()
+        .list_sequences(sid)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(rows))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmOutreachSequenceCreateBody {
+    pub session_id: String,
+    pub name: String,
+    pub steps: Vec<SequenceStep>,
+}
+
+/// POST /api/dept/gtm/outreach/sequences — create a draft sequence (S-033).
+pub async fn gtm_outreach_sequences_create(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<GtmOutreachSequenceCreateBody>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .gtm_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    if body.name.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "name is required".into()));
+    }
+    let id = engine
+        .outreach()
+        .create_sequence(sid, body.name.trim().to_string(), body.steps)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::json!({ "id": id.to_string() })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmOutreachSequenceActivateBody {
+    pub session_id: String,
+}
+
+/// POST /api/dept/gtm/outreach/sequences/{id}/activate — set sequence status to Active (S-033).
+pub async fn gtm_outreach_sequences_activate(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<GtmOutreachSequenceActivateBody>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .gtm_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let seq_id: SequenceId = id.parse().map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid sequence id (UUID)".into(),
+        )
+    })?;
+    let seq = engine
+        .outreach()
+        .get_sequence(&seq_id)
+        .await
+        .map_err(engine_err)?;
+    if seq.session_id != sid {
+        return Err((StatusCode::NOT_FOUND, "sequence not found for session".into()));
+    }
+    engine
+        .outreach()
+        .activate_sequence(&seq_id)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 #[derive(Debug, Deserialize)]
