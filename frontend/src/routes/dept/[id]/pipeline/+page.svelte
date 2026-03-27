@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { activeSession } from '$lib/stores';
+	import { browser } from '$app/environment';
 	import {
 		getHarvestOpportunities,
 		getJobs,
 		postHarvestAdvance,
 		postHarvestProposal,
+		type JobListItem,
 		type OpportunityRow
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
@@ -23,7 +25,8 @@
 	let busyProposal = $state<string | null>(null);
 	/** Freelancer / voice string sent to `POST /api/dept/harvest/proposal` as `profile`. */
 	let proposalProfile = $state('default');
-	let proposalJobs = $state<Record<string, unknown>[]>([]);
+	let proposalJobs = $state<JobListItem[]>([]);
+	let refreshingJobs = $state(false);
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
@@ -48,27 +51,25 @@
 		return rows.filter((r) => stageOf(r) === stage);
 	}
 
-	/** Serde JSON for Rust unit enums: `{ "Queued": null }`. */
-	function jobStatusLabel(raw: unknown): string {
-		if (typeof raw === 'string') return raw;
-		if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-			const keys = Object.keys(raw as object);
-			if (keys.length === 1) return keys[0];
-		}
-		return '';
-	}
-
 	async function loadProposalJobs() {
 		if (!sessionId || !isHarvest) return;
 		try {
-			const rows = await getJobs(sessionId, {
+			proposalJobs = await getJobs(sessionId, {
 				kinds: ['ProposalDraft'],
 				statuses: ['Queued', 'Running', 'AwaitingApproval'],
 				limit: 24
 			});
-			proposalJobs = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
 		} catch {
 			proposalJobs = [];
+		}
+	}
+
+	async function refreshProposalJobs() {
+		refreshingJobs = true;
+		try {
+			await loadProposalJobs();
+		} finally {
+			refreshingJobs = false;
 		}
 	}
 
@@ -89,8 +90,18 @@
 		if (!sessionId || !isHarvest) return;
 		void load();
 		void loadProposalJobs();
-		const t = setInterval(() => void loadProposalJobs(), 8000);
-		return () => clearInterval(t);
+		const onVis = () => {
+			if (!browser || !document.hidden) void loadProposalJobs();
+		};
+		document.addEventListener('visibilitychange', onVis);
+		const t = setInterval(() => {
+			if (browser && document.hidden) return;
+			void loadProposalJobs();
+		}, 12000);
+		return () => {
+			clearInterval(t);
+			document.removeEventListener('visibilitychange', onVis);
+		};
 	});
 
 	async function moveTo(oppId: string, stage: string) {
@@ -164,20 +175,36 @@
 		{/if}
 	</div>
 
-	{#if isHarvest && sessionId && proposalJobs.length > 0}
+	{#if isHarvest && sessionId}
 		<div class="border-b border-border bg-muted/30 px-4 py-2">
-			<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-				Proposal jobs (queue)
-			</p>
-			<ul class="mt-1.5 flex flex-wrap gap-2">
-				{#each proposalJobs as j}
-					<li
-						class="rounded border border-border bg-background px-2 py-1 font-mono text-[10px] text-foreground"
-					>
-						{String(j.id ?? '').slice(0, 8)}… · {jobStatusLabel(j.status)}
-					</li>
-				{/each}
-			</ul>
+			<div class="flex items-center justify-between gap-2">
+				<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+					Proposal jobs (queue)
+				</p>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="!h-7 !px-2 !text-[10px]"
+					loading={refreshingJobs}
+					disabled={refreshingJobs}
+					onclick={() => refreshProposalJobs()}
+				>
+					Refresh
+				</Button>
+			</div>
+			{#if proposalJobs.length > 0}
+				<ul class="mt-1.5 flex flex-wrap gap-2">
+					{#each proposalJobs as j}
+						<li
+							class="rounded border border-border bg-background px-2 py-1 font-mono text-[10px] text-foreground"
+						>
+							{j.id.slice(0, 8)}… · {j.status}
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="mt-1 text-[10px] text-muted-foreground">No proposal jobs in this session.</p>
+			{/if}
 		</div>
 	{/if}
 

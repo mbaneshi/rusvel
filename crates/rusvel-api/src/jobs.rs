@@ -5,11 +5,73 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
+use serde::Serialize;
 
 use rusvel_core::domain::{Job, JobFilter, JobKind, JobStatus};
-use rusvel_core::id::SessionId;
+use rusvel_core::id::{JobId, SessionId};
 
 use crate::AppState;
+
+/// Wire shape for [`GET /api/jobs`]: `kind` and `status` are plain strings (same vocabulary as query filters).
+#[derive(Debug, Serialize)]
+pub struct JobListItem {
+    pub id: JobId,
+    pub session_id: SessionId,
+    pub kind: String,
+    pub status: String,
+    pub payload: serde_json::Value,
+    pub scheduled_at: Option<DateTime<Utc>>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub retries: u32,
+    pub max_retries: u32,
+    pub error: Option<String>,
+    pub metadata: serde_json::Value,
+}
+
+impl From<Job> for JobListItem {
+    fn from(j: Job) -> Self {
+        Self {
+            id: j.id,
+            session_id: j.session_id,
+            kind: kind_to_wire(&j.kind),
+            status: status_to_wire(&j.status),
+            payload: j.payload,
+            scheduled_at: j.scheduled_at,
+            started_at: j.started_at,
+            completed_at: j.completed_at,
+            retries: j.retries,
+            max_retries: j.max_retries,
+            error: j.error,
+            metadata: j.metadata,
+        }
+    }
+}
+
+fn kind_to_wire(k: &JobKind) -> String {
+    match k {
+        JobKind::AgentRun => "AgentRun".into(),
+        JobKind::ContentPublish => "ContentPublish".into(),
+        JobKind::OutreachSend => "OutreachSend".into(),
+        JobKind::HarvestScan => "HarvestScan".into(),
+        JobKind::CodeAnalyze => "CodeAnalyze".into(),
+        JobKind::ProposalDraft => "ProposalDraft".into(),
+        JobKind::ScheduledCron => "ScheduledCron".into(),
+        JobKind::Custom(s) => format!("Custom:{s}"),
+    }
+}
+
+fn status_to_wire(s: &JobStatus) -> String {
+    match s {
+        JobStatus::Queued => "Queued".into(),
+        JobStatus::Running => "Running".into(),
+        JobStatus::Succeeded => "Succeeded".into(),
+        JobStatus::Failed => "Failed".into(),
+        JobStatus::Cancelled => "Cancelled".into(),
+        JobStatus::AwaitingApproval => "AwaitingApproval".into(),
+    }
+}
 
 /// `GET /api/jobs` — list jobs with optional filters.
 ///
@@ -19,14 +81,14 @@ use crate::AppState;
 pub async fn list_jobs(
     State(state): State<Arc<AppState>>,
     Query(q): Query<JobsQuery>,
-) -> Result<Json<Vec<Job>>, (StatusCode, String)> {
+) -> Result<Json<Vec<JobListItem>>, (StatusCode, String)> {
     let filter = build_filter(q).map_err(|e: String| (StatusCode::BAD_REQUEST, e))?;
     let jobs = state
         .jobs
         .list(filter)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(jobs))
+    Ok(Json(jobs.into_iter().map(JobListItem::from).collect()))
 }
 
 #[derive(Debug, serde::Deserialize)]

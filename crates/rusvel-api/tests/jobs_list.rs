@@ -64,4 +64,6 @@ async fn get_jobs_filters_by_session_and_kind() {
     let arr: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0]["id"].as_str().unwrap(), job_id.to_string());
+    assert_eq!(arr[0]["status"].as_str().unwrap(), "Queued");
+    assert_eq!(arr[0]["kind"].as_str().unwrap(), "ProposalDraft");
 }

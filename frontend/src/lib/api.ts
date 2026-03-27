@@ -853,7 +853,22 @@ export async function postHarvestProposal(
 	});
 }
 
-/** GET /api/jobs — central queue; `status` / `kinds` are comma-separated on the wire. */
+/** GET /api/jobs — `kind` and `status` are plain strings (matches filter query vocabulary). */
+export interface JobListItem {
+	id: string;
+	session_id: string;
+	kind: string;
+	status: string;
+	payload: Record<string, unknown>;
+	scheduled_at?: string | null;
+	started_at?: string | null;
+	completed_at?: string | null;
+	retries: number;
+	max_retries: number;
+	error?: string | null;
+	metadata: Record<string, unknown>;
+}
+
 export async function getJobs(
 	sessionId: string,
 	opts?: {
@@ -861,7 +876,7 @@ export async function getJobs(
 		kinds?: string[];
 		limit?: number;
 	}
-): Promise<unknown[]> {
+): Promise<JobListItem[]> {
 	const sp = new URLSearchParams({ session_id: sessionId });
 	if (opts?.statuses?.length) {
 		sp.set('status', opts.statuses.join(','));
@@ -872,7 +887,7 @@ export async function getJobs(
 	if (opts?.limit != null) {
 		sp.set('limit', String(opts.limit));
 	}
-	return request<unknown[]>(`/api/jobs?${sp}`);
+	return request<JobListItem[]>(`/api/jobs?${sp}`);
 }
 
 export interface ScheduledPostRow {
