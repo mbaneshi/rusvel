@@ -29,7 +29,6 @@
 			<DepartmentPanel
 				dept={dept.id}
 				title={dept.title}
-				icon={dept.icon}
 				color={dept.color}
 				quickActions={dept.quick_actions}
 				sessionId={currentSession.id}
@@ -38,7 +37,7 @@
 		{/key}
 		<div class="flex-1">
 			{#key dept.id}
-				<DepartmentChat dept={dept.id} title={dept.title} icon={dept.icon} />
+				<DepartmentChat dept={dept.id} title={dept.title} />
 			{/key}
 		</div>
 	{/if}

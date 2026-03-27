@@ -16,6 +16,7 @@
 	import OnboardingChecklist from '$lib/components/onboarding/OnboardingChecklist.svelte';
 	import ProductTour from '$lib/components/onboarding/ProductTour.svelte';
 	import CommandPalette from '$lib/components/onboarding/CommandPalette.svelte';
+	import DeptIcon from '$lib/components/DeptIcon.svelte';
 	import { Toaster } from 'svelte-sonner';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
 	import {
@@ -295,6 +296,8 @@
 							>
 								{#if iconMap[item.icon]}
 									<svelte:component this={iconMap[item.icon]} size={16} strokeWidth={1.75} />
+								{:else if item.href.startsWith('/dept/')}
+									<DeptIcon deptId={item.icon} size={16} strokeWidth={1.75} />
 								{:else}
 									<span class="font-mono text-xs">{item.icon}</span>
 								{/if}

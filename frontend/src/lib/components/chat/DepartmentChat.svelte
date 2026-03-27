@@ -20,6 +20,8 @@
 	import { cached } from '$lib/cache';
 	import ToolCallCard from './ToolCallCard.svelte';
 	import ApprovalCard from './ApprovalCard.svelte';
+	import DeptIcon from '$lib/components/DeptIcon.svelte';
+	import { Settings, History, Plus } from 'lucide-svelte';
 
 	interface ToolCallState {
 		id: string;
@@ -39,9 +41,8 @@
 	let {
 		dept,
 		title = 'Department',
-		icon = 'D',
 		suggestedPrompts = []
-	}: { dept: string; title?: string; icon?: string; suggestedPrompts?: string[] } = $props();
+	}: { dept: string; title?: string; suggestedPrompts?: string[] } = $props();
 
 	let messages: DisplayMessage[] = $state([]);
 	let conversations: Conversation[] = $state([]);
@@ -278,9 +279,9 @@
 	<div class="flex items-center justify-between border-b border-border bg-card px-3 py-2">
 		<div class="flex items-center gap-2">
 			<div
-				class="flex h-6 w-6 items-center justify-center rounded-md bg-chart-2/30 text-[10px] font-bold text-chart-2"
+				class="flex h-6 w-6 items-center justify-center rounded-md bg-chart-2/30 text-chart-2"
 			>
-				{icon}
+				<DeptIcon deptId={dept} size={14} strokeWidth={1.75} class="text-chart-2" />
 			</div>
 			<span class="text-sm font-medium text-foreground">{title}</span>
 		</div>
@@ -292,47 +293,21 @@
 					? 'text-foreground bg-accent'
 					: ''}"
 			>
-				<svg
-					class="h-4 w-4"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					><path
-						d="M6.5 1.5h3l.5 2 1.5.7 1.8-1 2.1 2.1-1 1.8.7 1.5 2 .5v3l-2 .5-.7 1.5 1 1.8-2.1 2.1-1.8-1-1.5.7-.5 2h-3l-.5-2-1.5-.7-1.8 1-2.1-2.1 1-1.8-.7-1.5-2-.5v-3l2-.5.7-1.5-1-1.8L4.2 2.2l1.8 1L7.5 2.5z"
-					/><circle cx="8" cy="8" r="2" /></svg
-				>
+				<Settings class="h-4 w-4" strokeWidth={1.5} />
 			</button>
 			<button
 				onclick={() => (showHistory = !showHistory)}
 				title="History"
 				class="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 			>
-				<svg
-					class="h-4 w-4"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"
-					><path d="M8 3.5V8L10.5 10.5" stroke-linecap="round" /><circle
-						cx="8"
-						cy="8"
-						r="5.5"
-					/></svg
-				>
+				<History class="h-4 w-4" strokeWidth={1.5} />
 			</button>
 			<button
 				onclick={newChat}
 				title="New chat"
 				class="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
 			>
-				<svg
-					class="h-4 w-4"
-					viewBox="0 0 16 16"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.5"><path d="M8 3v10M3 8h10" stroke-linecap="round" /></svg
-				>
+				<Plus class="h-4 w-4" strokeWidth={1.5} />
 			</button>
 		</div>
 	</div>
@@ -404,7 +379,7 @@
 					<div
 						class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-chart-2/20"
 					>
-						<span class="text-xl font-bold text-chart-2">{icon}</span>
+						<DeptIcon deptId={dept} size={28} strokeWidth={1.5} class="text-chart-2" />
 					</div>
 					<p class="text-sm font-medium text-foreground">{title}</p>
 					<p class="mt-1 text-xs text-muted-foreground">
@@ -460,9 +435,9 @@
 					<div class="flex gap-2 {isUser ? 'justify-end' : 'justify-start'}">
 						{#if !isUser}
 							<div
-								class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md bg-chart-2/30 text-[9px] font-bold text-chart-2"
+								class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md bg-chart-2/30 text-chart-2"
 							>
-								{icon}
+								<DeptIcon deptId={dept} size={12} strokeWidth={1.75} class="text-chart-2" />
 							</div>
 						{/if}
 						<div

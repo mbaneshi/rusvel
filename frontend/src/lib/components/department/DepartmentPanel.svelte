@@ -4,6 +4,7 @@
 	import { getDeptConfig } from '$lib/api';
 	import type { DepartmentConfig } from '$lib/api';
 	import DeptHelpTooltip from '$lib/components/onboarding/DeptHelpTooltip.svelte';
+	import DeptIcon from '$lib/components/DeptIcon.svelte';
 	import DeptTerminal from '$lib/components/DeptTerminal.svelte';
 	import { getDeptColor } from './colors';
 	import ActionsTab from './ActionsTab.svelte';
@@ -20,7 +21,6 @@
 	let {
 		dept,
 		title,
-		icon,
 		color,
 		quickActions = [],
 		tabs = ['actions', 'agents', 'workflows', 'skills', 'rules', 'mcp', 'hooks', 'dirs', 'events'],
@@ -30,7 +30,6 @@
 	}: {
 		dept: string;
 		title: string;
-		icon: string;
 		color: string;
 		quickActions: { label: string; prompt: string }[];
 		tabs?: string[];
@@ -148,7 +147,7 @@
 			style="background: hsl({deptHsl} / 0.2); color: hsl({deptHsl})"
 			title="Expand {title}"
 		>
-			{icon}
+			<DeptIcon deptId={dept} size={18} strokeWidth={1.75} />
 		</button>
 	</div>
 {:else}
@@ -165,7 +164,7 @@
 						class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold"
 						style="background: hsl({deptHsl} / 0.2); color: hsl({deptHsl})"
 					>
-						{icon}
+						<DeptIcon deptId={dept} size={18} strokeWidth={1.75} />
 					</div>
 					<div class="min-w-0">
 						<h2 class="text-sm font-semibold text-foreground truncate">{title}</h2>
