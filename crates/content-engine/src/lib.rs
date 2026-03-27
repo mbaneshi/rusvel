@@ -197,11 +197,30 @@ impl ContentEngine {
         at: DateTime<Utc>,
     ) -> Result<()> {
         self.calendar
-            .schedule(content_id, platform, at, *session_id)
+            .schedule(content_id, platform.clone(), at, *session_id)
             .await?;
-        self.emit(events::CONTENT_SCHEDULED, Some(*session_id), &content_id)
-            .await?;
+        self.emit_with_payload(
+            events::CONTENT_SCHEDULED,
+            Some(*session_id),
+            &content_id,
+            serde_json::json!({
+                "platform": platform,
+                "publish_at": at.to_rfc3339(),
+            }),
+        )
+        .await?;
         Ok(())
+    }
+
+    /// Alias for [`Self::schedule`] — matches “schedule a draft” wording in product specs.
+    pub async fn schedule_draft(
+        &self,
+        session_id: &SessionId,
+        draft_id: ContentId,
+        platform: Platform,
+        publish_at: DateTime<Utc>,
+    ) -> Result<()> {
+        self.schedule(session_id, draft_id, platform, publish_at).await
     }
 
     /// Mark a content item as human-approved (ADR-008 content gate before publish).
@@ -337,13 +356,30 @@ impl ContentEngine {
         session_id: Option<SessionId>,
         content_id: &ContentId,
     ) -> Result<()> {
+        self.emit_with_payload(kind, session_id, content_id, serde_json::json!({}))
+            .await
+    }
+
+    async fn emit_with_payload(
+        &self,
+        kind: &str,
+        session_id: Option<SessionId>,
+        content_id: &ContentId,
+        extra: serde_json::Value,
+    ) -> Result<()> {
+        let mut payload = serde_json::json!({ "content_id": content_id.to_string() });
+        if let (Some(po), Some(eo)) = (payload.as_object_mut(), extra.as_object()) {
+            for (k, v) in eo {
+                po.insert(k.clone(), v.clone());
+            }
+        }
         let event = Event {
             id: EventId::new(),
             session_id,
             run_id: None,
             source: "content".into(),
             kind: kind.into(),
-            payload: serde_json::json!({ "content_id": content_id.to_string() }),
+            payload,
             created_at: Utc::now(),
             metadata: serde_json::json!({}),
         };

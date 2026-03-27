@@ -344,6 +344,7 @@ pub async fn dept_chat(
                  - Draft content: POST /api/dept/content/draft {session_id, topic, kind}\n\
                  - Publish content: POST /api/dept/content/publish {session_id, content_id, platform}\n\
                  - List content: GET /api/dept/content/list?session_id=<id>&status=<filter>\n\
+                 - Schedule draft: POST /api/dept/content/schedule {session_id, content_id, platform, publish_at (RFC3339)}\n\
                  - Scheduled posts: GET /api/dept/content/scheduled?session_id=<id>&from=<RFC3339>&to=<RFC3339>\n\
                  Content kinds: LongForm, Tweet, Thread, LinkedInPost, Blog, VideoScript, Email, Proposal\n\
                  Platforms: DevTo, Twitter, LinkedIn, Mastodon, Bluesky, Medium",

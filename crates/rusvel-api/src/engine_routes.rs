@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use rusvel_core::domain::{
     CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, JobKind, NewJob, Opportunity,
-    OpportunityStage,
+    OpportunityStage, Platform,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContentId, SessionId};
@@ -264,6 +264,43 @@ pub async fn content_list(
         .await
         .map_err(engine_err)?;
     Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ContentScheduleRequest {
+    pub session_id: String,
+    pub content_id: String,
+    pub platform: String,
+    /// RFC3339 UTC (or offset) datetime when the item should publish.
+    pub publish_at: String,
+}
+
+/// POST /api/dept/content/schedule — persist schedule on the draft and enqueue publish job.
+pub async fn content_schedule(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ContentScheduleRequest>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .content_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let cid = parse_content_id(&body.content_id)?;
+    let platform: Platform = serde_json::from_value(serde_json::json!(body.platform))
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("invalid platform: {e}")))?;
+    let at = DateTime::parse_from_rfc3339(body.publish_at.trim())
+        .map(|d| d.with_timezone(&Utc))
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid publish_at (use RFC3339)".into(),
+            )
+        })?;
+    engine
+        .schedule(&sid, cid, platform, at)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 // ── Harvest Engine ───────────────────────────────────────────────

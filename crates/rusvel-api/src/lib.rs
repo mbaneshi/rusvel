@@ -233,6 +233,7 @@ pub fn build_router_with_frontend(
             axum::routing::patch(engine_routes::content_approve),
         )
         .route("/api/dept/content/publish", post(engine_routes::content_publish))
+        .route("/api/dept/content/schedule", post(engine_routes::content_schedule))
         .route("/api/dept/content/list", get(engine_routes::content_list))
         .route(
             "/api/dept/content/scheduled",

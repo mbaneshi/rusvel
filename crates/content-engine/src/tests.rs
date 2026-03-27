@@ -177,6 +177,16 @@ impl RecordingEventBus {
             .map(|e| e.kind.clone())
             .collect()
     }
+
+    fn last_payload_of_kind(&self, kind: &str) -> Option<serde_json::Value> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|e| e.kind == kind)
+            .map(|e| e.payload.clone())
+    }
 }
 #[async_trait]
 impl EventPort for RecordingEventBus {
@@ -420,6 +430,29 @@ async fn calendar_schedules_and_lists_posts() {
         .unwrap();
     let updated: ContentItem = serde_json::from_value(json).unwrap();
     assert_eq!(updated.status, ContentStatus::Scheduled);
+}
+
+#[tokio::test]
+async fn schedule_emits_content_scheduled_with_platform_and_publish_at() {
+    let (engine, events, _, _) = test_engine();
+    let sid = SessionId::new();
+    let item = engine
+        .draft(&sid, "Event payload", ContentKind::Blog)
+        .await
+        .unwrap();
+    let publish_at = Utc::now() + chrono::Duration::hours(12);
+    engine
+        .schedule(&sid, item.id, Platform::LinkedIn, publish_at)
+        .await
+        .unwrap();
+
+    let payload = events
+        .last_payload_of_kind(crate::events::CONTENT_SCHEDULED)
+        .expect("content.scheduled event");
+    let id_str = item.id.to_string();
+    assert_eq!(payload["content_id"].as_str(), Some(id_str.as_str()), "{payload:?}");
+    assert!(payload.get("platform").is_some());
+    assert!(payload.get("publish_at").is_some());
 }
 
 #[tokio::test]
