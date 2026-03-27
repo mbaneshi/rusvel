@@ -3,49 +3,25 @@
 //!
 //! Mirrors `rusvel-app` worker handling for [`JobKind::OutreachSend`] (draft → hold → approve → send + enqueue next).
 
+mod common;
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use gtm_engine::email::{EmailAdapter, MockEmailAdapter};
-use gtm_engine::outreach::OutreachSendDispatch;
+use common::SessionAdapter;
+use common::outreach::process_outreach_like_app_worker;
+use gtm_engine::email::MockEmailAdapter;
 use gtm_engine::{GtmEngine, SequenceStep};
 use rusvel_core::domain::{
-    AgentConfig, AgentOutput, AgentStatus, Contact, Content, Job, JobFilter, JobKind,
-    JobStatus, Session, SessionConfig, SessionKind,
+    AgentConfig, AgentOutput, AgentStatus, Contact, Content, JobFilter, JobKind, JobStatus,
+    Session, SessionConfig, SessionKind,
 };
 use rusvel_core::error::Result;
 use rusvel_core::id::{ContactId, RunId, SessionId};
-use rusvel_core::ports::{
-    AgentPort, EventPort, JobPort, SessionPort, StoragePort,
-};
+use rusvel_core::ports::{AgentPort, EventPort, JobPort, SessionPort, StoragePort};
 use rusvel_db::Database;
 use rusvel_event::EventBus;
-
-struct SessionAdapter(pub Arc<dyn StoragePort>);
-
-#[async_trait]
-impl SessionPort for SessionAdapter {
-    async fn create(&self, session: Session) -> Result<SessionId> {
-        let id = session.id;
-        self.0.sessions().put_session(&session).await?;
-        Ok(id)
-    }
-    async fn load(&self, id: &SessionId) -> Result<Session> {
-        self.0.sessions().get_session(id).await?.ok_or_else(|| {
-            rusvel_core::error::RusvelError::NotFound {
-                kind: "session".into(),
-                id: id.to_string(),
-            }
-        })
-    }
-    async fn save(&self, session: &Session) -> Result<()> {
-        self.0.sessions().put_session(session).await
-    }
-    async fn list(&self) -> Result<Vec<rusvel_core::domain::SessionSummary>> {
-        self.0.sessions().list_sessions().await
-    }
-}
 
 /// Returns short text for outreach draft generation.
 struct OutreachStubAgent;
@@ -73,32 +49,6 @@ impl AgentPort for OutreachStubAgent {
     }
 }
 
-async fn process_outreach_like_app_worker(
-    engine: &GtmEngine,
-    jobs: &dyn JobPort,
-    events: &dyn EventPort,
-    email: &dyn EmailAdapter,
-    job: &Job,
-) -> rusvel_core::error::Result<()> {
-    let job_id = job.id;
-    match engine
-        .outreach()
-        .process_outreach_send_job(job, events, email)
-        .await?
-    {
-        OutreachSendDispatch::HoldForApproval(job_result) => {
-            jobs.hold_for_approval(&job_id, job_result).await?;
-        }
-        OutreachSendDispatch::Complete { result, next } => {
-            if let Some(nj) = next {
-                jobs.enqueue(nj).await?;
-            }
-            jobs.complete(&job_id, result).await?;
-        }
-    }
-    Ok(())
-}
-
 #[tokio::test]
 async fn outreach_sequence_creates_approval_then_schedules_follow_up_with_mock_email() {
     let base = std::env::temp_dir().join(format!("rusvel-outreach-e2e-{}", uuid::Uuid::now_v7()));
@@ -108,7 +58,7 @@ async fn outreach_sequence_creates_approval_then_schedules_follow_up_with_mock_e
     let storage: Arc<dyn StoragePort> = db.clone();
     let jobs: Arc<dyn JobPort> = db.clone();
     let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
 

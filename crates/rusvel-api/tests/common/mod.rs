@@ -1,5 +1,7 @@
 //! Shared Axum test harness: temp DB, stub LLM, Forge + content engines.
 
+pub mod outreach;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -12,8 +14,8 @@ use code_engine::CodeEngine;
 use content_engine::{ContentEngine, MockPlatformAdapter};
 use forge_engine::ForgeEngine;
 use gtm_engine::GtmEngine;
-use rusvel_api::{AppState, build_router};
 use rusvel_agent::AgentRuntime;
+use rusvel_api::{AppState, build_router};
 use rusvel_config::TomlConfig;
 use rusvel_core::domain::{
     AgentOutput, AgentStatus, Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef,
@@ -133,6 +135,8 @@ pub struct TestHarness {
     pub session_id: SessionId,
     pub mock_twitter: Arc<MockPlatformAdapter>,
     pub jobs: Arc<dyn JobPort>,
+    /// Shared with the router [`AppState`] (events, outreach, approvals).
+    pub events: Arc<dyn EventPort>,
     /// Same engine instance as [`AppState::gtm_engine`] when the harness was built with GTM.
     pub gtm_engine: Option<Arc<GtmEngine>>,
 }
@@ -185,17 +189,16 @@ async fn build_harness_with_auth_and_gtm(
     let db_path = base.join("rusvel.db");
     let db: Arc<Database> = Arc::new(Database::open(&db_path).expect("db"));
     let storage: Arc<dyn StoragePort> = db.clone();
-    let config: Arc<dyn ConfigPort> = Arc::new(
-        TomlConfig::load(base.join("config.toml")).expect("config"),
-    );
+    let config: Arc<dyn ConfigPort> =
+        Arc::new(TomlConfig::load(base.join("config.toml")).expect("config"));
     let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
-    let memory: Arc<dyn MemoryPort> = Arc::new(
-        MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
-    );
+    let memory: Arc<dyn MemoryPort> =
+        Arc::new(MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"));
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let jobs_for_harness = jobs.clone();
+    let events_for_harness = events.clone();
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
     let agent: Arc<dyn AgentPort> = Arc::new(StaticDraftAgent);
     let tools: Arc<dyn ToolPort> = Arc::new(StubTool);
@@ -222,7 +225,9 @@ async fn build_harness_with_auth_and_gtm(
         agent,
         jobs.clone(),
     ));
-    let mock_tw = Arc::new(MockPlatformAdapter::new(rusvel_core::domain::Platform::Twitter));
+    let mock_tw = Arc::new(MockPlatformAdapter::new(
+        rusvel_core::domain::Platform::Twitter,
+    ));
     content_engine.register_platform(mock_tw.clone());
 
     let now = Utc::now();
@@ -250,6 +255,11 @@ async fn build_harness_with_auth_and_gtm(
         None
     };
 
+    let webhook_receiver = Arc::new(rusvel_webhook::WebhookReceiver::new(
+        storage.clone(),
+        events.clone(),
+    ));
+
     let state = AppState {
         forge,
         code_engine: Some(code_engine),
@@ -263,7 +273,9 @@ async fn build_harness_with_auth_and_gtm(
         database: db.clone(),
         storage,
         profile: None,
-        registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),
+        registry: DepartmentRegistry::load(
+            PathBuf::from("/__no_such__/departments.toml").as_path(),
+        ),
         embedding: None,
         vector_store: None,
         memory: memory.clone(),
@@ -273,6 +285,7 @@ async fn build_harness_with_auth_and_gtm(
         terminal: None,
         cdp: None,
         auth,
+        webhook_receiver,
     };
 
     let router = build_router(state);
@@ -281,6 +294,7 @@ async fn build_harness_with_auth_and_gtm(
         session_id,
         mock_twitter: mock_tw,
         jobs: jobs_for_harness,
+        events: events_for_harness,
         gtm_engine,
     }
 }
