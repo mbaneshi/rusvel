@@ -46,7 +46,8 @@ use std::time::Instant;
 use axum::Router;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
-use tower_http::cors::{Any, CorsLayer};
+use axum::http::{HeaderValue, Method};
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -529,11 +530,24 @@ pub fn build_router_with_frontend(
         api
     };
 
+    let allowed_origins = [
+        "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+        "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+    ];
     app.layer(
         CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any),
+            .allow_origin(allowed_origins)
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                axum::http::header::CONTENT_TYPE,
+                axum::http::header::AUTHORIZATION,
+            ]),
     )
     .layer(axum::middleware::from_fn_with_state(
         shared.clone(),

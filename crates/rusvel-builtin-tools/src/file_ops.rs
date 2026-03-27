@@ -1,10 +1,37 @@
 //! File operation tools: read_file, write_file, edit_file, glob, grep.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use rusvel_core::domain::{Content, ToolDefinition, ToolResult};
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
+
+fn validate_path(path: &str) -> Result<PathBuf, rusvel_core::error::RusvelError> {
+    let p = PathBuf::from(path);
+    let canonical = if p.exists() {
+        p.canonicalize()
+    } else {
+        p.parent()
+            .unwrap_or(std::path::Path::new("."))
+            .canonicalize()
+            .map(|parent| parent.join(p.file_name().unwrap_or_default()))
+    }
+    .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("path validation: {e}")))?;
+
+    let base = std::env::current_dir()
+        .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("cwd: {e}")))?
+        .canonicalize()
+        .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("cwd canonicalize: {e}")))?;
+
+    if !canonical.starts_with(&base) {
+        return Err(rusvel_core::error::RusvelError::Tool(format!(
+            "path escapes allowed base directory: {}",
+            canonical.display()
+        )));
+    }
+    Ok(canonical)
+}
 
 pub async fn register(registry: &ToolRegistry) {
     // ── read_file ────────────────────────────────────────────────
@@ -36,8 +63,8 @@ pub async fn register(registry: &ToolRegistry) {
             },
             Arc::new(|args| {
                 Box::pin(async move {
-                    let path = args["path"].as_str().unwrap_or("");
-                    let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+                    let path = validate_path(args["path"].as_str().unwrap_or(""))?;
+                    let content = tokio::fs::read_to_string(&path).await.map_err(|e| {
                         rusvel_core::error::RusvelError::Tool(format!("read_file: {e}"))
                     })?;
 
@@ -97,21 +124,20 @@ pub async fn register(registry: &ToolRegistry) {
             },
             Arc::new(|args| {
                 Box::pin(async move {
-                    let path = args["path"].as_str().unwrap_or("");
+                    let path = validate_path(args["path"].as_str().unwrap_or(""))?;
                     let content = args["content"].as_str().unwrap_or("");
 
-                    // Create parent directories if needed.
-                    if let Some(parent) = std::path::Path::new(path).parent() {
+                    if let Some(parent) = path.parent() {
                         tokio::fs::create_dir_all(parent).await.ok();
                     }
 
-                    tokio::fs::write(path, content)
+                    tokio::fs::write(&path, content)
                         .await
                         .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("write_file: {e}")))?;
 
                     Ok(ToolResult {
                         success: true,
-                        output: Content::text(format!("Wrote {} bytes to {path}", content.len())),
+                        output: Content::text(format!("Wrote {} bytes to {}", content.len(), path.display())),
                         metadata: json!({}),
                     })
                 })
@@ -149,11 +175,11 @@ pub async fn register(registry: &ToolRegistry) {
             },
             Arc::new(|args| {
                 Box::pin(async move {
-                    let path = args["path"].as_str().unwrap_or("");
+                    let path = validate_path(args["path"].as_str().unwrap_or(""))?;
                     let old_string = args["old_string"].as_str().unwrap_or("");
                     let new_string = args["new_string"].as_str().unwrap_or("");
 
-                    let content = tokio::fs::read_to_string(path)
+                    let content = tokio::fs::read_to_string(&path)
                         .await
                         .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("edit_file read: {e}")))?;
 
@@ -170,13 +196,13 @@ pub async fn register(registry: &ToolRegistry) {
                     }
 
                     let new_content = content.replacen(old_string, new_string, 1);
-                    tokio::fs::write(path, &new_content)
+                    tokio::fs::write(&path, &new_content)
                         .await
                         .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("edit_file write: {e}")))?;
 
                     Ok(ToolResult {
                         success: true,
-                        output: Content::text(format!("Edited {path}: replaced 1 occurrence")),
+                        output: Content::text(format!("Edited {}: replaced 1 occurrence", path.display())),
                         metadata: json!({}),
                     })
                 })
@@ -211,12 +237,13 @@ pub async fn register(registry: &ToolRegistry) {
             Arc::new(|args| {
                 Box::pin(async move {
                     let pattern = args["pattern"].as_str().unwrap_or("");
-                    let base = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                    let base_str = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                    let base = validate_path(base_str)?;
 
                     let full_pattern = if pattern.starts_with('/') {
                         pattern.to_string()
                     } else {
-                        format!("{base}/{pattern}")
+                        format!("{}/{pattern}", base.display())
                     };
 
                     let paths: Vec<String> = glob::glob(&full_pattern)
@@ -272,7 +299,8 @@ pub async fn register(registry: &ToolRegistry) {
             Arc::new(|args| {
                 Box::pin(async move {
                     let pattern = args["pattern"].as_str().unwrap_or("");
-                    let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                    let path_str = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                    let path = validate_path(path_str)?;
                     let glob_filter = args.get("glob_filter").and_then(|v| v.as_str());
 
                     // Use ripgrep if available, fall back to grep.
@@ -285,7 +313,7 @@ pub async fn register(registry: &ToolRegistry) {
                         cmd.arg("--glob").arg(g);
                     }
 
-                    cmd.arg(pattern).arg(path);
+                    cmd.arg(pattern).arg(&path);
 
                     let output = cmd.output().await.map_err(|e| {
                         rusvel_core::error::RusvelError::Tool(format!("grep: {e}"))

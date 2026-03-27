@@ -8,6 +8,19 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+
+fn validate_identifier(name: &str) -> rusvel_core::Result<&str> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Err(RusvelError::Validation(format!(
+            "invalid SQL identifier: {name}"
+        )));
+    }
+    Ok(name)
+}
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -167,7 +180,7 @@ impl Database {
     }
 
     fn table_info_inner(&self, conn: &Connection, table: &str) -> rusvel_core::Result<TableInfo> {
-        // Columns via PRAGMA table_info
+        let table = validate_identifier(table)?;
         let mut col_stmt = conn
             .prepare(&format!("PRAGMA table_info('{table}')"))
             .map_err(|e| RusvelError::Storage(e.to_string()))?;
@@ -203,6 +216,7 @@ impl Database {
 
         let mut indexes = Vec::new();
         for (idx_name, unique) in &idx_list {
+            validate_identifier(idx_name)?;
             let mut info_stmt = conn
                 .prepare(&format!("PRAGMA index_info('{idx_name}')"))
                 .map_err(|e| RusvelError::Storage(e.to_string()))?;
@@ -275,8 +289,26 @@ impl Database {
             });
         }
 
-        let cols = select.unwrap_or("*");
-        let order_clause = order.map(|o| format!(" ORDER BY {o}")).unwrap_or_default();
+        validate_identifier(table)?;
+        let cols = match select {
+            Some(s) => {
+                for col in s.split(',') {
+                    validate_identifier(col.trim())?;
+                }
+                s
+            }
+            None => "*",
+        };
+        let order_clause = match order {
+            Some(o) => {
+                for part in o.split(',') {
+                    let token = part.trim().split_whitespace().next().unwrap_or("");
+                    validate_identifier(token)?;
+                }
+                format!(" ORDER BY {o}")
+            }
+            None => String::new(),
+        };
 
         let sql =
             format!("SELECT {cols} FROM \"{table}\"{order_clause} LIMIT {limit} OFFSET {offset}");
