@@ -6,7 +6,7 @@ use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use hmac::{Hmac, Mac};
 use rusvel_core::id::EventId;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::Sha256;
 use tower::ServiceExt;
 

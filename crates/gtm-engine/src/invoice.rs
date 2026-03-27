@@ -135,7 +135,11 @@ impl InvoiceManager {
     }
 
     /// Updates lifecycle status. Sets `paid_at` when moving to [`InvoiceStatus::Paid`].
-    pub async fn set_invoice_status(&self, id: &InvoiceId, new_status: InvoiceStatus) -> Result<()> {
+    pub async fn set_invoice_status(
+        &self,
+        id: &InvoiceId,
+        new_status: InvoiceStatus,
+    ) -> Result<()> {
         let val = self
             .storage
             .objects()

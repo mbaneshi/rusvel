@@ -56,7 +56,10 @@ pub fn build_code_prompt(summary: &CodeAnalysisSummary, kind: &ContentKind) -> S
                 summary.repo_path
             ));
             chunks.push(format!("Tweet 2: Scale — {}.", stats_line));
-            chunks.push(format!("Tweet 3: Surface area — symbols to know: {}.", symbols));
+            chunks.push(format!(
+                "Tweet 3: Surface area — symbols to know: {}.",
+                symbols
+            ));
             chunks.push(format!(
                 "Tweet 4: Complexity hotspot — largest function: {}.",
                 largest

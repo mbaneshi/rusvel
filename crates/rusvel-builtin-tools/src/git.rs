@@ -61,8 +61,7 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "git_diff".into(),
-                description:
-                    "Show changes between commits, commit and working tree, etc.".into(),
+                description: "Show changes between commits, commit and working tree, etc.".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -82,7 +81,10 @@ pub async fn register(registry: &ToolRegistry) {
             Arc::new(|args| {
                 Box::pin(async move {
                     let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
-                    let staged = args.get("staged").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let staged = args
+                        .get("staged")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
 
                     let mut cmd = tokio::process::Command::new("git");
                     cmd.arg("diff").current_dir(path);
@@ -140,11 +142,7 @@ pub async fn register(registry: &ToolRegistry) {
                     let count = args.get("count").and_then(|v| v.as_u64()).unwrap_or(10);
 
                     let output = tokio::process::Command::new("git")
-                        .args([
-                            "log",
-                            "--oneline",
-                            &format!("-{count}"),
-                        ])
+                        .args(["log", "--oneline", &format!("-{count}")])
                         .current_dir(path)
                         .output()
                         .await
@@ -185,10 +183,7 @@ mod tests {
         let registry = ToolRegistry::new();
         register(&registry).await;
 
-        let result = registry
-            .call("git_log", json!({"count": 3}))
-            .await
-            .unwrap();
+        let result = registry.call("git_log", json!({"count": 3})).await.unwrap();
         assert!(result.success);
     }
 }

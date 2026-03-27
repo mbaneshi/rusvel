@@ -194,7 +194,7 @@ pub async fn register_mcp_tools(client: &Arc<McpClient>, registry: &ToolRegistry
             description,
             parameters: tool.input_schema.clone(),
             searchable: false,
-                metadata: serde_json::json!({
+            metadata: serde_json::json!({
                 "mcp_server": client.name(),
                 "mcp_tool": tool.name,
             }),
@@ -259,19 +259,12 @@ impl McpClientManager {
     }
 
     /// Connect to an MCP server and register its tools.
-    pub async fn connect(
-        &self,
-        config: &McpServerConfig,
-        registry: &ToolRegistry,
-    ) -> Result<()> {
+    pub async fn connect(&self, config: &McpServerConfig, registry: &ToolRegistry) -> Result<()> {
         match McpClient::connect(config).await {
             Ok(client) => {
                 let client = Arc::new(client);
                 register_mcp_tools(&client, registry).await;
-                self.clients
-                    .write()
-                    .await
-                    .insert(config.id.clone(), client);
+                self.clients.write().await.insert(config.id.clone(), client);
                 Ok(())
             }
             Err(e) => {

@@ -42,8 +42,9 @@ impl DevToAdapter {
 
     fn api_key(&self) -> Result<String> {
         match self.config.get_value("devto_api_key")? {
-            Some(v) => serde_json::from_value(v)
-                .map_err(|e| RusvelError::Serialization(e.to_string())),
+            Some(v) => {
+                serde_json::from_value(v).map_err(|e| RusvelError::Serialization(e.to_string()))
+            }
             None => Err(RusvelError::Validation(
                 "config key `devto_api_key` is not set".into(),
             )),
@@ -270,8 +271,7 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/articles"))
             .respond_with(
-                ResponseTemplate::new(422)
-                    .set_body_string(r#"{"error":"Title is too short"}"#),
+                ResponseTemplate::new(422).set_body_string(r#"{"error":"Title is too short"}"#),
             )
             .mount(&mock_server)
             .await;

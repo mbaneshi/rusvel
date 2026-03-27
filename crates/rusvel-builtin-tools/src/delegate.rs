@@ -4,11 +4,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rusvel_agent::{AgentEvent, AgentRuntime};
+use rusvel_core::SessionId;
 use rusvel_core::domain::{AgentConfig, AgentOutput, Content, Part, ToolDefinition, ToolResult};
 use rusvel_core::id::{PaneId, RunId};
 use rusvel_core::ports::{AgentPort, TerminalPort};
 use rusvel_core::terminal::{PaneSize, PaneSource, WindowSource};
-use rusvel_core::SessionId;
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
 use uuid::Uuid;

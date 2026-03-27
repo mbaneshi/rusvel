@@ -46,7 +46,5 @@ pub use domain::*;
 pub use engine::Engine;
 pub use error::{Result, RusvelError};
 pub use id::*;
-pub use rrf::{reciprocal_rank_fusion, RRF_K_DEFAULT};
-pub use terminal::{
-    Layout, Pane, PaneSize, PaneSource, PaneStatus, Window, WindowSource,
-};
+pub use rrf::{RRF_K_DEFAULT, reciprocal_rank_fusion};
+pub use terminal::{Layout, Pane, PaneSize, PaneSource, PaneStatus, Window, WindowSource};

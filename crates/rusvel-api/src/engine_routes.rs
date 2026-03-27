@@ -19,14 +19,16 @@ use serde::Serialize;
 
 use rusvel_core::domain::Contact;
 use rusvel_core::domain::{
-    CodeAnalysisSummary, ContentItem, ContentKind, Event, ExecutiveBrief, JobKind, NewJob,
-    Opportunity, OpportunityStage, Platform,
+    CodeAnalysisSummary, ContentItem, ContentKind, Event, ExecutiveBrief, FlowExecution, JobKind,
+    NewJob, Opportunity, OpportunityStage, Platform,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContactId, ContentId, EventId, SessionId};
 
 use gtm_engine::crm::CrmManager;
 use gtm_engine::{InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
+
+use forge_engine::PipelineOrchestrationDef;
 
 use crate::AppState;
 
@@ -93,6 +95,40 @@ pub async fn brief_generate(
     let sid = parse_session_id(&body.session_id)?;
     let brief = state.forge.generate_brief(&sid).await.map_err(engine_err)?;
     Ok(Json(brief))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ForgePipelineBody {
+    pub session_id: String,
+    #[serde(default)]
+    pub def: Option<PipelineOrchestrationDef>,
+}
+
+/// POST /api/forge/pipeline — cross-engine harvest → content pipeline (S-042).
+pub async fn forge_pipeline_orchestrate(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ForgePipelineBody>,
+) -> ApiResult<FlowExecution> {
+    let sid = parse_session_id(&body.session_id)?;
+    let harvest = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
+    let content = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
+    let runner = crate::pipeline_runner::HarvestContentPipelineRunner {
+        harvest: harvest.clone(),
+        content: content.clone(),
+    };
+    let def = body.def.unwrap_or_default();
+    let exec = state
+        .forge
+        .orchestrate_pipeline(sid, def, &runner)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(exec))
 }
 
 // ── Code Engine ──────────────────────────────────────────────────
@@ -546,6 +582,77 @@ pub async fn harvest_list(
         .and_then(|s| serde_json::from_value(serde_json::json!(s)).ok());
     let items = engine
         .list_opportunities(&sid, stage.as_ref())
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HarvestOutcomeBody {
+    pub session_id: String,
+    pub opportunity_id: String,
+    /// `won` | `lost` | `withdrawn`
+    pub result: String,
+    #[serde(default)]
+    pub notes: String,
+}
+
+/// POST /api/dept/harvest/outcome — record won/lost for learning (S-044).
+pub async fn harvest_record_outcome(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HarvestOutcomeBody>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let result = match body.result.to_lowercase().as_str() {
+        "won" => harvest_engine::HarvestDealOutcome::Won,
+        "lost" => harvest_engine::HarvestDealOutcome::Lost,
+        "withdrawn" => harvest_engine::HarvestDealOutcome::Withdrawn,
+        _ => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "result must be won, lost, or withdrawn".into(),
+            ));
+        }
+    };
+    match engine
+        .record_opportunity_outcome(&sid, &body.opportunity_id, result, body.notes)
+        .await
+    {
+        Ok(record) => Ok(Json(serde_json::to_value(record).map_err(engine_err)?)),
+        Err(RusvelError::NotFound { .. }) => {
+            Err((StatusCode::NOT_FOUND, "opportunity not found".into()))
+        }
+        Err(e) => Err(engine_err(e)),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HarvestOutcomesQuery {
+    pub session_id: String,
+    #[serde(default = "default_harvest_outcomes_limit")]
+    pub limit: u32,
+}
+
+fn default_harvest_outcomes_limit() -> u32 {
+    50
+}
+
+/// GET /api/dept/harvest/outcomes?session_id=&limit=
+pub async fn harvest_outcomes_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<HarvestOutcomesQuery>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
+    let sid = parse_session_id(&q.session_id)?;
+    let items = engine
+        .list_harvest_outcomes(&sid, q.limit.min(200))
         .await
         .map_err(engine_err)?;
     Ok(Json(serde_json::to_value(items).map_err(engine_err)?))

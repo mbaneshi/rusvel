@@ -7,13 +7,13 @@ use futures::{SinkExt, StreamExt};
 use serde_json::json;
 use tokio::sync::{Mutex, broadcast};
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 use rusvel_core::domain::BrowserEvent;
 use rusvel_core::{Result, RusvelError};
 
-use crate::platforms;
 use crate::CdpState;
+use crate::platforms;
 
 type WsStream = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 
@@ -64,10 +64,7 @@ async fn run_network_inner(
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 let response = params.get("response").cloned().unwrap_or(json!({}));
-                let url = response
-                    .get("url")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let url = response.get("url").and_then(|v| v.as_str()).unwrap_or("");
                 let mime = response
                     .get("mimeType")
                     .and_then(|v| v.as_str())
@@ -111,10 +108,7 @@ async fn run_network_inner(
                     .get("body")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                let b64 = body_result
-                    .get("base64Encoded")
-                    .and_then(|v| v.as_bool())
-                    == Some(true);
+                let b64 = body_result.get("base64Encoded").and_then(|v| v.as_bool()) == Some(true);
                 let text_body = if b64 {
                     let raw = base64::Engine::decode(
                         &base64::engine::general_purpose::STANDARD,
@@ -164,7 +158,8 @@ async fn send_cmd(
     let id = *next_id;
     *next_id += 1;
     let msg = json!({ "id": id, "method": method, "params": params });
-    let text = serde_json::to_string(&msg).map_err(|e| RusvelError::Serialization(e.to_string()))?;
+    let text =
+        serde_json::to_string(&msg).map_err(|e| RusvelError::Serialization(e.to_string()))?;
     ws.send(Message::Text(text.into()))
         .await
         .map_err(|e| RusvelError::Internal(e.to_string()))?;
@@ -187,7 +182,10 @@ async fn read_ws_json(ws: &mut WsStream) -> Result<serde_json::Value> {
     }
 }
 
-async fn next_msg(ws: &mut WsStream, queue: &mut VecDeque<serde_json::Value>) -> Result<serde_json::Value> {
+async fn next_msg(
+    ws: &mut WsStream,
+    queue: &mut VecDeque<serde_json::Value>,
+) -> Result<serde_json::Value> {
     if let Some(v) = queue.pop_front() {
         return Ok(v);
     }

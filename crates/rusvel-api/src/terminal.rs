@@ -4,10 +4,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+use axum::Json;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Path, Query, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use axum::Json;
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -344,10 +344,7 @@ async fn handle_ws(
                     }
                 }
                 Message::Binary(data) => {
-                    if let Err(e) = terminal_input
-                        .write_pane(&pane_for_input, &data)
-                        .await
-                    {
+                    if let Err(e) = terminal_input.write_pane(&pane_for_input, &data).await {
                         tracing::debug!("write_pane error: {e}");
                         break;
                     }

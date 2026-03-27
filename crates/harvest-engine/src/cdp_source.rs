@@ -120,13 +120,15 @@ impl CdpSource {
         self
     }
 
-    async fn scan_with_browser(&self, browser: &Arc<dyn BrowserPort>) -> Result<Vec<RawOpportunity>> {
+    async fn scan_with_browser(
+        &self,
+        browser: &Arc<dyn BrowserPort>,
+    ) -> Result<Vec<RawOpportunity>> {
         browser.connect(&self.endpoint).await?;
         let tabs = browser.tabs().await?;
-        let tab_id = tabs
-            .first()
-            .map(|t| t.id.as_str())
-            .ok_or_else(|| RusvelError::Internal("no browser tabs — open a page in Chrome".into()))?;
+        let tab_id = tabs.first().map(|t| t.id.as_str()).ok_or_else(|| {
+            RusvelError::Internal("no browser tabs — open a page in Chrome".into())
+        })?;
         browser.navigate(tab_id, &self.listing_url).await?;
         sleep(Duration::from_millis(800)).await;
         let evaluated = browser.evaluate_js(tab_id, &self.extract_js).await?;
@@ -140,10 +142,11 @@ impl CdpSource {
 
 fn parse_evaluate_to_rows(evaluated: serde_json::Value) -> Result<Vec<RawOpportunity>> {
     let text = extract_eval_string(&evaluated)?;
-    let rows: Vec<serde_json::Value> =
-        serde_json::from_str(&text).map_err(|e| {
-            RusvelError::Internal(format!("CDP extract did not return a JSON array string: {e}"))
-        })?;
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&text).map_err(|e| {
+        RusvelError::Internal(format!(
+            "CDP extract did not return a JSON array string: {e}"
+        ))
+    })?;
     let mut out = Vec::new();
     for v in rows {
         if let Ok(row) = serde_json::from_value::<CdpRow>(v) {
@@ -262,7 +265,10 @@ mod tests {
             }])
         }
 
-        async fn observe(&self, _tab_id: &str) -> Result<tokio::sync::broadcast::Receiver<BrowserEvent>> {
+        async fn observe(
+            &self,
+            _tab_id: &str,
+        ) -> Result<tokio::sync::broadcast::Receiver<BrowserEvent>> {
             let (_tx, rx) = tokio::sync::broadcast::channel(1);
             Ok(rx)
         }
@@ -282,7 +288,11 @@ mod tests {
         let browser = Arc::new(MockBrowser {
             eval_result: serde_json::Value::String(json.into()),
         });
-        let src = CdpSource::new(Some(browser), "http://127.0.0.1:9222", "https://example.com/jobs");
+        let src = CdpSource::new(
+            Some(browser),
+            "http://127.0.0.1:9222",
+            "https://example.com/jobs",
+        );
         let rows = src.scan().await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Rust gig");
@@ -313,8 +323,12 @@ mod tests {
             eval_result: serde_json::Value::String(json.into()),
         });
         let js = extract_js_listing_cards("article", "h2", ".body", None);
-        let src = CdpSource::new(Some(browser), "http://127.0.0.1:9222", "https://board.example/jobs")
-            .with_extract_js(js);
+        let src = CdpSource::new(
+            Some(browser),
+            "http://127.0.0.1:9222",
+            "https://board.example/jobs",
+        )
+        .with_extract_js(js);
         let rows = src.scan().await.unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].title, "Scraped A");
@@ -330,7 +344,11 @@ mod tests {
         let browser = Arc::new(MockBrowser {
             eval_result: wrapped,
         });
-        let src = CdpSource::new(Some(browser), "http://127.0.0.1:9222", "https://example.com");
+        let src = CdpSource::new(
+            Some(browser),
+            "http://127.0.0.1:9222",
+            "https://example.com",
+        );
         let rows = src.scan().await.unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].title, "Wrapped");

@@ -13,11 +13,9 @@ use rusvel_core::ports::LlmPort;
 const ANTHROPIC_BETA_COMPUTER_USE: &str = "computer-use-2025-01-24";
 
 fn request_needs_computer_beta(tools: &[serde_json::Value]) -> bool {
-    tools.iter().any(|t| {
-        t.get("type")
-            .and_then(|v| v.as_str())
-            == Some("computer_20250124")
-    })
+    tools
+        .iter()
+        .any(|t| t.get("type").and_then(|v| v.as_str()) == Some("computer_20250124"))
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -178,7 +176,11 @@ fn parse_claude_content_block(block: &serde_json::Value) -> Option<Part> {
                 .get("input")
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({}));
-            Some(Part::ToolCall { id, name, args: input })
+            Some(Part::ToolCall {
+                id,
+                name,
+                args: input,
+            })
         }
         "image" => {
             let source = block.get("source")?;
@@ -313,27 +315,21 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
                     .parts
                     .iter()
                     .filter_map(|p| match p {
-                        Part::Text(t) => {
-                            Some(serde_json::json!({"type": "text", "text": t}))
-                        }
-                        Part::ToolCall { id, name, args } => {
-                            Some(serde_json::json!({
-                                "type": "tool_use",
-                                "id": id,
-                                "name": name,
-                                "input": args,
-                            }))
-                        }
-                        Part::ImageBase64 { base64, media_type } => {
-                            Some(serde_json::json!({
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": media_type,
-                                    "data": base64
-                                }
-                            }))
-                        }
+                        Part::Text(t) => Some(serde_json::json!({"type": "text", "text": t})),
+                        Part::ToolCall { id, name, args } => Some(serde_json::json!({
+                            "type": "tool_use",
+                            "id": id,
+                            "name": name,
+                            "input": args,
+                        })),
+                        Part::ImageBase64 { base64, media_type } => Some(serde_json::json!({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": base64
+                            }
+                        })),
                         _ => None,
                     })
                     .collect();
@@ -450,7 +446,10 @@ fn apply_anthropic_headers(
         .header("content-type", "application/json")
 }
 
-fn apply_batch_headers(provider: &ClaudeProvider, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+fn apply_batch_headers(
+    provider: &ClaudeProvider,
+    req: reqwest::RequestBuilder,
+) -> reqwest::RequestBuilder {
     apply_anthropic_headers(provider, req).header("anthropic-beta", ANTHROPIC_BATCH_BETA)
 }
 
@@ -477,9 +476,8 @@ async fn submit_message_batch(
     let mut requests = Vec::with_capacity(batch.items.len());
     for item in &batch.items {
         let claude_req = to_claude_request(&item.request);
-        let params = serde_json::to_value(&claude_req).map_err(|e| {
-            RusvelError::Serialization(format!("batch params: {e}"))
-        })?;
+        let params = serde_json::to_value(&claude_req)
+            .map_err(|e| RusvelError::Serialization(format!("batch params: {e}")))?;
         requests.push(BatchRequestRow {
             custom_id: item.id.clone(),
             params,
@@ -594,8 +592,8 @@ async fn fetch_batch_results_jsonl(
         if line.is_empty() {
             continue;
         }
-        let v: serde_json::Value =
-            serde_json::from_str(line).map_err(|e| RusvelError::Llm(format!("batch jsonl: {e}")))?;
+        let v: serde_json::Value = serde_json::from_str(line)
+            .map_err(|e| RusvelError::Llm(format!("batch jsonl: {e}")))?;
         let custom_id = v
             .get("custom_id")
             .and_then(|x| x.as_str())
@@ -608,9 +606,10 @@ async fn fetch_batch_results_jsonl(
         let ty = result.get("type").and_then(|x| x.as_str()).unwrap_or("");
         match ty {
             "succeeded" => {
-                let msg = result.get("message").cloned().ok_or_else(|| {
-                    RusvelError::Llm("batch line missing message".into())
-                })?;
+                let msg = result
+                    .get("message")
+                    .cloned()
+                    .ok_or_else(|| RusvelError::Llm("batch line missing message".into()))?;
                 let mut llm = message_value_to_llm_response(&msg)?;
                 let model = msg
                     .get("model")
@@ -623,7 +622,10 @@ async fn fetch_batch_results_jsonl(
                     RUSVEL_META_BATCH_DISCOUNT.to_string(),
                     serde_json::json!(LLM_BATCH_COST_MULTIPLIER),
                 );
-                meta.insert(RUSVEL_META_COST_MODEL.to_string(), serde_json::json!(&model));
+                meta.insert(
+                    RUSVEL_META_COST_MODEL.to_string(),
+                    serde_json::json!(&model),
+                );
                 meta.insert(
                     RUSVEL_META_COST_PROVIDER.to_string(),
                     serde_json::json!("Claude"),
@@ -637,7 +639,9 @@ async fn fetch_batch_results_jsonl(
                     provider: ModelProvider::Claude,
                     model: model.clone(),
                 };
-                items.push(LlmBatchItemOutcome::ok_with_model(custom_id, model_ref, llm));
+                items.push(LlmBatchItemOutcome::ok_with_model(
+                    custom_id, model_ref, llm,
+                ));
             }
             "errored" => {
                 let err = result
@@ -663,9 +667,8 @@ async fn fetch_batch_results_jsonl(
 }
 
 fn message_value_to_llm_response(msg: &serde_json::Value) -> Result<LlmResponse> {
-    let claude_resp: ClaudeResponse = serde_json::from_value(msg.clone()).map_err(|e| {
-        RusvelError::Llm(format!("batch message parse: {e}"))
-    })?;
+    let claude_resp: ClaudeResponse = serde_json::from_value(msg.clone())
+        .map_err(|e| RusvelError::Llm(format!("batch message parse: {e}")))?;
     Ok(from_claude_response(claude_resp))
 }
 

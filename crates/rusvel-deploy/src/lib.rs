@@ -6,7 +6,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::process::Command;
 
-use rusvel_core::domain::{DeployedUrl, DeployStatus};
+use rusvel_core::domain::{DeployStatus, DeployedUrl};
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::{ConfigPort, DeployPort};
 

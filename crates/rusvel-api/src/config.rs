@@ -122,8 +122,8 @@ pub async fn load_and_migrate_chat_config(
             model = %config.model,
             "migrated legacy bare Claude chat model to Cursor agent default"
         );
-        let value =
-            serde_json::to_value(&config).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let value = serde_json::to_value(&config)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         storage
             .objects()
             .put(CONFIG_KEY, CONFIG_ID, value)

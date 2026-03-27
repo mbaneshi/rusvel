@@ -3,14 +3,14 @@
 //! Registers file operations, shell execution, web fetching, and git tools
 //! into a [`ToolRegistry`](rusvel_tool::ToolRegistry).
 
-pub mod delegate;
-pub mod flow;
-pub mod terminal_tools;
-mod file_ops;
-mod git;
 pub mod browser;
+pub mod delegate;
+mod file_ops;
+pub mod flow;
+mod git;
 pub mod memory;
 mod shell;
+pub mod terminal_tools;
 pub mod tool_search;
 
 use std::sync::Arc;
@@ -60,9 +60,6 @@ pub async fn register_flow_tools(
 }
 
 /// Register `browser_observe`, `browser_search`, and `browser_act` (CDP / [`BrowserPort`]).
-pub async fn register_browser_tools(
-    registry: &ToolRegistry,
-    browser_port: Arc<dyn BrowserPort>,
-) {
+pub async fn register_browser_tools(registry: &ToolRegistry, browser_port: Arc<dyn BrowserPort>) {
     browser::register(registry, browser_port).await;
 }

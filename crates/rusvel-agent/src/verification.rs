@@ -60,11 +60,7 @@ pub struct VerificationContext {
 pub trait VerificationStep: Send + Sync {
     fn name(&self) -> &str;
 
-    async fn verify(
-        &self,
-        ctx: &VerificationContext,
-        output: &str,
-    ) -> Result<VerificationResult>;
+    async fn verify(&self, ctx: &VerificationContext, output: &str) -> Result<VerificationResult>;
 }
 
 /// Runs an ordered list of [`VerificationStep`]s, short-circuiting on the
@@ -160,11 +156,7 @@ impl VerificationStep for LlmCritiqueStep {
         "llm_critique"
     }
 
-    async fn verify(
-        &self,
-        ctx: &VerificationContext,
-        output: &str,
-    ) -> Result<VerificationResult> {
+    async fn verify(&self, ctx: &VerificationContext, output: &str) -> Result<VerificationResult> {
         let req = self.build_critique_request(ctx, output);
         let resp = self.llm.generate(req).await?;
 
@@ -179,8 +171,8 @@ impl VerificationStep for LlmCritiqueStep {
             .collect::<String>();
 
         // Parse the JSON response; fall back to Pass on malformed output.
-        let parsed: serde_json::Value =
-            serde_json::from_str(&text).unwrap_or(serde_json::json!({"pass": true, "confidence": 0.5}));
+        let parsed: serde_json::Value = serde_json::from_str(&text)
+            .unwrap_or(serde_json::json!({"pass": true, "confidence": 0.5}));
 
         let pass = parsed["pass"].as_bool().unwrap_or(true);
         let confidence = parsed["confidence"].as_f64().unwrap_or(0.5);
@@ -233,11 +225,7 @@ impl VerificationStep for RulesComplianceStep {
         "rules_compliance"
     }
 
-    async fn verify(
-        &self,
-        _ctx: &VerificationContext,
-        output: &str,
-    ) -> Result<VerificationResult> {
+    async fn verify(&self, _ctx: &VerificationContext, output: &str) -> Result<VerificationResult> {
         let mut issues = Vec::new();
         for (desc, re) in &self.forbidden {
             if re.is_match(output) {
@@ -263,41 +251,43 @@ mod tests {
 
     #[tokio::test]
     async fn rules_compliance_passes_clean_output() {
-        let step = RulesComplianceStep::new(vec![
-            ("no profanity".into(), r"(?i)\bbadword\b".into()),
-        ])
-        .unwrap();
+        let step =
+            RulesComplianceStep::new(vec![("no profanity".into(), r"(?i)\bbadword\b".into())])
+                .unwrap();
         let ctx = VerificationContext {
             department_id: "content".into(),
             tool_name: None,
             original_prompt: "Write something nice".into(),
         };
-        let result = step.verify(&ctx, "This is a perfectly fine output.").await.unwrap();
+        let result = step
+            .verify(&ctx, "This is a perfectly fine output.")
+            .await
+            .unwrap();
         assert!(result.is_pass());
     }
 
     #[tokio::test]
     async fn rules_compliance_fails_on_forbidden() {
-        let step = RulesComplianceStep::new(vec![
-            ("no secrets".into(), r"(?i)api[_\s]?key".into()),
-        ])
-        .unwrap();
+        let step =
+            RulesComplianceStep::new(vec![("no secrets".into(), r"(?i)api[_\s]?key".into())])
+                .unwrap();
         let ctx = VerificationContext {
             department_id: "code".into(),
             tool_name: None,
             original_prompt: "Generate config".into(),
         };
-        let result = step.verify(&ctx, "Here is the API_KEY=abc123").await.unwrap();
+        let result = step
+            .verify(&ctx, "Here is the API_KEY=abc123")
+            .await
+            .unwrap();
         assert!(result.is_fail());
     }
 
     #[tokio::test]
     async fn chain_short_circuits_on_fail() {
         let pass_step = RulesComplianceStep::new(vec![]).unwrap();
-        let fail_step = RulesComplianceStep::new(vec![
-            ("always fail".into(), r".*".into()),
-        ])
-        .unwrap();
+        let fail_step =
+            RulesComplianceStep::new(vec![("always fail".into(), r".*".into())]).unwrap();
 
         let chain = VerificationChain::new()
             .add(Arc::new(pass_step))

@@ -241,14 +241,16 @@ mod tests {
     fn manifest_requires_storage_and_event_ports() {
         let m = code_manifest();
         assert_eq!(m.requires_ports.len(), 2);
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "StoragePort" && !p.optional));
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "EventPort" && !p.optional));
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "StoragePort" && !p.optional)
+        );
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "EventPort" && !p.optional)
+        );
     }
 
     #[test]

@@ -64,7 +64,12 @@ impl CostTrackingLlm {
         if let Some(t) = tier {
             tags.push(format!("tier:{t}"));
         }
-        if resp.metadata.get(RUSVEL_META_BATCH).and_then(|v| v.as_bool()) == Some(true) {
+        if resp
+            .metadata
+            .get(RUSVEL_META_BATCH)
+            .and_then(|v| v.as_bool())
+            == Some(true)
+        {
             tags.push("batch:true".into());
         }
         if let Some(sid) = req_for_cost
@@ -319,7 +324,12 @@ mod tests {
         assert_eq!(pts.len(), 1);
         assert_eq!(pts[0].name, LLM_COST_METRIC_NAME);
         assert!(pts[0].value > 0.0);
-        assert!(pts[0].tags.iter().any(|t| t.contains("session:sess-test-1")));
+        assert!(
+            pts[0]
+                .tags
+                .iter()
+                .any(|t| t.contains("session:sess-test-1"))
+        );
         assert!(pts[0].tags.iter().any(|t| t.starts_with("tier:")));
     }
 
@@ -332,8 +342,14 @@ mod tests {
         );
         let mut meta = serde_json::Map::new();
         meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!("fast"));
-        meta.insert(RUSVEL_META_SESSION_ID.into(), serde_json::json!("sess-test-1"));
-        meta.insert(RUSVEL_META_DEPARTMENT_ID.into(), serde_json::json!("harvest"));
+        meta.insert(
+            RUSVEL_META_SESSION_ID.into(),
+            serde_json::json!("sess-test-1"),
+        );
+        meta.insert(
+            RUSVEL_META_DEPARTMENT_ID.into(),
+            serde_json::json!("harvest"),
+        );
         let req = LlmRequest {
             model: ModelRef {
                 provider: ModelProvider::Claude,

@@ -131,10 +131,7 @@ fn parse_cli_output(stdout: &str) -> std::result::Result<CliResult, String> {
 
 #[async_trait]
 impl LlmPort for ClaudeCliProvider {
-    async fn stream(
-        &self,
-        request: LlmRequest,
-    ) -> Result<mpsc::Receiver<LlmStreamEvent>> {
+    async fn stream(&self, request: LlmRequest) -> Result<mpsc::Receiver<LlmStreamEvent>> {
         let prompt = Self::build_prompt(&request);
         let (tx, rx) = mpsc::channel(64);
 
@@ -181,9 +178,8 @@ impl LlmPort for ClaudeCliProvider {
             let mut lines = BufReader::new(stdout).lines();
             let mut full_text = String::new();
 
-            let stream_result = tokio::time::timeout(
-                std::time::Duration::from_secs(timeout_secs),
-                async {
+            let stream_result =
+                tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
                     while let Ok(Some(line)) = lines.next_line().await {
                         if line.trim().is_empty() {
                             continue;
@@ -203,17 +199,36 @@ impl LlmPort for ClaudeCliProvider {
                                     for block in content {
                                         let block_type = block.get("type").and_then(|t| t.as_str());
                                         if block_type == Some("text") {
-                                            if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                                            if let Some(text) =
+                                                block.get("text").and_then(|t| t.as_str())
+                                            {
                                                 if !text.is_empty() {
                                                     full_text.push_str(text);
-                                                    let _ = tx.send(LlmStreamEvent::Delta(text.to_string())).await;
+                                                    let _ = tx
+                                                        .send(LlmStreamEvent::Delta(
+                                                            text.to_string(),
+                                                        ))
+                                                        .await;
                                                 }
                                             }
                                         } else if block_type == Some("tool_use") {
-                                            let id = block.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                            let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                                            let args = block.get("input").cloned().unwrap_or(serde_json::json!({}));
-                                            let _ = tx.send(LlmStreamEvent::ToolUse { id, name, args }).await;
+                                            let id = block
+                                                .get("id")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let name = block
+                                                .get("name")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let args = block
+                                                .get("input")
+                                                .cloned()
+                                                .unwrap_or(serde_json::json!({}));
+                                            let _ = tx
+                                                .send(LlmStreamEvent::ToolUse { id, name, args })
+                                                .await;
                                         }
                                     }
                                 }
@@ -225,15 +240,40 @@ impl LlmPort for ClaudeCliProvider {
                                     .unwrap_or(false);
 
                                 if is_error {
-                                    let msg = parsed.get("result").and_then(|r| r.as_str()).unwrap_or("unknown error").to_string();
+                                    let msg = parsed
+                                        .get("result")
+                                        .and_then(|r| r.as_str())
+                                        .unwrap_or("unknown error")
+                                        .to_string();
                                     let _ = tx.send(LlmStreamEvent::Error(msg)).await;
                                 } else {
-                                    let result_text = parsed.get("result").and_then(|r| r.as_str()).unwrap_or("").to_string();
-                                    let cost_usd = parsed.get("total_cost_usd").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
-                                    let num_turns = parsed.get("num_turns").and_then(serde_json::Value::as_u64).unwrap_or(0) as u32;
-                                    let duration_ms = parsed.get("duration_ms").and_then(serde_json::Value::as_u64).unwrap_or(0);
-                                    let duration_api_ms = parsed.get("duration_api_ms").and_then(serde_json::Value::as_u64).unwrap_or(0);
-                                    let session_id = parsed.get("session_id").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                                    let result_text = parsed
+                                        .get("result")
+                                        .and_then(|r| r.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let cost_usd = parsed
+                                        .get("total_cost_usd")
+                                        .and_then(serde_json::Value::as_f64)
+                                        .unwrap_or(0.0);
+                                    let num_turns = parsed
+                                        .get("num_turns")
+                                        .and_then(serde_json::Value::as_u64)
+                                        .unwrap_or(0)
+                                        as u32;
+                                    let duration_ms = parsed
+                                        .get("duration_ms")
+                                        .and_then(serde_json::Value::as_u64)
+                                        .unwrap_or(0);
+                                    let duration_api_ms = parsed
+                                        .get("duration_api_ms")
+                                        .and_then(serde_json::Value::as_u64)
+                                        .unwrap_or(0);
+                                    let session_id = parsed
+                                        .get("session_id")
+                                        .and_then(|s| s.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
 
                                     // Determine finish reason from content
                                     let finish_reason = if parsed.pointer("/result").is_some() {
@@ -242,32 +282,38 @@ impl LlmPort for ClaudeCliProvider {
                                         FinishReason::Stop
                                     };
 
-                                    let _ = tx.send(LlmStreamEvent::Done(LlmResponse {
-                                        content: Content::text(result_text),
-                                        finish_reason,
-                                        usage: LlmUsage { input_tokens: 0, output_tokens: 0 },
-                                        metadata: serde_json::json!({
-                                            "source": "claude-cli-stream",
-                                            "cost_usd": cost_usd,
-                                            "num_turns": num_turns,
-                                            "duration_ms": duration_ms,
-                                            "duration_api_ms": duration_api_ms,
-                                            "session_id": session_id,
-                                        }),
-                                    })).await;
+                                    let _ = tx
+                                        .send(LlmStreamEvent::Done(LlmResponse {
+                                            content: Content::text(result_text),
+                                            finish_reason,
+                                            usage: LlmUsage {
+                                                input_tokens: 0,
+                                                output_tokens: 0,
+                                            },
+                                            metadata: serde_json::json!({
+                                                "source": "claude-cli-stream",
+                                                "cost_usd": cost_usd,
+                                                "num_turns": num_turns,
+                                                "duration_ms": duration_ms,
+                                                "duration_api_ms": duration_api_ms,
+                                                "session_id": session_id,
+                                            }),
+                                        }))
+                                        .await;
                                 }
                             }
                             _ => {}
                         }
                     }
-                },
-            )
-            .await;
+                })
+                .await;
 
             let _ = child.kill().await;
 
             if stream_result.is_err() {
-                let _ = tx.send(LlmStreamEvent::Error("claude CLI stream timed out".into())).await;
+                let _ = tx
+                    .send(LlmStreamEvent::Error("claude CLI stream timed out".into()))
+                    .await;
             }
         });
 

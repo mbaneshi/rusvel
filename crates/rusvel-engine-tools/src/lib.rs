@@ -25,9 +25,6 @@ pub async fn register_content_tools(
     content::register(registry, engine).await;
 }
 
-pub async fn register_code_tools(
-    registry: &ToolRegistry,
-    engine: Arc<code_engine::CodeEngine>,
-) {
+pub async fn register_code_tools(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngine>) {
     code::register(registry, engine).await;
 }

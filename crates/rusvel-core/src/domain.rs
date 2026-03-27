@@ -47,7 +47,10 @@ pub enum Part {
     },
     Audio(Vec<u8>),
     Video(Vec<u8>),
-    File { name: String, data: Vec<u8> },
+    File {
+        name: String,
+        data: Vec<u8>,
+    },
     /// A tool invocation requested by the LLM.
     ToolCall {
         id: String,
@@ -1630,11 +1633,7 @@ mod tests {
             input_tokens: 1_000_000,
             output_tokens: 500_000,
         };
-        let c = estimate_llm_cost_usd(
-            &ModelProvider::Claude,
-            "claude-haiku-4-20250414",
-            &u,
-        );
+        let c = estimate_llm_cost_usd(&ModelProvider::Claude, "claude-haiku-4-20250414", &u);
         assert!(c > 0.0);
         assert!((c - 3.5).abs() < 0.01);
     }

@@ -49,9 +49,8 @@ fn parse_session_id(args: &serde_json::Value) -> rusvel_core::error::Result<Sess
 }
 
 fn parse_timeframe(s: &str) -> rusvel_core::error::Result<Timeframe> {
-    serde_json::from_value(serde_json::Value::String(s.to_string())).map_err(|_| {
-        rusvel_core::error::RusvelError::Validation(format!("invalid timeframe: {s}"))
-    })
+    serde_json::from_value(serde_json::Value::String(s.to_string()))
+        .map_err(|_| rusvel_core::error::RusvelError::Validation(format!("invalid timeframe: {s}")))
 }
 
 #[async_trait]
@@ -159,14 +158,10 @@ impl DepartmentApp for ForgeDepartment {
                         .get("timeframe")
                         .and_then(|v| v.as_str())
                         .ok_or_else(|| {
-                            rusvel_core::error::RusvelError::Validation(
-                                "timeframe required".into(),
-                            )
+                            rusvel_core::error::RusvelError::Validation("timeframe required".into())
                         })?;
                     let timeframe = parse_timeframe(tf)?;
-                    let goal = eng
-                        .set_goal(&sid, title, description, timeframe)
-                        .await?;
+                    let goal = eng.set_goal(&sid, title, description, timeframe).await?;
                     Ok(ToolOutput {
                         content: serde_json::to_string_pretty(&goal)
                             .unwrap_or_else(|_| "goal".into()),
@@ -236,8 +231,7 @@ impl DepartmentApp for ForgeDepartment {
                         })?;
                     let cfg = eng.hire_persona(name, &sid)?;
                     Ok(ToolOutput {
-                        content: serde_json::to_string_pretty(&cfg)
-                            .unwrap_or_else(|_| "{}".into()),
+                        content: serde_json::to_string_pretty(&cfg).unwrap_or_else(|_| "{}".into()),
                         is_error: false,
                         metadata: serde_json::json!({}),
                     })

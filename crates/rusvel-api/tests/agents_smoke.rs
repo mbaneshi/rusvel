@@ -29,13 +29,7 @@ async fn post_get_agent_roundtrip() {
     let got: AgentProfile = serde_json::from_slice(&b2).unwrap();
     assert_eq!(got.name, "lint-bot");
 
-    let (st3, b3) = json_request(
-        &mut h.router,
-        "GET",
-        "/api/agents?engine=code",
-        None,
-    )
-    .await;
+    let (st3, b3) = json_request(&mut h.router, "GET", "/api/agents?engine=code", None).await;
     assert_eq!(st3, StatusCode::OK);
     let list: Vec<AgentProfile> = serde_json::from_slice(&b3).unwrap();
     assert!(list.iter().any(|a| a.name == "lint-bot"));

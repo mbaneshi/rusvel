@@ -9,6 +9,4 @@
 mod migrations;
 mod store;
 
-pub use store::{
-    ColumnInfo, Database, ForeignKeyInfo, IndexInfo, SqlColumn, SqlResult, TableInfo,
-};
+pub use store::{ColumnInfo, Database, ForeignKeyInfo, IndexInfo, SqlColumn, SqlResult, TableInfo};

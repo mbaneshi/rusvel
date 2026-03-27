@@ -34,13 +34,7 @@ async fn cron_crud_and_tick_ok() {
     let list: Vec<serde_json::Value> = serde_json::from_slice(&list_bytes).unwrap();
     assert!(list.iter().any(|row| row["id"].as_str() == Some(id)));
 
-    let (stg, one) = json_request(
-        &mut h.router,
-        "GET",
-        &format!("/api/cron/{id}"),
-        None,
-    )
-    .await;
+    let (stg, one) = json_request(&mut h.router, "GET", &format!("/api/cron/{id}"), None).await;
     assert_eq!(stg, StatusCode::OK);
     let row: serde_json::Value = serde_json::from_slice(&one).unwrap();
     assert_eq!(row["name"], "every second (test)");
@@ -57,12 +51,6 @@ async fn cron_crud_and_tick_ok() {
     let (st3, _) = json_request(&mut h.router, "POST", "/api/cron/tick", None).await;
     assert_eq!(st3, StatusCode::OK);
 
-    let (std, _) = json_request(
-        &mut h.router,
-        "DELETE",
-        &format!("/api/cron/{id}"),
-        None,
-    )
-    .await;
+    let (std, _) = json_request(&mut h.router, "DELETE", &format!("/api/cron/{id}"), None).await;
     assert_eq!(std, StatusCode::OK);
 }

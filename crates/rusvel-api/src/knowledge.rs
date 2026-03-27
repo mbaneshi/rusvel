@@ -22,7 +22,7 @@ use rusvel_core::domain::{
 };
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{EmbeddingPort, MemoryPort, StoragePort, VectorStorePort};
-use rusvel_core::{reciprocal_rank_fusion, RRF_K_DEFAULT};
+use rusvel_core::{RRF_K_DEFAULT, reciprocal_rank_fusion};
 
 use crate::AppState;
 
@@ -83,7 +83,8 @@ async fn index_event_for_kb(
         return Ok(());
     }
 
-    let Some(text) = indexable_text(storage, event).await
+    let Some(text) = indexable_text(storage, event)
+        .await
         .map(|s| truncate_kb_text(s))
     else {
         tracing::debug!(kind = %event.kind, "knowledge indexer: no text to index");
@@ -177,7 +178,11 @@ async fn indexable_text(storage: &Arc<dyn StoragePort>, event: &Event) -> Option
         "harvest.opportunity.discovered" | "harvest.opportunity.scored" => {
             let oid = event.payload.get("id")?.as_str()?;
             let Some(v) = objects.get("opportunity", oid).await.ok().flatten() else {
-                let title = event.payload.get("title").and_then(|x| x.as_str()).unwrap_or(oid);
+                let title = event
+                    .payload
+                    .get("title")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(oid);
                 return Some(format!("Harvest opportunity (id {oid}): {title}"));
             };
             let title = v.get("title")?.as_str()?;

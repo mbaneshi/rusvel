@@ -14,7 +14,7 @@ use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::{ContactId, EventId, JobId, SessionId};
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
 
-use crate::email::{send_email_with_event, EmailAdapter, EmailMessage};
+use crate::email::{EmailAdapter, EmailMessage, send_email_with_event};
 
 // ── Local ID + domain types ────────────────────────────────────────
 
@@ -456,11 +456,7 @@ impl OutreachManager {
             )
             .await?;
 
-        let to = contact
-            .emails
-            .first()
-            .cloned()
-            .unwrap_or_default();
+        let to = contact.emails.first().cloned().unwrap_or_default();
         if to.is_empty() {
             return Err(RusvelError::Validation(
                 "contact has no email address".into(),
@@ -533,10 +529,7 @@ impl OutreachManager {
                 }
             }
         }
-        self.storage
-            .objects()
-            .put(KIND_SEQ_RUN, run_key, run)
-            .await
+        self.storage.objects().put(KIND_SEQ_RUN, run_key, run).await
     }
 
     async fn merge_run_complete(&self, run_key: &str) -> Result<()> {
@@ -550,10 +543,7 @@ impl OutreachManager {
             obj.insert("status".into(), "completed".into());
             obj.insert("completed_at".into(), Utc::now().to_rfc3339().into());
         }
-        self.storage
-            .objects()
-            .put(KIND_SEQ_RUN, run_key, run)
-            .await
+        self.storage.objects().put(KIND_SEQ_RUN, run_key, run).await
     }
 
     pub async fn schedule_followup(

@@ -35,7 +35,11 @@ pub fn register(engine: &Arc<LegalEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let title = args
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let counterparty = args
                     .get("counterparty")
                     .and_then(|v| v.as_str())
@@ -80,7 +84,9 @@ pub fn register(engine: &Arc<LegalEngine>, ctx: &mut RegistrationContext) {
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
                 let area: ComplianceArea = serde_json::from_value(
-                    args.get("area").cloned().unwrap_or(serde_json::json!("GDPR")),
+                    args.get("area")
+                        .cloned()
+                        .unwrap_or(serde_json::json!("GDPR")),
                 )
                 .map_err(|e| RusvelError::Validation(format!("area: {e}")))?;
                 let description = args
@@ -88,8 +94,15 @@ pub fn register(engine: &Arc<LegalEngine>, ctx: &mut RegistrationContext) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let passed = args.get("passed").and_then(|v| v.as_bool()).unwrap_or(false);
-                let notes = args.get("notes").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let passed = args
+                    .get("passed")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let notes = args
+                    .get("notes")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let check = eng
                     .compliance()
                     .add_check(sid, area, description, passed, notes)

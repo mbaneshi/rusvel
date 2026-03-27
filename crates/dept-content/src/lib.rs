@@ -11,8 +11,8 @@ mod tools;
 use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
-use content_engine::adapters;
 use content_engine::ContentEngine;
+use content_engine::adapters;
 use rusvel_core::Engine;
 use rusvel_core::department::*;
 use rusvel_core::error::Result;
@@ -60,26 +60,32 @@ impl DepartmentApp for ContentDepartment {
         );
 
         // ── Register platform adapters (engine-internal, ADR-006) ──
-        engine.register_platform(Arc::new(
-            adapters::linkedin::LinkedInAdapter::new(ctx.config.clone()),
-        ));
-        engine.register_platform(Arc::new(
-            adapters::twitter::TwitterAdapter::new(ctx.config.clone()),
-        ));
-        engine.register_platform(Arc::new(
-            adapters::devto::DevToAdapter::new(ctx.config.clone()),
-        ));
+        engine.register_platform(Arc::new(adapters::linkedin::LinkedInAdapter::new(
+            ctx.config.clone(),
+        )));
+        engine.register_platform(Arc::new(adapters::twitter::TwitterAdapter::new(
+            ctx.config.clone(),
+        )));
+        engine.register_platform(Arc::new(adapters::devto::DevToAdapter::new(
+            ctx.config.clone(),
+        )));
 
         let engine = Arc::new(engine);
         let _ = self.engine.set(engine.clone());
 
         tools::register_tools(&mut ctx.tools, engine.clone());
 
-        ctx.event_handlers
-            .on("content", "code.analyzed", events::on_code_analyzed(engine.clone()));
+        ctx.event_handlers.on(
+            "content",
+            "code.analyzed",
+            events::on_code_analyzed(engine.clone()),
+        );
 
-        ctx.job_handlers
-            .handle("content", "content.publish", jobs::content_publish(engine.clone()));
+        ctx.job_handlers.handle(
+            "content",
+            "content.publish",
+            jobs::content_publish(engine.clone()),
+        );
 
         tracing::info!("Content department registered");
         Ok(())

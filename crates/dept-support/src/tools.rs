@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use support_engine::SupportEngine;
-use support_engine::TicketPriority;
 use rusvel_core::department::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
+use support_engine::SupportEngine;
+use support_engine::TicketPriority;
 
 fn parse_session_id(args: &serde_json::Value) -> Result<SessionId> {
     args.get("session_id")
@@ -37,14 +37,20 @@ pub fn register(engine: &Arc<SupportEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let subject = args.get("subject").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let subject = args
+                    .get("subject")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let description = args
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
                 let priority: TicketPriority = serde_json::from_value(
-                    args.get("priority").cloned().unwrap_or(serde_json::json!("Medium")),
+                    args.get("priority")
+                        .cloned()
+                        .unwrap_or(serde_json::json!("Medium")),
                 )
                 .map_err(|e| RusvelError::Validation(format!("priority: {e}")))?;
                 let requester_email = args
@@ -106,7 +112,11 @@ pub fn register(engine: &Arc<SupportEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let q = args.get("query").and_then(|v| v.as_str()).unwrap_or("").to_lowercase();
+                let q = args
+                    .get("query")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
                 let articles = eng.knowledge().list_articles(sid).await?;
                 let filtered: Vec<_> = articles
                     .into_iter()
@@ -115,7 +125,8 @@ pub fn register(engine: &Arc<SupportEngine>, ctx: &mut RegistrationContext) {
                     })
                     .collect();
                 Ok(ToolOutput {
-                    content: serde_json::to_string_pretty(&filtered).unwrap_or_else(|_| "[]".into()),
+                    content: serde_json::to_string_pretty(&filtered)
+                        .unwrap_or_else(|_| "[]".into()),
                     is_error: false,
                     metadata: serde_json::json!({ "count": filtered.len() }),
                 })

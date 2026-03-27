@@ -59,10 +59,7 @@ async fn pane_exits_with_status_queryable_via_port() {
             &wid,
             "exit 0",
             Path::new("/"),
-            PaneSize {
-                rows: 24,
-                cols: 80,
-            },
+            PaneSize { rows: 24, cols: 80 },
             PaneSource::AgentTool { run_id: run },
         )
         .await

@@ -37,12 +37,15 @@ pub async fn register(registry: &ToolRegistry) {
             Arc::new(|args| {
                 Box::pin(async move {
                     let path = args["path"].as_str().unwrap_or("");
-                    let content = tokio::fs::read_to_string(path)
-                        .await
-                        .map_err(|e| rusvel_core::error::RusvelError::Tool(format!("read_file: {e}")))?;
+                    let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+                        rusvel_core::error::RusvelError::Tool(format!("read_file: {e}"))
+                    })?;
 
                     let offset = args.get("offset").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-                    let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
+                    let limit = args
+                        .get("limit")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize);
 
                     let lines: Vec<&str> = content.lines().collect();
                     let start = offset.saturating_sub(1).min(lines.len());

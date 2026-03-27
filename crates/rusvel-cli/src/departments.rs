@@ -252,7 +252,10 @@ pub async fn handle_dept(
             }
             println!("Search results for \"{query}\":");
             for r in &results {
-                println!("  {:.2}  {}:{} — {}", r.score, r.file_path, r.line, r.symbol_name);
+                println!(
+                    "  {:.2}  {}:{} — {}",
+                    r.score, r.file_path, r.line, r.symbol_name
+                );
             }
             Ok(())
         }
@@ -277,11 +280,7 @@ pub async fn handle_dept(
             let session_id = crate::load_active_session()?;
             println!("Drafting content about: {topic}...\n");
             let item = engine
-                .draft(
-                    &session_id,
-                    &topic,
-                    rusvel_core::domain::ContentKind::Blog,
-                )
+                .draft(&session_id, &topic, rusvel_core::domain::ContentKind::Blog)
                 .await?;
             println!("Content drafted:");
             println!("  ID:     {}", item.id);

@@ -58,12 +58,7 @@ pub async fn create_schedule(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let sid = Uuid::parse_str(body.session_id.trim())
         .map(SessionId::from_uuid)
-        .map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                "invalid session_id".to_string(),
-            )
-        })?;
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid session_id".to_string()))?;
 
     let created = state
         .cron_scheduler

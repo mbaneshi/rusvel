@@ -35,8 +35,16 @@ pub fn register(engine: &Arc<InfraEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let service = args.get("service").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let version = args.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let service = args
+                    .get("service")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let version = args
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let environment = args
                     .get("environment")
                     .and_then(|v| v.as_str())
@@ -70,7 +78,10 @@ pub fn register(engine: &Arc<InfraEngine>, ctx: &mut RegistrationContext) {
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
                 let checks = eng.monitor().list_checks(sid).await?;
-                let down = checks.iter().filter(|c| c.status == CheckStatus::Down).count();
+                let down = checks
+                    .iter()
+                    .filter(|c| c.status == CheckStatus::Down)
+                    .count();
                 let degraded = checks
                     .iter()
                     .filter(|c| c.status == CheckStatus::Degraded)
@@ -109,14 +120,20 @@ pub fn register(engine: &Arc<InfraEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let title = args
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let description = args
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
                 let severity: Severity = serde_json::from_value(
-                    args.get("severity").cloned().unwrap_or(serde_json::json!("P3")),
+                    args.get("severity")
+                        .cloned()
+                        .unwrap_or(serde_json::json!("P3")),
                 )
                 .map_err(|e| RusvelError::Validation(format!("severity: {e}")))?;
                 let inc = eng

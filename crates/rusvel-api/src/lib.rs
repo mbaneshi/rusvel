@@ -27,6 +27,7 @@ pub mod jobs;
 pub mod kits;
 pub mod knowledge;
 pub mod mcp_servers;
+pub mod pipeline_runner;
 pub mod playbooks;
 pub mod routes;
 pub mod rules;
@@ -135,6 +136,10 @@ pub fn build_router_with_frontend(
         .route("/api/brief", get(engine_routes::brief_get))
         .route("/api/brief/latest", get(engine_routes::brief_latest_get))
         .route("/api/brief/generate", post(engine_routes::brief_generate))
+        .route(
+            "/api/forge/pipeline",
+            post(engine_routes::forge_pipeline_orchestrate),
+        )
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
         .route("/api/sessions/{id}", get(routes::get_session))
@@ -289,6 +294,14 @@ pub fn build_router_with_frontend(
             get(engine_routes::harvest_pipeline),
         )
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
+        .route(
+            "/api/dept/harvest/outcomes",
+            get(engine_routes::harvest_outcomes_list),
+        )
+        .route(
+            "/api/dept/harvest/outcome",
+            post(engine_routes::harvest_record_outcome),
+        )
         .route(
             "/api/dept/harvest/advance",
             post(engine_routes::harvest_advance),

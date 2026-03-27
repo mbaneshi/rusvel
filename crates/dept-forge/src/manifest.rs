@@ -213,9 +213,10 @@ mod tests {
     #[test]
     fn manifest_rules_cover_safety() {
         let m = forge_manifest();
-        assert!(m
-            .rules
-            .iter()
-            .any(|r| r.name.contains("circuit") && r.enabled));
+        assert!(
+            m.rules
+                .iter()
+                .any(|r| r.name.contains("circuit") && r.enabled)
+        );
     }
 }

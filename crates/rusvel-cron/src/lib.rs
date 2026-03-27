@@ -152,10 +152,7 @@ impl CronScheduler {
     }
 
     pub async fn get(&self, id: &str) -> Result<Option<CronScheduleRecord>> {
-        let raw = self
-            .objects()
-            .get(CRON_SCHEDULE_OBJECT_KIND, id)
-            .await?;
+        let raw = self.objects().get(CRON_SCHEDULE_OBJECT_KIND, id).await?;
         Ok(match raw {
             Some(v) => Some(
                 serde_json::from_value(v).map_err(|e| RusvelError::Serialization(e.to_string()))?,
@@ -165,9 +162,7 @@ impl CronScheduler {
     }
 
     pub async fn delete(&self, id: &str) -> Result<()> {
-        self.objects()
-            .delete(CRON_SCHEDULE_OBJECT_KIND, id)
-            .await
+        self.objects().delete(CRON_SCHEDULE_OBJECT_KIND, id).await
     }
 
     pub async fn update(
@@ -179,13 +174,10 @@ impl CronScheduler {
         payload: Option<Value>,
         event_kind: Option<String>,
     ) -> Result<CronScheduleRecord> {
-        let mut record = self
-            .get(id)
-            .await?
-            .ok_or_else(|| RusvelError::NotFound {
-                kind: CRON_SCHEDULE_OBJECT_KIND.into(),
-                id: id.into(),
-            })?;
+        let mut record = self.get(id).await?.ok_or_else(|| RusvelError::NotFound {
+            kind: CRON_SCHEDULE_OBJECT_KIND.into(),
+            id: id.into(),
+        })?;
 
         if let Some(n) = name {
             if n.trim().is_empty() {
@@ -234,11 +226,10 @@ impl CronScheduler {
         let now = Utc::now();
 
         for v in rows {
-            let mut record: CronScheduleRecord =
-                match serde_json::from_value(v) {
-                    Ok(r) => r,
-                    Err(_) => continue,
-                };
+            let mut record: CronScheduleRecord = match serde_json::from_value(v) {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
 
             if !record.enabled {
                 continue;

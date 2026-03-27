@@ -25,8 +25,7 @@ pub fn content_manifest() -> DepartmentManifest {
         quick_actions: vec![
             QuickAction {
                 label: "Draft blog post".into(),
-                prompt: "Draft a blog post. Ask me for the topic, audience, and key points."
-                    .into(),
+                prompt: "Draft a blog post. Ask me for the topic, audience, and key points.".into(),
             },
             QuickAction {
                 label: "Adapt for Twitter".into(),
@@ -34,9 +33,8 @@ pub fn content_manifest() -> DepartmentManifest {
             },
             QuickAction {
                 label: "Content calendar".into(),
-                prompt:
-                    "Show the content calendar for this week with scheduled and draft posts."
-                        .into(),
+                prompt: "Show the content calendar for this week with scheduled and draft posts."
+                    .into(),
             },
         ],
 
@@ -259,10 +257,11 @@ mod tests {
     #[test]
     fn manifest_requires_agent_port() {
         let m = content_manifest();
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "AgentPort" && !p.optional));
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "AgentPort" && !p.optional)
+        );
     }
 
     #[test]

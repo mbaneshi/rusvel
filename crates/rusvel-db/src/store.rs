@@ -166,11 +166,7 @@ impl Database {
         self.table_info_inner(&conn, name)
     }
 
-    fn table_info_inner(
-        &self,
-        conn: &Connection,
-        table: &str,
-    ) -> rusvel_core::Result<TableInfo> {
+    fn table_info_inner(&self, conn: &Connection, table: &str) -> rusvel_core::Result<TableInfo> {
         // Columns via PRAGMA table_info
         let mut col_stmt = conn
             .prepare(&format!("PRAGMA table_info('{table}')"))
@@ -280,13 +276,10 @@ impl Database {
         }
 
         let cols = select.unwrap_or("*");
-        let order_clause = order
-            .map(|o| format!(" ORDER BY {o}"))
-            .unwrap_or_default();
+        let order_clause = order.map(|o| format!(" ORDER BY {o}")).unwrap_or_default();
 
-        let sql = format!(
-            "SELECT {cols} FROM \"{table}\"{order_clause} LIMIT {limit} OFFSET {offset}"
-        );
+        let sql =
+            format!("SELECT {cols} FROM \"{table}\"{order_clause} LIMIT {limit} OFFSET {offset}");
         self.execute_sql_inner(&conn, &sql)
     }
 
@@ -296,11 +289,7 @@ impl Database {
         self.execute_sql_inner(&conn, sql)
     }
 
-    fn execute_sql_inner(
-        &self,
-        conn: &Connection,
-        sql: &str,
-    ) -> rusvel_core::Result<SqlResult> {
+    fn execute_sql_inner(&self, conn: &Connection, sql: &str) -> rusvel_core::Result<SqlResult> {
         let start = std::time::Instant::now();
         let mut stmt = conn
             .prepare(sql)
@@ -611,9 +600,7 @@ impl ObjectStore for Database {
         let mut idx = 2;
 
         if let Some(ref sid) = filter.session_id {
-            sql.push_str(&format!(
-                " AND json_extract(data, '$.session_id') = ?{idx}"
-            ));
+            sql.push_str(&format!(" AND json_extract(data, '$.session_id') = ?{idx}"));
             param_values.push(Box::new(sid.to_string()));
             idx += 1;
         }
@@ -1047,9 +1034,8 @@ impl JobStore for Database {
         let kind_filter = if kinds.is_empty() {
             String::new()
         } else {
-            let placeholders: Vec<String> = (0..kinds.len())
-                .map(|i| format!("?{}", i + 3))
-                .collect();
+            let placeholders: Vec<String> =
+                (0..kinds.len()).map(|i| format!("?{}", i + 3)).collect();
             for k in kinds {
                 param_values.push(Box::new(serde_json::to_string(k)?));
             }
@@ -1814,9 +1800,7 @@ mod tests {
         assert_eq!(dequeued.status, JobStatus::Running);
 
         // No more jobs to dequeue
-        let none = JobStore::dequeue(&db, &[JobKind::AgentRun])
-            .await
-            .unwrap();
+        let none = JobStore::dequeue(&db, &[JobKind::AgentRun]).await.unwrap();
         assert!(none.is_none());
     }
 

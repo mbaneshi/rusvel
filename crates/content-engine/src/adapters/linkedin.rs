@@ -42,8 +42,9 @@ impl LinkedInAdapter {
 
     fn bearer(&self) -> Result<String> {
         match self.config.get_value("linkedin_token")? {
-            Some(v) => serde_json::from_value(v)
-                .map_err(|e| RusvelError::Serialization(e.to_string())),
+            Some(v) => {
+                serde_json::from_value(v).map_err(|e| RusvelError::Serialization(e.to_string()))
+            }
             None => Err(RusvelError::Validation(
                 "config key `linkedin_token` is not set".into(),
             )),

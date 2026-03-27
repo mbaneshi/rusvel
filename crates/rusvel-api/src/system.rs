@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use serde::Serialize;
 use tokio::process::Command;
 
@@ -88,21 +88,35 @@ pub async fn get_status(
     let project_dir = find_project_dir();
 
     // Read status docs if they exist
-    let current_state = std::fs::read_to_string(format!("{}/docs/status/current-state.md", project_dir))
-        .unwrap_or_else(|_| "Not found".into());
-    let gap_analysis = std::fs::read_to_string(format!("{}/docs/status/gap-analysis.md", project_dir))
-        .unwrap_or_else(|_| "Not found".into());
+    let current_state =
+        std::fs::read_to_string(format!("{}/docs/status/current-state.md", project_dir))
+            .unwrap_or_else(|_| "Not found".into());
+    let gap_analysis =
+        std::fs::read_to_string(format!("{}/docs/status/gap-analysis.md", project_dir))
+            .unwrap_or_else(|_| "Not found".into());
 
     // Count entities
-    let agents = state.storage.objects()
-        .list("agents", rusvel_core::domain::ObjectFilter::default()).await
-        .map(|v| v.len()).unwrap_or(0);
-    let skills = state.storage.objects()
-        .list("skills", rusvel_core::domain::ObjectFilter::default()).await
-        .map(|v| v.len()).unwrap_or(0);
-    let rules = state.storage.objects()
-        .list("rules", rusvel_core::domain::ObjectFilter::default()).await
-        .map(|v| v.len()).unwrap_or(0);
+    let agents = state
+        .storage
+        .objects()
+        .list("agents", rusvel_core::domain::ObjectFilter::default())
+        .await
+        .map(|v| v.len())
+        .unwrap_or(0);
+    let skills = state
+        .storage
+        .objects()
+        .list("skills", rusvel_core::domain::ObjectFilter::default())
+        .await
+        .map(|v| v.len())
+        .unwrap_or(0);
+    let rules = state
+        .storage
+        .objects()
+        .list("rules", rusvel_core::domain::ObjectFilter::default())
+        .await
+        .map(|v| v.len())
+        .unwrap_or(0);
 
     // Git info
     let git_log = run_command("git", &["log", "--oneline", "-10"], &project_dir).await;
@@ -140,16 +154,23 @@ pub async fn self_fix(
     let result = run_command(
         "claude",
         &[
-            "-p", &prompt,
-            "--output-format", "text",
-            "--model", "sonnet",
-            "--allowedTools", "Read Write Edit Bash Glob Grep",
-            "--add-dir", &project_dir,
+            "-p",
+            &prompt,
+            "--output-format",
+            "text",
+            "--model",
+            "sonnet",
+            "--allowedTools",
+            "Read Write Edit Bash Glob Grep",
+            "--add-dir",
+            &project_dir,
             "--no-session-persistence",
-            "--permission-mode", "acceptEdits",
+            "--permission-mode",
+            "acceptEdits",
         ],
         &project_dir,
-    ).await;
+    )
+    .await;
 
     Ok(Json(result))
 }
@@ -163,10 +184,14 @@ pub struct FixRequest {
 pub async fn ingest_docs(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let embed = state.embedding.as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Embedding adapter not available".into()))?;
-    let vs = state.vector_store.as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Vector store not available".into()))?;
+    let embed = state.embedding.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Embedding adapter not available".into(),
+    ))?;
+    let vs = state.vector_store.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Vector store not available".into(),
+    ))?;
 
     let project_dir = find_project_dir();
     let docs = [
@@ -187,7 +212,8 @@ pub async fn ingest_docs(
             Err(_) => continue,
         };
 
-        let chunks: Vec<&str> = content.split("\n\n")
+        let chunks: Vec<&str> = content
+            .split("\n\n")
             .map(|c| c.trim())
             .filter(|c| c.len() > 50)
             .collect();
@@ -196,12 +222,14 @@ pub async fn ingest_docs(
             let id = format!("doc-{}-{}", doc_path.replace('/', "-"), i);
             match embed.embed_one(chunk).await {
                 Ok(embedding) => {
-                    let _ = vs.upsert(
-                        &id,
-                        chunk,
-                        embedding,
-                        serde_json::json!({ "source": doc_path, "chunk_index": i }),
-                    ).await;
+                    let _ = vs
+                        .upsert(
+                            &id,
+                            chunk,
+                            embedding,
+                            serde_json::json!({ "source": doc_path, "chunk_index": i }),
+                        )
+                        .await;
                     total_chunks += 1;
                 }
                 Err(e) => {
@@ -213,12 +241,20 @@ pub async fn ingest_docs(
     }
 
     // Also ingest profile.toml if it exists
-    let profile_path = format!("{}/.rusvel/profile.toml",
-        std::env::var("HOME").unwrap_or_else(|_| ".".into()));
+    let profile_path = format!(
+        "{}/.rusvel/profile.toml",
+        std::env::var("HOME").unwrap_or_else(|_| ".".into())
+    );
     if let Ok(profile_content) = std::fs::read_to_string(&profile_path) {
         if let Ok(embedding) = embed.embed_one(&profile_content).await {
-            let _ = vs.upsert("doc-profile", &profile_content, embedding,
-                serde_json::json!({ "source": "profile.toml" })).await;
+            let _ = vs
+                .upsert(
+                    "doc-profile",
+                    &profile_content,
+                    embedding,
+                    serde_json::json!({ "source": "profile.toml" }),
+                )
+                .await;
             total_chunks += 1;
             ingested_files.push("profile.toml".into());
         }
@@ -245,8 +281,14 @@ async fn run_command(cmd: &str, args: &[&str], cwd: &str) -> CommandResult {
     {
         Ok(output) => CommandResult {
             success: output.status.success(),
-            stdout: String::from_utf8_lossy(&output.stdout).chars().take(5000).collect(),
-            stderr: String::from_utf8_lossy(&output.stderr).chars().take(2000).collect(),
+            stdout: String::from_utf8_lossy(&output.stdout)
+                .chars()
+                .take(5000)
+                .collect(),
+            stderr: String::from_utf8_lossy(&output.stderr)
+                .chars()
+                .take(2000)
+                .collect(),
             exit_code: output.status.code(),
         },
         Err(e) => CommandResult {
@@ -261,7 +303,10 @@ async fn run_command(cmd: &str, args: &[&str], cwd: &str) -> CommandResult {
 pub fn find_project_dir() -> String {
     // Try common locations
     for path in &[
-        std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
+        std::env::current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string(),
         "/Users/bm/rusvel".into(),
     ] {
         if std::path::Path::new(path).join("Cargo.toml").exists() {

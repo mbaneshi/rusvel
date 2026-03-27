@@ -116,7 +116,10 @@ fn value_ref_to_json(v: ValueRef<'_>) -> Value {
     }
 }
 
-fn run_sql(conn: &Connection, query: &str) -> rusvel_core::Result<(Vec<SqlColumnMeta>, Vec<Vec<Value>>, usize)> {
+fn run_sql(
+    conn: &Connection,
+    query: &str,
+) -> rusvel_core::Result<(Vec<SqlColumnMeta>, Vec<Vec<Value>>, usize)> {
     let query = query.trim();
     if query.is_empty() {
         return Err(RusvelError::Validation("empty query".into()));
@@ -205,9 +208,7 @@ pub async fn get_table_rows(
             } else {
                 String::new()
             };
-            let sql = format!(
-                r#"SELECT * FROM "{table}"{order_clause} LIMIT ? OFFSET ?"#
-            );
+            let sql = format!(r#"SELECT * FROM "{table}"{order_clause} LIMIT ? OFFSET ?"#);
             let mut stmt = conn
                 .prepare(&sql)
                 .map_err(|e| RusvelError::Storage(e.to_string()))?;

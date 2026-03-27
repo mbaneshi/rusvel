@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
-use axum::Router;
 use rusvel_agent::AgentRuntime;
 use rusvel_config::TomlConfig;
 use rusvel_core::domain::{
@@ -19,8 +19,8 @@ use rusvel_core::ports::{
 };
 use rusvel_db::Database;
 use rusvel_event::EventBus;
-use rusvel_mcp::http::{nest_mcp_http, McpAuth};
 use rusvel_mcp::RusvelMcp;
+use rusvel_mcp::http::{McpAuth, nest_mcp_http};
 use rusvel_memory::MemoryStore;
 use serde_json::json;
 use tempfile::tempdir;
@@ -36,14 +36,12 @@ impl SessionPort for SessionAdapter {
         Ok(id)
     }
     async fn load(&self, id: &SessionId) -> Result<Session> {
-        self.0
-            .sessions()
-            .get_session(id)
-            .await?
-            .ok_or_else(|| rusvel_core::error::RusvelError::NotFound {
+        self.0.sessions().get_session(id).await?.ok_or_else(|| {
+            rusvel_core::error::RusvelError::NotFound {
                 kind: "session".into(),
                 id: id.to_string(),
-            })
+            }
+        })
     }
     async fn save(&self, session: &Session) -> Result<()> {
         self.0.sessions().put_session(session).await
@@ -104,11 +102,10 @@ async fn mcp_router() -> Router {
     let db: Arc<Database> = Arc::new(Database::open(base.join("rusvel.db")).unwrap());
     let config: Arc<dyn ConfigPort> = Arc::new(TomlConfig::load(base.join("config.toml")).unwrap());
     let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
-    let memory: Arc<dyn MemoryPort> = Arc::new(
-        MemoryStore::open(base.join("memory.db").to_str().unwrap()).unwrap(),
-    );
+    let memory: Arc<dyn MemoryPort> =
+        Arc::new(MemoryStore::open(base.join("memory.db").to_str().unwrap()).unwrap());
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let storage: Arc<dyn StoragePort> = db.clone();
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
@@ -176,9 +173,6 @@ async fn post_tools_list_includes_session_list() {
     let bytes = to_bytes(res.into_body(), usize::MAX).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let tools = v["result"]["tools"].as_array().expect("tools array");
-    let names: Vec<&str> = tools
-        .iter()
-        .filter_map(|t| t["name"].as_str())
-        .collect();
+    let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
     assert!(names.contains(&"session_list"));
 }

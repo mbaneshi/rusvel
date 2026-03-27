@@ -19,19 +19,11 @@ impl MemObjects {
 #[async_trait]
 impl ObjectStore for MemObjects {
     async fn put(&self, kind: &str, id: &str, obj: serde_json::Value) -> Result<()> {
-        self.0
-            .lock()
-            .unwrap()
-            .insert(format!("{kind}:{id}"), obj);
+        self.0.lock().unwrap().insert(format!("{kind}:{id}"), obj);
         Ok(())
     }
     async fn get(&self, kind: &str, id: &str) -> Result<Option<serde_json::Value>> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .get(&format!("{kind}:{id}"))
-            .cloned())
+        Ok(self.0.lock().unwrap().get(&format!("{kind}:{id}")).cloned())
     }
     async fn delete(&self, kind: &str, id: &str) -> Result<()> {
         self.0.lock().unwrap().remove(&format!("{kind}:{id}"));
@@ -288,10 +280,7 @@ async fn successful_run_removes_checkpoint() {
         .unwrap();
     assert_eq!(exec.status, FlowExecutionStatus::Succeeded);
 
-    let ck = engine
-        .get_checkpoint(&exec.id.to_string())
-        .await
-        .unwrap();
+    let ck = engine.get_checkpoint(&exec.id.to_string()).await.unwrap();
     assert!(ck.is_none());
 }
 

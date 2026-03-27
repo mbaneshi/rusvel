@@ -49,7 +49,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
             .register_with_handler(
                 ToolDefinition {
                     name: "harvest_score".into(),
-                    description: "Re-score an existing opportunity and update its stored score.".into(),
+                    description: "Re-score an existing opportunity and update its stored score."
+                        .into(),
                     parameters: json!({
                         "type": "object",
                         "properties": {
@@ -59,7 +60,7 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         "required": ["session_id", "opportunity_id"]
                     }),
                     searchable: false,
-                metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -67,9 +68,7 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         let sid = parse_session_id(&args, "session_id")?;
                         let opp_id = args["opportunity_id"].as_str().unwrap_or_default();
                         match engine.score_opportunity(&sid, opp_id).await {
-                            Ok(u) => ok_json(
-                                &json!({"score": u.score, "reasoning": u.reasoning}),
-                            ),
+                            Ok(u) => ok_json(&json!({"score": u.score, "reasoning": u.reasoning})),
                             Err(e) => err_result(e),
                         }
                     })
@@ -162,7 +161,9 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
             .register_with_handler(
                 ToolDefinition {
                     name: "harvest_pipeline".into(),
-                    description: "Get pipeline statistics for a session (total count, breakdown by stage).".into(),
+                    description:
+                        "Get pipeline statistics for a session (total count, breakdown by stage)."
+                            .into(),
                     parameters: json!({
                         "type": "object",
                         "properties": {
@@ -171,7 +172,7 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         "required": ["session_id"]
                     }),
                     searchable: false,
-                metadata: json!({"category": "harvest", "engine": "harvest"}),
+                    metadata: json!({"category": "harvest", "engine": "harvest"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
@@ -189,10 +190,7 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
     }
 }
 
-fn parse_session_id(
-    args: &serde_json::Value,
-    key: &str,
-) -> rusvel_core::error::Result<SessionId> {
+fn parse_session_id(args: &serde_json::Value, key: &str) -> rusvel_core::error::Result<SessionId> {
     let s = args[key].as_str().unwrap_or_default();
     let uuid = s
         .parse::<uuid::Uuid>()

@@ -26,14 +26,13 @@ pub fn harvest_manifest() -> DepartmentManifest {
         quick_actions: vec![
             QuickAction {
                 label: "Scan opportunities".into(),
-                prompt:
-                    "Scan for new freelance opportunities on Upwork, LinkedIn, and GitHub.".into(),
+                prompt: "Scan for new freelance opportunities on Upwork, LinkedIn, and GitHub."
+                    .into(),
             },
             QuickAction {
                 label: "Score pipeline".into(),
-                prompt:
-                    "Score all opportunities in the pipeline by fit, budget, and probability."
-                        .into(),
+                prompt: "Score all opportunities in the pipeline by fit, budget, and probability."
+                    .into(),
             },
             QuickAction {
                 label: "Draft proposal".into(),
@@ -242,33 +241,39 @@ mod tests {
     fn manifest_declares_events() {
         let m = harvest_manifest();
         assert_eq!(m.events_produced.len(), 3);
-        assert!(m
-            .events_produced
-            .contains(&"harvest.opportunity_discovered".into()));
-        assert!(m
-            .events_produced
-            .contains(&"harvest.opportunity_scored".into()));
-        assert!(m
-            .events_produced
-            .contains(&"harvest.proposal_drafted".into()));
+        assert!(
+            m.events_produced
+                .contains(&"harvest.opportunity_discovered".into())
+        );
+        assert!(
+            m.events_produced
+                .contains(&"harvest.opportunity_scored".into())
+        );
+        assert!(
+            m.events_produced
+                .contains(&"harvest.proposal_drafted".into())
+        );
     }
 
     #[test]
     fn manifest_requires_ports() {
         let m = harvest_manifest();
         assert_eq!(m.requires_ports.len(), 4);
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "StoragePort" && !p.optional));
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "AgentPort" && !p.optional));
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "ConfigPort" && p.optional));
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "StoragePort" && !p.optional)
+        );
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "AgentPort" && !p.optional)
+        );
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "ConfigPort" && p.optional)
+        );
     }
 
     #[test]

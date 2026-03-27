@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use rusvel_core::domain::{AgentConfig, Content, ModelProvider, ModelRef, Part};
-use rusvel_core::id::SessionId;
 use rusvel_core::error::{Result, RusvelError};
+use rusvel_core::id::SessionId;
 use rusvel_core::ports::AgentPort;
 
 use super::{NodeContext, NodeHandler, NodeOutput};

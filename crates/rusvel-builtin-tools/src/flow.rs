@@ -21,7 +21,9 @@ pub async fn register(
         .register_with_handler(
             ToolDefinition {
                 name: "invoke_flow".into(),
-                description: "Execute a DAG workflow flow by its ID. Returns the execution result as JSON.".into(),
+                description:
+                    "Execute a DAG workflow flow by its ID. Returns the execution result as JSON."
+                        .into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -52,10 +54,7 @@ pub async fn register(
                             ))
                         })?;
 
-                    let input = args
-                        .get("input")
-                        .cloned()
-                        .unwrap_or_else(|| json!({}));
+                    let input = args.get("input").cloned().unwrap_or_else(|| json!({}));
 
                     let execution = engine.run_flow(&flow_id, input).await.map_err(|e| {
                         rusvel_core::error::RusvelError::Tool(format!("invoke_flow: {e}"))

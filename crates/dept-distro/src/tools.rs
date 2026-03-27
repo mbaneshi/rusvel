@@ -93,7 +93,11 @@ pub fn register(engine: &Arc<DistroEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let commission_rate = args
                     .get("commission_rate")
                     .and_then(serde_json::Value::as_f64)

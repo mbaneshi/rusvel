@@ -41,10 +41,7 @@ pub async fn ensure_browser_log_pane(
             &window_id,
             "sleep 86400",
             &cwd,
-            PaneSize {
-                rows: 24,
-                cols: 80,
-            },
+            PaneSize { rows: 24, cols: 80 },
             PaneSource::Browser {
                 tab_id: tab_id.to_string(),
                 platform: platform.to_string(),
@@ -77,19 +74,15 @@ pub async fn spawn_browser_log_bridge(
     platform: String,
 ) -> Result<()> {
     let mut rx = browser.observe(&tab_id).await?;
-    let pane_id = ensure_browser_log_pane(
-        terminal.as_ref(),
-        &session_id,
-        &tab_id,
-        &platform,
-    )
-    .await?;
+    let pane_id =
+        ensure_browser_log_pane(terminal.as_ref(), &session_id, &tab_id, &platform).await?;
 
     tokio::spawn(async move {
         loop {
             match rx.recv().await {
                 Ok(event) => {
-                    if let Err(e) = inject_browser_event_log(terminal.as_ref(), &pane_id, &event).await
+                    if let Err(e) =
+                        inject_browser_event_log(terminal.as_ref(), &pane_id, &event).await
                     {
                         tracing::debug!(error = %e, "inject_browser_event_log failed");
                     }

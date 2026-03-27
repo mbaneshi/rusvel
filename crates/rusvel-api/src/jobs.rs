@@ -103,7 +103,12 @@ pub struct JobsQuery {
 }
 
 fn build_filter(q: JobsQuery) -> Result<JobFilter, String> {
-    let session_id = match q.session_id.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    let session_id = match q
+        .session_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         Some(s) => Some(
             s.parse::<uuid::Uuid>()
                 .map(SessionId::from_uuid)
@@ -170,7 +175,9 @@ fn parse_one_kind(s: &str) -> Result<JobKind, String> {
         "CodeAnalyze" => Ok(JobKind::CodeAnalyze),
         "ProposalDraft" => Ok(JobKind::ProposalDraft),
         "ScheduledCron" => Ok(JobKind::ScheduledCron),
-        _ if s.starts_with("Custom:") => Ok(JobKind::Custom(s.trim_start_matches("Custom:").to_string())),
+        _ if s.starts_with("Custom:") => {
+            Ok(JobKind::Custom(s.trim_start_matches("Custom:").to_string()))
+        }
         _ => Err(format!("unknown job kind: {s}")),
     }
 }

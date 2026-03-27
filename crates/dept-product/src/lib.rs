@@ -82,14 +82,28 @@ impl DepartmentApp for ProductDepartment {
                 let eng = eng.clone();
                 Box::pin(async move {
                     let sid = parse_session_id(&args)?;
-                    let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let desc = args.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let title = args
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let desc = args
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let priority: product_engine::Priority = args
                         .get("priority")
                         .and_then(|v| serde_json::from_value(v.clone()).ok())
                         .unwrap_or(product_engine::Priority::Medium);
-                    let milestone = args.get("status").and_then(|v| v.as_str()).map(String::from);
-                    let id = eng.roadmap().add_feature(sid, title, desc, priority, milestone).await?;
+                    let milestone = args
+                        .get("status")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    let id = eng
+                        .roadmap()
+                        .add_feature(sid, title, desc, priority, milestone)
+                        .await?;
                     Ok(ToolOutput {
                         content: format!("Feature created: {id}"),
                         is_error: false,

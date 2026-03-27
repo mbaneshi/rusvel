@@ -90,7 +90,10 @@ pub(crate) mod jsonrpc {
         }
     }
 
-    pub async fn dispatch(mcp: &RusvelMcp, req: JsonRpcRequest) -> Result<Option<JsonRpcResponse>, McpError> {
+    pub async fn dispatch(
+        mcp: &RusvelMcp,
+        req: JsonRpcRequest,
+    ) -> Result<Option<JsonRpcResponse>, McpError> {
         let is_notification = req.method.starts_with("notifications/");
         if is_notification {
             mcp.handle_method(&req.method, req.params).await?;
@@ -277,7 +280,13 @@ impl RusvelMcp {
             }
             "visual_inspect" => {
                 let update = args["update_baselines"].as_bool().unwrap_or(false);
-                let mut cmd_args = vec!["exec", "playwright", "test", "--project=visual", "--reporter=json"];
+                let mut cmd_args = vec![
+                    "exec",
+                    "playwright",
+                    "test",
+                    "--project=visual",
+                    "--reporter=json",
+                ];
                 if update {
                     cmd_args.push("--update-snapshots");
                 }
@@ -288,7 +297,9 @@ impl RusvelMcp {
                 } else if std::path::Path::new("/Users/bm/rusvel/frontend").exists() {
                     "/Users/bm/rusvel/frontend".to_string()
                 } else {
-                    return Err(McpError::InvalidParams("Cannot find frontend directory".into()));
+                    return Err(McpError::InvalidParams(
+                        "Cannot find frontend directory".into(),
+                    ));
                 };
 
                 match tokio::process::Command::new("pnpm")

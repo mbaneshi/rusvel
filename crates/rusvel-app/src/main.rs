@@ -46,8 +46,8 @@ use rusvel_event::{EventBus, TriggerManager};
 use rusvel_llm::{ClaudeCliProvider, CostTrackingLlm, CursorAgentProvider, MultiProvider};
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
-use rusvel_tool::ToolRegistry;
 use rusvel_terminal::TerminalManager;
+use rusvel_tool::ToolRegistry;
 use rusvel_vector::LanceVectorStore;
 
 // ════════════════════════════════════════════════════════════════════
@@ -447,7 +447,12 @@ async fn seed_defaults(storage: &Arc<dyn StoragePort>) -> Result<()> {
     }
 
     // ── Seed self-improvement agents ────────────────────────────────
-    let si_agent_names = ["arch-reviewer", "si-test-writer", "refactorer", "doc-updater"];
+    let si_agent_names = [
+        "arch-reviewer",
+        "si-test-writer",
+        "refactorer",
+        "doc-updater",
+    ];
     let has_si_agents = existing_agents.iter().any(|a| {
         a.get("name")
             .and_then(|n| n.as_str())
@@ -886,11 +891,8 @@ async fn main() -> Result<()> {
         Some(terminal_for_flow.clone()),
     )
     .await;
-    rusvel_builtin_tools::register_terminal_tools(
-        &tool_registry,
-        Some(terminal_for_flow.clone()),
-    )
-    .await;
+    rusvel_builtin_tools::register_terminal_tools(&tool_registry, Some(terminal_for_flow.clone()))
+        .await;
     let flow_engine = Arc::new(flow_engine::FlowEngine::new(
         db.clone() as Arc<dyn StoragePort>,
         events.clone(),
@@ -952,6 +954,7 @@ async fn main() -> Result<()> {
             }
         };
     let outreach_email_worker = outreach_email.clone();
+    let forge_worker = forge.clone();
     let _job_worker = tokio::spawn(async move {
         let job_port = jobs_for_worker;
         loop {
@@ -1054,10 +1057,8 @@ async fn main() -> Result<()> {
                                         e.to_string(),
                                     )),
                                 }
-                            } else if let Some(opp) = job
-                                .payload
-                                .get("opportunity_id")
-                                .and_then(|x| x.as_str())
+                            } else if let Some(opp) =
+                                job.payload.get("opportunity_id").and_then(|x| x.as_str())
                             {
                                 let profile = job
                                     .payload
@@ -1074,9 +1075,7 @@ async fn main() -> Result<()> {
                                                 .unwrap_or_default(),
                                             metadata: serde_json::json!({"engine": "harvest"}),
                                         };
-                                        match job_port
-                                            .hold_for_approval(&job_id, job_result)
-                                            .await
+                                        match job_port.hold_for_approval(&job_id, job_result).await
                                         {
                                             Ok(()) => Ok(None),
                                             Err(e) => Err(e),
@@ -1110,28 +1109,58 @@ async fn main() -> Result<()> {
                                 .get("schedule_id")
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
-                            let event = Event {
-                                id: EventId::new(),
-                                session_id: Some(job.session_id),
-                                run_id: None,
-                                source: "cron".into(),
-                                kind: event_kind,
-                                payload: serde_json::json!({
-                                    "schedule_id": schedule_id,
-                                    "payload": payload,
-                                }),
-                                created_at: Utc::now(),
-                                metadata: serde_json::json!({ "schedule_id": schedule_id }),
-                            };
-                            match events_worker.emit(event).await {
-                                Ok(_) => Ok(Some(JobResult {
-                                    output: serde_json::json!({
-                                        "ok": true,
+
+                            if event_kind == forge_engine::events::DAILY_BRIEFING_CRON_KIND {
+                                let sid = job.session_id;
+                                match forge_worker.generate_brief(&sid).await {
+                                    Ok(brief) => Ok(Some(JobResult {
+                                        output: serde_json::json!({
+                                            "ok": true,
+                                            "brief_id": brief.id,
+                                            "date": brief.date,
+                                            "summary": brief.summary,
+                                            "action_items": brief.action_items,
+                                            "schedule_id": schedule_id,
+                                        }),
+                                        metadata: serde_json::json!({
+                                            "engine": "forge",
+                                            "trigger": "cron",
+                                            "event_kind": event_kind,
+                                        }),
+                                    })),
+                                    Err(e) => {
+                                        tracing::error!(
+                                            job_id = %job_id,
+                                            error = %e,
+                                            "Daily briefing (cron) failed"
+                                        );
+                                        Err(e)
+                                    }
+                                }
+                            } else {
+                                let event = Event {
+                                    id: EventId::new(),
+                                    session_id: Some(job.session_id),
+                                    run_id: None,
+                                    source: "cron".into(),
+                                    kind: event_kind,
+                                    payload: serde_json::json!({
                                         "schedule_id": schedule_id,
+                                        "payload": payload,
                                     }),
-                                    metadata: serde_json::json!({ "source": "cron" }),
-                                })),
-                                Err(e) => Err(e),
+                                    created_at: Utc::now(),
+                                    metadata: serde_json::json!({ "schedule_id": schedule_id }),
+                                };
+                                match events_worker.emit(event).await {
+                                    Ok(_) => Ok(Some(JobResult {
+                                        output: serde_json::json!({
+                                            "ok": true,
+                                            "schedule_id": schedule_id,
+                                        }),
+                                        metadata: serde_json::json!({ "source": "cron" }),
+                                    })),
+                                    Err(e) => Err(e),
+                                }
                             }
                         }
                         JobKind::OutreachSend => {
@@ -1144,9 +1173,11 @@ async fn main() -> Result<()> {
                                 )
                                 .await
                             {
-                                Ok(gtm_engine::outreach::OutreachSendDispatch::HoldForApproval(
-                                    job_result,
-                                )) => match job_port.hold_for_approval(&job_id, job_result).await {
+                                Ok(
+                                    gtm_engine::outreach::OutreachSendDispatch::HoldForApproval(
+                                        job_result,
+                                    ),
+                                ) => match job_port.hold_for_approval(&job_id, job_result).await {
                                     Ok(()) => Ok(None),
                                     Err(e) => Err(e),
                                 },
@@ -1227,11 +1258,7 @@ async fn main() -> Result<()> {
                 None
             }
         }
-    } else if cli.command.is_none()
-        && !cli.mcp
-        && !cli.mcp_http
-        && std::io::stdin().is_terminal()
-    {
+    } else if cli.command.is_none() && !cli.mcp && !cli.mcp_http && std::io::stdin().is_terminal() {
         // First run + interactive terminal + no subcommand → run wizard
         match first_run_wizard(&data_dir, &sessions).await {
             Ok(p) => p,
@@ -1261,7 +1288,14 @@ async fn main() -> Result<()> {
             content: Some(content_engine.clone()),
             harvest: Some(harvest_engine.clone()),
         };
-        rusvel_cli::run(cli, forge.clone(), sessions.clone(), storage_port, engine_refs).await?;
+        rusvel_cli::run(
+            cli,
+            forge.clone(),
+            sessions.clone(),
+            storage_port,
+            engine_refs,
+        )
+        .await?;
     } else if cli.tui {
         // --tui flag: launch TUI dashboard
         tracing::info!("Launching TUI dashboard...");
@@ -1439,12 +1473,13 @@ async fn main() -> Result<()> {
         }
         let base = rusvel_api::build_router_with_frontend(state, frontend_dir);
         let mcp_srv = Arc::new(RusvelMcp::new(forge.clone(), sessions.clone()));
-        let router = rusvel_mcp::http::nest_mcp_http(base, mcp_srv, rusvel_mcp::http::McpAuth::from_env());
+        let router =
+            rusvel_mcp::http::nest_mcp_http(base, mcp_srv, rusvel_mcp::http::McpAuth::from_env());
         let addr: SocketAddr = "127.0.0.1:3000".parse()?;
         tracing::info!("RUSVEL starting on http://{addr} (MCP HTTP)");
 
-        let _cron_tick_task_mcp_http = cron_scheduler
-            .spawn_interval_ticker(std::time::Duration::from_secs(30));
+        let _cron_tick_task_mcp_http =
+            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30));
 
         let server = rusvel_api::start_server(router, addr);
         let shutdown = tokio::signal::ctrl_c();
@@ -1555,7 +1590,8 @@ async fn main() -> Result<()> {
         let addr: SocketAddr = "127.0.0.1:3000".parse()?;
         tracing::info!("RUSVEL starting on http://{addr}");
 
-        let _cron_tick_task = cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30));
+        let _cron_tick_task =
+            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30));
 
         let server = rusvel_api::start_server(router, addr);
         let shutdown = tokio::signal::ctrl_c();

@@ -12,8 +12,10 @@ use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use code_engine::CodeEngine;
 use content_engine::{ContentEngine, MockPlatformAdapter};
+use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
 use gtm_engine::GtmEngine;
+use harvest_engine::HarvestEngine;
 use rusvel_agent::AgentRuntime;
 use rusvel_api::{AppState, build_router};
 use rusvel_config::TomlConfig;
@@ -137,6 +139,10 @@ pub struct TestHarness {
     pub jobs: Arc<dyn JobPort>,
     /// Shared with the router [`AppState`] (events, outreach, approvals).
     pub events: Arc<dyn EventPort>,
+    /// Same [`EventBus`] as the router — use [`EventBus::subscribe`] for trigger tests (S-046).
+    pub event_bus: Arc<EventBus>,
+    pub storage: Arc<dyn StoragePort>,
+    pub agent_port: Arc<dyn AgentPort>,
     /// Same engine instance as [`AppState::gtm_engine`] when the harness was built with GTM.
     pub gtm_engine: Option<Arc<GtmEngine>>,
 }
@@ -191,9 +197,10 @@ async fn build_harness_with_auth_and_gtm(
     let storage: Arc<dyn StoragePort> = db.clone();
     let config: Arc<dyn ConfigPort> =
         Arc::new(TomlConfig::load(base.join("config.toml")).expect("config"));
-    let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
+    let event_bus: Arc<EventBus> = Arc::new(EventBus::new(
         db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
+    let events: Arc<dyn EventPort> = event_bus.clone();
     let memory: Arc<dyn MemoryPort> =
         Arc::new(MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"));
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
@@ -222,9 +229,22 @@ async fn build_harness_with_auth_and_gtm(
     let content_engine = Arc::new(ContentEngine::new(
         storage.clone(),
         events.clone(),
-        agent,
+        agent.clone(),
         jobs.clone(),
     ));
+
+    let flow_engine = Arc::new(FlowEngine::new(
+        storage.clone(),
+        events.clone(),
+        agent.clone(),
+        None,
+        None,
+    ));
+    let harvest_engine = Arc::new(
+        HarvestEngine::new(storage.clone())
+            .with_events(events.clone())
+            .with_agent(agent.clone()),
+    );
     let mock_tw = Arc::new(MockPlatformAdapter::new(
         rusvel_core::domain::Platform::Twitter,
     ));
@@ -268,14 +288,14 @@ async fn build_harness_with_auth_and_gtm(
         forge,
         code_engine: Some(code_engine),
         content_engine: Some(content_engine),
-        harvest_engine: None,
+        harvest_engine: Some(harvest_engine),
         gtm_engine: gtm_engine.clone(),
-        flow_engine: None,
+        flow_engine: Some(flow_engine),
         sessions,
         events,
         jobs,
         database: db.clone(),
-        storage,
+        storage: storage.clone(),
         profile: None,
         registry: DepartmentRegistry::load(
             PathBuf::from("/__no_such__/departments.toml").as_path(),
@@ -300,6 +320,9 @@ async fn build_harness_with_auth_and_gtm(
         mock_twitter: mock_tw,
         jobs: jobs_for_harness,
         events: events_for_harness,
+        event_bus,
+        storage,
+        agent_port: agent,
         gtm_engine,
     }
 }

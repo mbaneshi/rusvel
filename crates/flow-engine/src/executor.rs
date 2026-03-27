@@ -14,8 +14,8 @@ use rusvel_core::id::{FlowExecutionId, FlowNodeId, PaneId, WindowId};
 use rusvel_core::ports::{StoragePort, TerminalPort};
 use rusvel_core::terminal::{PaneSize, PaneSource, WindowSource};
 
-use crate::nodes::{NodeContext, NodeRegistry};
 use crate::CHECKPOINT_STORE;
+use crate::nodes::{NodeContext, NodeRegistry};
 
 struct FlowTerminalState {
     terminal: Arc<dyn TerminalPort>,
@@ -187,12 +187,7 @@ pub async fn execute_flow_with_config(
     let pane_size = PaneSize { rows: 24, cols: 80 };
 
     let resume = config.resume;
-    let (
-        mut outputs,
-        mut node_results,
-        skipped,
-        mut completed_success,
-    ): (
+    let (mut outputs, mut node_results, skipped, mut completed_success): (
         HashMap<FlowNodeId, serde_json::Value>,
         HashMap<String, FlowNodeResult>,
         HashSet<FlowNodeId>,
@@ -204,12 +199,7 @@ pub async fn execute_flow_with_config(
             r.skipped,
             std::mem::take(&mut r.completed_success),
         ),
-        None => (
-            HashMap::new(),
-            HashMap::new(),
-            HashSet::new(),
-            Vec::new(),
-        ),
+        None => (HashMap::new(), HashMap::new(), HashSet::new(), Vec::new()),
     };
     let mut skipped = skipped;
     let trigger_for_exec = trigger_data.clone();
@@ -339,15 +329,8 @@ pub async fn execute_flow_with_config(
                 }
 
                 if let Some(ref ck) = config.checkpoint {
-                    persist_checkpoint(
-                        ck,
-                        &completed_success,
-                        &outputs,
-                        &node_results,
-                        None,
-                        None,
-                    )
-                    .await?;
+                    persist_checkpoint(ck, &completed_success, &outputs, &node_results, None, None)
+                        .await?;
                 }
             }
             Err(e) => {
@@ -410,9 +393,9 @@ pub async fn execute_flow_with_config(
         }
     }
 
-    let all_ok = node_results.values().all(|r| {
-        r.status == FlowNodeStatus::Succeeded || r.status == FlowNodeStatus::Skipped
-    });
+    let all_ok = node_results
+        .values()
+        .all(|r| r.status == FlowNodeStatus::Succeeded || r.status == FlowNodeStatus::Skipped);
 
     Ok(FlowExecution {
         id: exec_id,

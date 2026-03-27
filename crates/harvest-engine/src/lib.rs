@@ -4,22 +4,24 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
+use rusvel_core::domain::BrowserEvent;
 use rusvel_core::engine::Engine;
 use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort};
 use rusvel_core::{
     Capability, Contact, ContactId, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
     OpportunityId, OpportunitySource, OpportunityStage, Result, RusvelError, SessionId,
 };
-use rusvel_core::domain::BrowserEvent;
 
 pub mod cdp_source;
 pub mod events;
+pub mod outcomes;
 pub mod pipeline;
 pub mod proposal;
 pub mod scorer;
 pub mod source;
 
-pub use cdp_source::{extract_js_listing_cards, CdpSource, DEFAULT_CDP_EXTRACT_JS};
+pub use cdp_source::{CdpSource, DEFAULT_CDP_EXTRACT_JS, extract_js_listing_cards};
+pub use outcomes::{HarvestDealOutcome, HarvestOutcomeRecord};
 pub use scorer::ScoringMethod;
 
 use pipeline::{Pipeline, PipelineStats};
@@ -122,6 +124,12 @@ impl HarvestEngine {
         }
     }
 
+    async fn scoring_outcome_hints(&self, session_id: &SessionId) -> Vec<String> {
+        outcomes::recent_outcome_prompt_lines(&self.storage, session_id, 12)
+            .await
+            .unwrap_or_default()
+    }
+
     /// Scan a source, score results, store them, and return opportunities.
     pub async fn scan(
         &self,
@@ -136,12 +144,14 @@ impl HarvestEngine {
         .await;
 
         let raw_items = source.scan().await?;
+        let hints = self.scoring_outcome_hints(session_id).await;
         let scorer = OpportunityScorer::new(
             self.agent.clone(),
             self.config.skills.clone(),
             self.config.min_budget,
         )
-        .with_scoring_session(*session_id);
+        .with_scoring_session(*session_id)
+        .with_outcome_hints(hints);
 
         let pipe = Pipeline::new(self.storage.clone());
         let mut results = Vec::new();
@@ -226,12 +236,14 @@ impl HarvestEngine {
             source_data: serde_json::json!({}),
         };
 
+        let hints = self.scoring_outcome_hints(session_id).await;
         let scorer = OpportunityScorer::new(
             self.agent.clone(),
             self.config.skills.clone(),
             self.config.min_budget,
         )
-        .with_scoring_session(*session_id);
+        .with_scoring_session(*session_id)
+        .with_outcome_hints(hints);
         let scored = scorer.score(&raw).await?;
         opp.score = scored.score;
         {
@@ -240,10 +252,7 @@ impl HarvestEngine {
                 meta = serde_json::json!({});
             }
             if let Some(obj) = meta.as_object_mut() {
-                obj.insert(
-                    "reasoning".into(),
-                    serde_json::json!(scored.reasoning),
-                );
+                obj.insert("reasoning".into(), serde_json::json!(scored.reasoning));
                 obj.insert(
                     "scoring_method".into(),
                     serde_json::json!(match scored.scoring_method {
@@ -320,11 +329,7 @@ impl HarvestEngine {
         };
         self.storage
             .objects()
-            .put(
-                "proposal",
-                &key,
-                serde_json::to_value(&record)?,
-            )
+            .put("proposal", &key, serde_json::to_value(&record)?)
             .await?;
 
         self.emit(
@@ -384,6 +389,43 @@ impl HarvestEngine {
             .await
     }
 
+    /// Record won/lost/withdrawn for an opportunity (feeds scorer LLM hints; S-044).
+    pub async fn record_opportunity_outcome(
+        &self,
+        session_id: &SessionId,
+        opportunity_id: &str,
+        result: HarvestDealOutcome,
+        notes: String,
+    ) -> Result<HarvestOutcomeRecord> {
+        let record =
+            outcomes::record_outcome(&self.storage, session_id, opportunity_id, result, notes)
+                .await?;
+        self.emit(
+            session_id,
+            events::OUTCOME_RECORDED,
+            serde_json::json!({
+                "outcome_id": record.id,
+                "opportunity_id": opportunity_id,
+                "result": match result {
+                    HarvestDealOutcome::Won => "won",
+                    HarvestDealOutcome::Lost => "lost",
+                    HarvestDealOutcome::Withdrawn => "withdrawn",
+                },
+            }),
+        )
+        .await;
+        Ok(record)
+    }
+
+    /// List recorded outcomes for a session (newest first).
+    pub async fn list_harvest_outcomes(
+        &self,
+        session_id: &SessionId,
+        limit: u32,
+    ) -> Result<Vec<HarvestOutcomeRecord>> {
+        outcomes::list_outcomes(&self.storage, session_id, limit).await
+    }
+
     /// Normalize CDP-captured browser payloads into opportunities / CRM contacts (Upwork).
     pub async fn on_data_captured(
         &self,
@@ -436,17 +478,12 @@ impl HarvestEngine {
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .into(),
-            url: row
-                .get("url")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            budget: row
-                .get("budget")
-                .and_then(|v| {
-                    v.as_str()
-                        .map(String::from)
-                        .or_else(|| v.as_f64().map(|n| format!("${n:.0}")))
-                }),
+            url: row.get("url").and_then(|v| v.as_str()).map(String::from),
+            budget: row.get("budget").and_then(|v| {
+                v.as_str()
+                    .map(String::from)
+                    .or_else(|| v.as_f64().map(|n| format!("${n:.0}")))
+            }),
             skills: row
                 .get("skills")
                 .and_then(|v| v.as_array())
@@ -858,11 +895,7 @@ mod tests {
         };
         storage
             .objects()
-            .put(
-                "proposal",
-                "opp-a_1",
-                serde_json::to_value(&rec).unwrap(),
-            )
+            .put("proposal", "opp-a_1", serde_json::to_value(&rec).unwrap())
             .await
             .unwrap();
 

@@ -3,11 +3,11 @@
 use std::borrow::Cow;
 
 use futures::{SinkExt, StreamExt};
+use rusvel_core::{Result, RusvelError};
 use serde::Deserialize;
-use rusvel_core::{RusvelError, Result};
 use serde_json::json;
 use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async};
 
 /// Normalize user input into an HTTP origin usable for `GET /json/list`.
 pub fn http_base(endpoint: &str) -> Cow<'_, str> {
@@ -35,10 +35,7 @@ pub struct ChromeTarget {
 }
 
 pub async fn fetch_targets(http_base: &str) -> Result<Vec<ChromeTarget>> {
-    let url = format!(
-        "{}/json/list",
-        http_base.trim_end_matches('/')
-    );
+    let url = format!("{}/json/list", http_base.trim_end_matches('/'));
     let client = reqwest::Client::builder()
         .build()
         .map_err(|e| RusvelError::Internal(e.to_string()))?;
@@ -109,7 +106,8 @@ async fn send_cmd(
     let id = *next_id;
     *next_id += 1;
     let msg = json!({ "id": id, "method": method, "params": params });
-    let text = serde_json::to_string(&msg).map_err(|e| RusvelError::Serialization(e.to_string()))?;
+    let text =
+        serde_json::to_string(&msg).map_err(|e| RusvelError::Serialization(e.to_string()))?;
     ws.send(Message::Text(text.into()))
         .await
         .map_err(|e| RusvelError::Internal(e.to_string()))?;
@@ -132,10 +130,7 @@ async fn read_until_id(ws: &mut WsStream, want: u64) -> Result<serde_json::Value
             if let Some(err) = v.get("error") {
                 return Err(RusvelError::Internal(err.to_string()));
             }
-            return Ok(v
-                .get("result")
-                .cloned()
-                .unwrap_or(serde_json::Value::Null));
+            return Ok(v.get("result").cloned().unwrap_or(serde_json::Value::Null));
         }
     }
 }

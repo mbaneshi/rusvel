@@ -12,10 +12,12 @@
 //! patterns for composing multiple agent runs. The [`persona`] module
 //! provides a catalog of reusable agent personas.
 
+pub mod context_pack;
 pub mod persona;
 pub mod verification;
 pub mod workflow;
 
+pub use context_pack::{ContextPack, to_prompt_section};
 pub use persona::PersonaCatalog;
 pub use verification::{
     LlmCritiqueStep, RulesComplianceStep, VerificationChain, VerificationContext,
@@ -78,8 +80,13 @@ pub enum AgentEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgUiEvent {
-    RunStarted { run_id: String, timestamp: String },
-    TextDelta { text: String },
+    RunStarted {
+        run_id: String,
+        timestamp: String,
+    },
+    TextDelta {
+        text: String,
+    },
     ToolCallStart {
         tool_call_id: String,
         tool_name: String,
@@ -91,11 +98,24 @@ pub enum AgUiEvent {
         output: String,
         is_error: bool,
     },
-    StateDelta { delta: serde_json::Value },
-    StepStarted { step_id: String, step_name: String },
-    StepCompleted { step_id: String },
-    RunCompleted { run_id: String, output: String },
-    RunFailed { run_id: String, error: String },
+    StateDelta {
+        delta: serde_json::Value,
+    },
+    StepStarted {
+        step_id: String,
+        step_name: String,
+    },
+    StepCompleted {
+        step_id: String,
+    },
+    RunCompleted {
+        run_id: String,
+        output: String,
+    },
+    RunFailed {
+        run_id: String,
+        error: String,
+    },
 }
 
 impl AgUiEvent {
@@ -315,9 +335,7 @@ impl AgentRuntime {
     /// Extract the first tool call from an LLM response.
     ///
     /// Scans `Part::ToolCall` variants in the response content.
-    fn extract_tool_call(
-        response: &LlmResponse,
-    ) -> Option<(String, String, serde_json::Value)> {
+    fn extract_tool_call(response: &LlmResponse) -> Option<(String, String, serde_json::Value)> {
         for part in &response.content.parts {
             if let Part::ToolCall { id, name, args } = part {
                 return Some((id.clone(), name.clone(), args.clone()));
@@ -362,7 +380,9 @@ impl AgentRuntime {
         let run_id = *run_id;
 
         tokio::spawn(async move {
-            let result = run_streaming_loop(&llm, &tools, &config, &run_id, input, &tx, &hooks_snapshot).await;
+            let result =
+                run_streaming_loop(&llm, &tools, &config, &run_id, input, &tx, &hooks_snapshot)
+                    .await;
             match result {
                 Ok(output) => {
                     let _ = tx.send(AgentEvent::Done { output }).await;
@@ -573,7 +593,8 @@ Output plain text only, no preamble.",
         }
     };
 
-    let mut new_messages = Vec::with_capacity(system_len + 1 + messages.len().saturating_sub(suffix_start));
+    let mut new_messages =
+        Vec::with_capacity(system_len + 1 + messages.len().saturating_sub(suffix_start));
     if system_len > 0 {
         new_messages.push(messages[0].clone());
     }
@@ -584,10 +605,7 @@ Output plain text only, no preamble.",
     new_messages.extend(messages[suffix_start..].iter().cloned());
     *messages = new_messages;
 
-    debug!(
-        new_len = messages.len(),
-        "context compaction applied"
-    );
+    debug!(new_len = messages.len(), "context compaction applied");
 }
 
 /// Inner streaming agent loop, factored out so it can be spawned as a task.
@@ -596,13 +614,12 @@ async fn emit_tool_ag_ui_state_deltas(
     tx: &tokio::sync::mpsc::Sender<AgentEvent>,
     metadata: &serde_json::Value,
 ) {
-    if let Some(arr) = metadata.get("ag_ui_state_deltas").and_then(|v| v.as_array()) {
+    if let Some(arr) = metadata
+        .get("ag_ui_state_deltas")
+        .and_then(|v| v.as_array())
+    {
         for d in arr {
-            let _ = tx
-                .send(AgentEvent::StateDelta {
-                    delta: d.clone(),
-                })
-                .await;
+            let _ = tx.send(AgentEvent::StateDelta { delta: d.clone() }).await;
         }
     }
 }
@@ -633,11 +650,8 @@ async fn run_streaming_loop(
 
     // Deferred tool loading: only non-searchable tools go into the initial prompt.
     // Searchable tools are discovered via `tool_search` and added dynamically.
-    let mut tool_defs: Vec<ToolDefinition> = tools
-        .list()
-        .into_iter()
-        .filter(|t| !t.searchable)
-        .collect();
+    let mut tool_defs: Vec<ToolDefinition> =
+        tools.list().into_iter().filter(|t| !t.searchable).collect();
 
     for iteration in 0..MAX_ITERATIONS {
         debug!(%run_id, iteration, "streaming agent loop iteration");
@@ -676,8 +690,8 @@ async fn run_streaming_loop(
             }
         }
 
-        let response = response
-            .ok_or_else(|| RusvelError::Llm("stream ended without Done event".into()))?;
+        let response =
+            response.ok_or_else(|| RusvelError::Llm("stream ended without Done event".into()))?;
 
         total_usage.input_tokens += response.usage.input_tokens;
         total_usage.output_tokens += response.usage.output_tokens;
@@ -927,12 +941,12 @@ impl AgentPort for AgentRuntime {
                         s.status = AgentStatus::AwaitingTool;
                     });
 
-                    let (tool_call_id, tool_name, tool_args) =
-                        Self::extract_tool_call(&response).ok_or_else(|| {
-                            RusvelError::Agent(
-                                "ToolUse finish_reason but no Part::ToolCall found".into(),
-                            )
-                        })?;
+                    let (tool_call_id, tool_name, tool_args) = Self::extract_tool_call(&response)
+                        .ok_or_else(|| {
+                        RusvelError::Agent(
+                            "ToolUse finish_reason but no Part::ToolCall found".into(),
+                        )
+                    })?;
 
                     debug!(%run_id, %tool_name, "calling tool");
 
@@ -1362,10 +1376,7 @@ mod tests {
         }
     }
 
-    fn make_streaming_runtime(
-        responses: Vec<LlmResponse>,
-        deltas: usize,
-    ) -> AgentRuntime {
+    fn make_streaming_runtime(responses: Vec<LlmResponse>, deltas: usize) -> AgentRuntime {
         AgentRuntime::new(
             Arc::new(MockStreamingLlm::new(responses, deltas)),
             Arc::new(MockTool),
@@ -1379,7 +1390,10 @@ mod tests {
     async fn streaming_emits_deltas_then_done() {
         let rt = make_streaming_runtime(vec![stop_response("Hello world!")], 3);
         let run_id = rt.create(make_config()).await.unwrap();
-        let mut rx = rt.run_streaming(&run_id, Content::text("Hi")).await.unwrap();
+        let mut rx = rt
+            .run_streaming(&run_id, Content::text("Hi"))
+            .await
+            .unwrap();
 
         let mut deltas = Vec::new();
         let mut done = false;
@@ -1398,7 +1412,11 @@ mod tests {
         }
 
         assert!(done, "should receive Done event");
-        assert!(deltas.len() >= 2, "should receive multiple deltas, got {}", deltas.len());
+        assert!(
+            deltas.len() >= 2,
+            "should receive multiple deltas, got {}",
+            deltas.len()
+        );
         let reassembled: String = deltas.into_iter().collect();
         assert_eq!(reassembled, "Hello world!");
     }
@@ -1410,7 +1428,10 @@ mod tests {
             2,
         );
         let run_id = rt.create(make_config()).await.unwrap();
-        let mut rx = rt.run_streaming(&run_id, Content::text("Search")).await.unwrap();
+        let mut rx = rt
+            .run_streaming(&run_id, Content::text("Search"))
+            .await
+            .unwrap();
 
         let mut got_tool_result = false;
         let mut got_done = false;
@@ -1439,7 +1460,10 @@ mod tests {
         // Using the non-streaming MockLlm (uses default stream() impl)
         let rt = make_runtime(vec![stop_response("Batch response")]);
         let run_id = rt.create(make_config()).await.unwrap();
-        let mut rx = rt.run_streaming(&run_id, Content::text("Hi")).await.unwrap();
+        let mut rx = rt
+            .run_streaming(&run_id, Content::text("Hi"))
+            .await
+            .unwrap();
 
         let mut got_done = false;
         while let Some(event) = rx.recv().await {

@@ -38,10 +38,7 @@ impl NodeHandler for ConditionNode {
                     "Condition needs 'result' (bool) or 'field' + 'op' + 'value'".into(),
                 )
             })?;
-        let op = params
-            .get("op")
-            .and_then(|v| v.as_str())
-            .unwrap_or("==");
+        let op = params.get("op").and_then(|v| v.as_str()).unwrap_or("==");
         let compare_to = params
             .get("value")
             .cloned()

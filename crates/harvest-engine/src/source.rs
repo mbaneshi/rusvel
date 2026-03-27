@@ -176,8 +176,7 @@ pub fn enrich_from_description(raw: &mut RawOpportunity) {
 
     static BUDGET: OnceLock<Regex> = OnceLock::new();
     let budget_re = BUDGET.get_or_init(|| {
-        Regex::new(r"\$[\d,]+(?:\.\d{2})?(?:\s*-\s*\$?[\d,]+(?:\.\d{2})?)?")
-            .expect("budget regex")
+        Regex::new(r"\$[\d,]+(?:\.\d{2})?(?:\s*-\s*\$?[\d,]+(?:\.\d{2})?)?").expect("budget regex")
     });
     if raw.budget.is_none()
         && let Some(m) = budget_re.find(&combined)
@@ -188,7 +187,10 @@ pub fn enrich_from_description(raw: &mut RawOpportunity) {
     if raw.skills.is_empty() {
         let lower = combined.to_lowercase();
         if let Some(idx) = lower.find("skills:").or_else(|| lower.find("skills :")) {
-            let tail = combined[idx..].split_once(':').map(|(_, r)| r).unwrap_or(&combined[idx..]);
+            let tail = combined[idx..]
+                .split_once(':')
+                .map(|(_, r)| r)
+                .unwrap_or(&combined[idx..]);
             let end = tail.find('\n').unwrap_or(tail.len());
             let part = tail[..end].trim();
             raw.skills = part
@@ -202,7 +204,8 @@ pub fn enrich_from_description(raw: &mut RawOpportunity) {
     }
 
     static TAG: OnceLock<Regex> = OnceLock::new();
-    let tag_re = TAG.get_or_init(|| Regex::new(r"(?i)<a[^>]*>([^<]{2,40})</a>").expect("tag regex"));
+    let tag_re =
+        TAG.get_or_init(|| Regex::new(r"(?i)<a[^>]*>([^<]{2,40})</a>").expect("tag regex"));
     if raw.skills.len() < 3 {
         for cap in tag_re.captures_iter(&raw.description) {
             if let Some(m) = cap.get(1) {

@@ -248,18 +248,21 @@ mod tests {
     fn manifest_requires_4_ports() {
         let m = flow_manifest();
         assert_eq!(m.requires_ports.len(), 4);
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "StoragePort" && !p.optional));
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "AgentPort" && !p.optional));
-        assert!(m
-            .requires_ports
-            .iter()
-            .any(|p| p.port == "JobPort" && !p.optional));
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "StoragePort" && !p.optional)
+        );
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "AgentPort" && !p.optional)
+        );
+        assert!(
+            m.requires_ports
+                .iter()
+                .any(|p| p.port == "JobPort" && !p.optional)
+        );
     }
 
     #[test]

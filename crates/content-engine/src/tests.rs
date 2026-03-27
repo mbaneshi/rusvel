@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use chrono::Utc;
 use rusvel_core::domain::*;
-use rusvel_core::id::JobId;
 use rusvel_core::error::Result;
+use rusvel_core::id::JobId;
 use rusvel_core::id::*;
 use rusvel_core::ports::*;
 
@@ -450,7 +450,11 @@ async fn schedule_emits_content_scheduled_with_platform_and_publish_at() {
         .last_payload_of_kind(crate::events::CONTENT_SCHEDULED)
         .expect("content.scheduled event");
     let id_str = item.id.to_string();
-    assert_eq!(payload["content_id"].as_str(), Some(id_str.as_str()), "{payload:?}");
+    assert_eq!(
+        payload["content_id"].as_str(),
+        Some(id_str.as_str()),
+        "{payload:?}"
+    );
     assert!(payload.get("platform").is_some());
     assert!(payload.get("publish_at").is_some());
 }

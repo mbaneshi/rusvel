@@ -511,8 +511,10 @@ pub trait TerminalPort: Send + Sync {
 
     async fn close_pane(&self, pane_id: &PaneId) -> Result<()>;
 
-    async fn subscribe_pane(&self, pane_id: &PaneId)
-        -> Result<tokio::sync::broadcast::Receiver<Vec<u8>>>;
+    async fn subscribe_pane(
+        &self,
+        pane_id: &PaneId,
+    ) -> Result<tokio::sync::broadcast::Receiver<Vec<u8>>>;
 
     async fn get_layout(&self, window_id: &WindowId) -> Result<Layout>;
 
@@ -542,10 +544,8 @@ pub trait BrowserPort: Send + Sync {
     async fn tabs(&self) -> Result<Vec<TabInfo>>;
 
     /// Subscribe to events for a tab (network captures, navigations). Phase 1 may emit none.
-    async fn observe(
-        &self,
-        tab_id: &str,
-    ) -> Result<tokio::sync::broadcast::Receiver<BrowserEvent>>;
+    async fn observe(&self, tab_id: &str)
+    -> Result<tokio::sync::broadcast::Receiver<BrowserEvent>>;
 
     async fn evaluate_js(&self, tab_id: &str, script: &str) -> Result<serde_json::Value>;
 

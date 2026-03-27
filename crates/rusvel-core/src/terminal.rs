@@ -35,7 +35,9 @@ pub enum PaneSource {
     Shell,
     /// Pane tied to a department (e.g. dept panel terminal).
     Department(String),
-    AgentTool { run_id: RunId },
+    AgentTool {
+        run_id: RunId,
+    },
     Delegation {
         /// Orchestrator run when known (optional in tool args; may equal `delegated_run_id`).
         parent_run_id: RunId,
@@ -70,10 +72,7 @@ pub enum Layout {
     Single,
     HSplit(Vec<f32>),
     VSplit(Vec<f32>),
-    Grid {
-        rows: u16,
-        cols: u16,
-    },
+    Grid { rows: u16, cols: u16 },
     Custom(serde_json::Value),
 }
 

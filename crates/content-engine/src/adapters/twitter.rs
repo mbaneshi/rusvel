@@ -41,8 +41,9 @@ impl TwitterAdapter {
 
     fn bearer(&self) -> Result<String> {
         match self.config.get_value("twitter_token")? {
-            Some(v) => serde_json::from_value(v)
-                .map_err(|e| RusvelError::Serialization(e.to_string())),
+            Some(v) => {
+                serde_json::from_value(v).map_err(|e| RusvelError::Serialization(e.to_string()))
+            }
             None => Err(RusvelError::Validation(
                 "config key `twitter_token` is not set".into(),
             )),

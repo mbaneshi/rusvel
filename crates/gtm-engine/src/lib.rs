@@ -15,11 +15,11 @@ pub mod outreach;
 
 pub use crm::{CrmManager, Deal, DealId, DealStage};
 pub use email::{
-    send_email_with_event, EmailAdapter, EmailMessage, MockEmailAdapter, SmtpEmailAdapter,
+    EmailAdapter, EmailMessage, MockEmailAdapter, SmtpEmailAdapter, send_email_with_event,
 };
 pub use invoice::{Invoice, InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 pub use outreach::{
-    FollowUp, FollowUpId, OutreachManager, OutreachSequence, OutreachSendDispatch, SequenceId,
+    FollowUp, FollowUpId, OutreachManager, OutreachSendDispatch, OutreachSequence, SequenceId,
     SequenceStatus, SequenceStep,
 };
 

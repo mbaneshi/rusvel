@@ -145,12 +145,7 @@ impl BrowserPort for CdpClient {
             let Some(ws) = t.web_socket_debugger_url.clone() else {
                 continue;
             };
-            g.targets.insert(
-                t.id.clone(),
-                TargetMeta {
-                    ws_url: ws,
-                },
-            );
+            g.targets.insert(t.id.clone(), TargetMeta { ws_url: ws });
             out.push(TabInfo {
                 id: t.id,
                 url: t.url.clone(),

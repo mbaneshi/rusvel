@@ -28,11 +28,9 @@ impl NodeHandler for CodeNode {
 
         // If "extract" parameter exists, extract field from first input
         if let Some(field) = ctx.node.parameters.get("extract").and_then(|v| v.as_str()) {
-            let input = ctx
-                .inputs
-                .values()
-                .next()
-                .ok_or_else(|| RusvelError::Validation("Code node has no inputs to extract from".into()))?;
+            let input = ctx.inputs.values().next().ok_or_else(|| {
+                RusvelError::Validation("Code node has no inputs to extract from".into())
+            })?;
 
             let extracted = walk_json_path(input, field);
             return Ok(NodeOutput {

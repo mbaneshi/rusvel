@@ -37,6 +37,8 @@ pub struct OpportunityScorer {
     skills: Vec<String>,
     min_budget: Option<f64>,
     scoring_session: Option<SessionId>,
+    /// Recent won/lost lines appended to the LLM prompt (S-044).
+    outcome_hints: Vec<String>,
 }
 
 impl OpportunityScorer {
@@ -50,12 +52,18 @@ impl OpportunityScorer {
             skills,
             min_budget,
             scoring_session: None,
+            outcome_hints: Vec::new(),
         }
     }
 
     /// Use this session ID for the ephemeral [`AgentPort`] run (observability / billing alignment).
     pub fn with_scoring_session(mut self, session_id: SessionId) -> Self {
         self.scoring_session = Some(session_id);
+        self
+    }
+
+    pub fn with_outcome_hints(mut self, hints: Vec<String>) -> Self {
+        self.outcome_hints = hints;
         self
     }
 
@@ -130,11 +138,10 @@ impl OpportunityScorer {
         agent: &Arc<dyn AgentPort>,
         raw: &RawOpportunity,
     ) -> Result<ScoredOpportunity> {
-        let prompt = build_llm_scoring_prompt(raw, &self.skills, self.min_budget);
+        let prompt =
+            build_llm_scoring_prompt(raw, &self.skills, self.min_budget, &self.outcome_hints);
 
-        let session_id = self
-            .scoring_session
-            .unwrap_or_else(SessionId::new);
+        let session_id = self.scoring_session.unwrap_or_else(SessionId::new);
         let config = AgentConfig {
             profile_id: None,
             session_id,
@@ -176,6 +183,7 @@ fn build_llm_scoring_prompt(
     raw: &RawOpportunity,
     user_skills: &[String],
     min_budget: Option<f64>,
+    outcome_hints: &[String],
 ) -> String {
     let skills_line = if user_skills.is_empty() {
         "(none configured)".to_string()
@@ -184,9 +192,19 @@ fn build_llm_scoring_prompt(
     };
     let budget_line = min_budget.map_or_else(|| "none".to_string(), |b| format!("${b:.0}"));
     let posted = raw.posted_at.as_deref().unwrap_or("unknown");
+    let past = if outcome_hints.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n## Past outcomes in this workspace (calibrate — similar gigs may repeat)\n{}\n\n",
+            outcome_hints.join("\n")
+        )
+    };
+
     format!(
         "## User skills (relevance target)\n{skills_line}\n\n\
          ## Minimum budget preference\n{budget_line}\n\n\
+         {past}\
          ## Opportunity\n\
          Title: {}\n\
          Description:\n{}\n\
@@ -215,10 +233,13 @@ fn build_llm_scoring_prompt(
 fn parse_llm_score_response(text: &str) -> Result<(f64, String)> {
     let blob = extract_json_blob(text);
     let v: Value = serde_json::from_str(&blob).map_err(|e| {
-        RusvelError::Internal(format!("Failed to parse LLM score JSON: {e}; snippet: {}", {
-            let t = text.trim();
-            t.chars().take(200).collect::<String>()
-        }))
+        RusvelError::Internal(format!(
+            "Failed to parse LLM score JSON: {e}; snippet: {}",
+            {
+                let t = text.trim();
+                t.chars().take(200).collect::<String>()
+            }
+        ))
     })?;
 
     let raw_score = v
@@ -406,7 +427,10 @@ mod tests {
         let prompt = last.lock().unwrap().clone();
         assert!(prompt.contains("## User skills"), "prompt: {prompt}");
         assert!(prompt.contains("rust"), "expected skills in prompt");
-        assert!(prompt.contains("## Opportunity"), "expected opportunity section");
+        assert!(
+            prompt.contains("## Opportunity"),
+            "expected opportunity section"
+        );
         assert!(prompt.contains("0-100"), "expected score range in prompt");
         assert!(prompt.contains("https://jobs.example/1"));
     }

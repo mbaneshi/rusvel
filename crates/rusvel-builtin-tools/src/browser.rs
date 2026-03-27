@@ -7,10 +7,7 @@ use rusvel_core::ports::BrowserPort;
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
 
-fn tab_id_for_platform(
-    tabs: &[rusvel_core::domain::TabInfo],
-    platform: &str,
-) -> Option<String> {
+fn tab_id_for_platform(tabs: &[rusvel_core::domain::TabInfo], platform: &str) -> Option<String> {
     let p = platform.to_lowercase();
     tabs.iter().find_map(|t| {
         t.platform

@@ -4,15 +4,15 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
-use axum::Json;
 use futures::Stream;
-use serde::Deserialize;
-use tokio_stream::wrappers::BroadcastStream;
 use rusvel_core::ports::BrowserPort;
+use serde::Deserialize;
 use tokio_stream::StreamExt as _;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::AppState;
 
@@ -51,7 +51,9 @@ pub async fn browser_connect(
     cdp.connect(&body.endpoint)
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?;
-    Ok(Json(serde_json::json!({ "ok": true, "endpoint": body.endpoint })))
+    Ok(Json(
+        serde_json::json!({ "ok": true, "endpoint": body.endpoint }),
+    ))
 }
 
 pub async fn browser_tabs(
@@ -128,7 +130,6 @@ pub async fn browser_captures_stream(
         let json = serde_json::to_string(&ev).ok()?;
         Some(Ok(Event::default().data(json)))
     });
-    Ok(Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new().interval(Duration::from_secs(20)),
-    ))
+    Ok(Sse::new(stream)
+        .keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(20))))
 }

@@ -69,8 +69,8 @@ pub async fn store_report(
     Json(report): Json<VisualReport>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     let report_id = report.run_id.clone();
-    let json = serde_json::to_value(&report)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let json =
+        serde_json::to_value(&report).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     state
         .storage
@@ -232,7 +232,13 @@ pub async fn run_visual_tests(
     let frontend_dir = format!("{project_dir}/frontend");
 
     let result = tokio::process::Command::new("pnpm")
-        .args(["exec", "playwright", "test", "--project=visual", "--reporter=json"])
+        .args([
+            "exec",
+            "playwright",
+            "test",
+            "--project=visual",
+            "--reporter=json",
+        ])
         .current_dir(&frontend_dir)
         .output()
         .await

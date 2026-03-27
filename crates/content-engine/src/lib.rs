@@ -21,11 +21,11 @@ pub mod code_bridge;
 pub mod platform;
 pub mod writer;
 
+pub use adapters::devto::DevToAdapter;
 pub use analytics::ContentAnalytics;
 pub use calendar::{ContentCalendar, ScheduledPost};
 pub use platform::{MockPlatformAdapter, PlatformAdapter, PostMetrics, PublishResult};
-pub use adapters::devto::DevToAdapter;
-pub use writer::{build_code_prompt, ContentReview, ContentWriter};
+pub use writer::{ContentReview, ContentWriter, build_code_prompt};
 
 // ════════════════════════════════════════════════════════════════════
 //  Event constants
@@ -220,7 +220,8 @@ impl ContentEngine {
         platform: Platform,
         publish_at: DateTime<Utc>,
     ) -> Result<()> {
-        self.schedule(session_id, draft_id, platform, publish_at).await
+        self.schedule(session_id, draft_id, platform, publish_at)
+            .await
     }
 
     /// Mark a content item as human-approved (ADR-008 content gate before publish).

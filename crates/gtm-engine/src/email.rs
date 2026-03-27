@@ -55,10 +55,7 @@ impl MockEmailAdapter {
 #[async_trait]
 impl EmailAdapter for MockEmailAdapter {
     async fn send(&self, message: &EmailMessage) -> Result<()> {
-        self.sent
-            .lock()
-            .expect("mock lock")
-            .push(message.clone());
+        self.sent.lock().expect("mock lock").push(message.clone());
         Ok(())
     }
 }

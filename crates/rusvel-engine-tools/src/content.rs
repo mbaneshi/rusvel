@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 
-use rusvel_core::domain::{Content, ContentKind, ContentStatus, Platform, ToolDefinition, ToolResult};
+use rusvel_core::domain::{
+    Content, ContentKind, ContentStatus, Platform, ToolDefinition, ToolResult,
+};
 use rusvel_core::id::{ContentId, SessionId};
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
@@ -158,7 +160,8 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
             .register_with_handler(
                 ToolDefinition {
                     name: "content_list".into(),
-                    description: "List content items for a session, optionally filtered by status.".into(),
+                    description: "List content items for a session, optionally filtered by status."
+                        .into(),
                     parameters: json!({
                         "type": "object",
                         "properties": {
@@ -172,13 +175,16 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
                         "required": ["session_id"]
                     }),
                     searchable: false,
-                metadata: json!({"category": "content", "engine": "content"}),
+                    metadata: json!({"category": "content", "engine": "content"}),
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
                     Box::pin(async move {
                         let sid = parse_session_id(&args)?;
-                        let status = args.get("status").and_then(|v| v.as_str()).map(parse_content_status);
+                        let status = args
+                            .get("status")
+                            .and_then(|v| v.as_str())
+                            .map(parse_content_status);
                         match engine.list_content(&sid, status).await {
                             Ok(items) => ok_json(&items),
                             Err(e) => err_result(e),
@@ -226,17 +232,17 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<content_engine::Conte
 
 fn parse_session_id(args: &serde_json::Value) -> rusvel_core::error::Result<SessionId> {
     let s = args["session_id"].as_str().unwrap_or_default();
-    let uuid = s
-        .parse::<uuid::Uuid>()
-        .map_err(|e| rusvel_core::error::RusvelError::Validation(format!("invalid session_id: {e}")))?;
+    let uuid = s.parse::<uuid::Uuid>().map_err(|e| {
+        rusvel_core::error::RusvelError::Validation(format!("invalid session_id: {e}"))
+    })?;
     Ok(SessionId::from_uuid(uuid))
 }
 
 fn parse_content_id(args: &serde_json::Value) -> rusvel_core::error::Result<ContentId> {
     let s = args["content_id"].as_str().unwrap_or_default();
-    let uuid = s
-        .parse::<uuid::Uuid>()
-        .map_err(|e| rusvel_core::error::RusvelError::Validation(format!("invalid content_id: {e}")))?;
+    let uuid = s.parse::<uuid::Uuid>().map_err(|e| {
+        rusvel_core::error::RusvelError::Validation(format!("invalid content_id: {e}"))
+    })?;
     Ok(ContentId::from_uuid(uuid))
 }
 

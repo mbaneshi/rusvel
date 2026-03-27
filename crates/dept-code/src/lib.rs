@@ -47,10 +47,7 @@ impl DepartmentApp for CodeDepartment {
     }
 
     async fn register(&self, ctx: &mut RegistrationContext) -> Result<()> {
-        let engine = Arc::new(CodeEngine::new(
-            ctx.storage.clone(),
-            ctx.events.clone(),
-        ));
+        let engine = Arc::new(CodeEngine::new(ctx.storage.clone(), ctx.events.clone()));
         let _ = self.engine.set(engine.clone());
 
         // ── Register tools ───────────────────────────────────────
@@ -69,10 +66,7 @@ impl DepartmentApp for CodeDepartment {
             Arc::new(move |args| {
                 let eng = eng.clone();
                 Box::pin(async move {
-                    let path = args
-                        .get("path")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(".");
+                    let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
                     let analysis = eng.analyze(std::path::Path::new(path)).await?;
                     Ok(ToolOutput {
                         content: serde_json::to_string_pretty(&analysis)
@@ -103,14 +97,8 @@ impl DepartmentApp for CodeDepartment {
             Arc::new(move |args| {
                 let eng = eng.clone();
                 Box::pin(async move {
-                    let query = args
-                        .get("query")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    let limit = args
-                        .get("limit")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(10) as usize;
+                    let query = args.get("query").and_then(|v| v.as_str()).unwrap_or("");
+                    let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
                     let results = eng.search(query, limit)?;
                     Ok(ToolOutput {
                         content: serde_json::to_string_pretty(&results)

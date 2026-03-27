@@ -11,9 +11,9 @@ pub const GTM_TOOL_IDS: &[&str] = &[
     "gtm.invoices.create_invoice",
 ];
 
-use gtm_engine::outreach::SequenceStep;
-use gtm_engine::invoice::LineItem;
 use gtm_engine::GtmEngine;
+use gtm_engine::invoice::LineItem;
+use gtm_engine::outreach::SequenceStep;
 use rusvel_core::department::*;
 use rusvel_core::domain::Contact;
 use rusvel_core::error::RusvelError;
@@ -57,10 +57,24 @@ pub fn register(engine: &Arc<GtmEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let email = args.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let company = args.get("company").and_then(|v| v.as_str()).map(String::from);
-                let metadata = args.get("metadata").cloned().unwrap_or(serde_json::json!({}));
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let email = args
+                    .get("email")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let company = args
+                    .get("company")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let metadata = args
+                    .get("metadata")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
 
                 let contact = Contact {
                     id: ContactId::new(),

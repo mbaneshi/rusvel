@@ -4,8 +4,8 @@
 //! reads responses from stdout. Newline-delimited JSON.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
@@ -176,9 +176,10 @@ impl StdioTransport {
             stdin.write_all(line.as_bytes()).await.map_err(|e| {
                 RusvelError::Tool(format!("Failed to write to MCP server stdin: {e}"))
             })?;
-            stdin.flush().await.map_err(|e| {
-                RusvelError::Tool(format!("Failed to flush MCP server stdin: {e}"))
-            })?;
+            stdin
+                .flush()
+                .await
+                .map_err(|e| RusvelError::Tool(format!("Failed to flush MCP server stdin: {e}")))?;
         }
 
         debug!(id, method, "Sent MCP request");
@@ -218,9 +219,10 @@ impl StdioTransport {
         stdin.write_all(line.as_bytes()).await.map_err(|e| {
             RusvelError::Tool(format!("Failed to write notification to MCP server: {e}"))
         })?;
-        stdin.flush().await.map_err(|e| {
-            RusvelError::Tool(format!("Failed to flush MCP server stdin: {e}"))
-        })?;
+        stdin
+            .flush()
+            .await
+            .map_err(|e| RusvelError::Tool(format!("Failed to flush MCP server stdin: {e}")))?;
 
         debug!(method, "Sent MCP notification");
         Ok(())
@@ -261,9 +263,10 @@ mod tests {
             done
         "#;
 
-        let transport = StdioTransport::spawn("bash", &["-c".into(), script.into()], HashMap::new())
-            .await
-            .unwrap();
+        let transport =
+            StdioTransport::spawn("bash", &["-c".into(), script.into()], HashMap::new())
+                .await
+                .unwrap();
 
         // Test initialize.
         let result = transport
@@ -274,10 +277,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            result["serverInfo"]["name"].as_str(),
-            Some("mock")
-        );
+        assert_eq!(result["serverInfo"]["name"].as_str(), Some("mock"));
 
         // Test tools/list.
         let result = transport

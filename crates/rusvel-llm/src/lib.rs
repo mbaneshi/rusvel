@@ -8,21 +8,21 @@
 
 mod claude;
 mod claude_cli;
-mod cursor_agent;
-mod flat_prompt;
 pub mod cost;
 mod cost_tracking;
+mod cursor_agent;
+mod flat_prompt;
 mod multi;
 mod ollama;
 mod openai;
-mod tier_routing;
 pub mod stream;
+mod tier_routing;
 
 pub use claude::ClaudeProvider;
 pub use claude_cli::ClaudeCliProvider;
-pub use cursor_agent::CursorAgentProvider;
-pub use cost::{aggregate_spend, SpendAggregation, LLM_COST_METRIC_NAME};
+pub use cost::{LLM_COST_METRIC_NAME, SpendAggregation, aggregate_spend};
 pub use cost_tracking::CostTrackingLlm;
+pub use cursor_agent::CursorAgentProvider;
 pub use multi::MultiProvider;
 pub use ollama::OllamaProvider;
 pub use openai::OpenAiProvider;

@@ -218,11 +218,7 @@ mod tests {
                 }
             ]
         });
-        let evs = events_from_response(
-            "https://www.upwork.com/api/v3/search/jobs",
-            &body,
-            "tab1",
-        );
+        let evs = events_from_response("https://www.upwork.com/api/v3/search/jobs", &body, "tab1");
         assert_eq!(evs.len(), 1);
         match &evs[0] {
             BrowserEvent::DataCaptured { kind, data, .. } => {

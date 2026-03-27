@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use rusvel_core::SessionId;
 use rusvel_core::domain::{Content, MemoryEntry, MemoryKind, ToolDefinition, ToolResult};
 use rusvel_core::ports::MemoryPort;
-use rusvel_core::SessionId;
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
 
@@ -42,9 +42,7 @@ pub async fn register(registry: &ToolRegistry, memory: Arc<dyn MemoryPort>) {
             Arc::new(move |args| {
                 let mem = mem.clone();
                 Box::pin(async move {
-                    let session_str = args["session_id"]
-                        .as_str()
-                        .unwrap_or_default();
+                    let session_str = args["session_id"].as_str().unwrap_or_default();
                     let session_id: SessionId = session_str
                         .parse::<uuid::Uuid>()
                         .map(SessionId::from_uuid)
@@ -124,7 +122,9 @@ pub async fn register(registry: &ToolRegistry, memory: Arc<dyn MemoryPort>) {
                     match entry {
                         Some(e) => Ok(ToolResult {
                             success: true,
-                            output: Content::text(serde_json::to_string_pretty(&e).unwrap_or_default()),
+                            output: Content::text(
+                                serde_json::to_string_pretty(&e).unwrap_or_default(),
+                            ),
                             metadata: json!({"found": true}),
                         }),
                         None => Ok(ToolResult {

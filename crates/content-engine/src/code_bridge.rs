@@ -51,7 +51,11 @@ pub fn summary_from_stored_code_analysis(v: &serde_json::Value) -> Result<CodeAn
                         .is_some_and(|k| k == "Function")
                 })
                 .take(10)
-                .filter_map(|sym| sym.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                .filter_map(|sym| {
+                    sym.get("name")
+                        .and_then(|n| n.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -63,7 +67,11 @@ pub fn summary_from_stored_code_analysis(v: &serde_json::Value) -> Result<CodeAn
             .map(|arr| {
                 arr.iter()
                     .take(10)
-                    .filter_map(|sym| sym.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                    .filter_map(|sym| {
+                        sym.get("name")
+                            .and_then(|n| n.as_str())
+                            .map(|s| s.to_string())
+                    })
                     .collect()
             })
             .unwrap_or_default();

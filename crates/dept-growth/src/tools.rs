@@ -34,7 +34,11 @@ pub fn register(engine: &Arc<GrowthEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let order = args.get("order").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
                 let id = eng.funnel().add_stage(sid, name, order).await?;
                 Ok(ToolOutput {
@@ -64,7 +68,11 @@ pub fn register(engine: &Arc<GrowthEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let size = args.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
                 let id = eng.cohort().create_cohort(sid, name, size).await?;
                 Ok(ToolOutput {
@@ -95,12 +103,20 @@ pub fn register(engine: &Arc<GrowthEngine>, ctx: &mut RegistrationContext) {
             let eng = eng.clone();
             Box::pin(async move {
                 let sid = parse_session_id(&args)?;
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let value = args
                     .get("value")
                     .and_then(serde_json::Value::as_f64)
                     .unwrap_or(0.0);
-                let unit = args.get("unit").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let unit = args
+                    .get("unit")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let id = eng.kpi().record_kpi(sid, name, value, unit).await?;
                 Ok(ToolOutput {
                     content: serde_json::json!({ "kpi_id": id.to_string() }).to_string(),

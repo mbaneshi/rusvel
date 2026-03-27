@@ -17,9 +17,10 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
-use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
+use rusvel_agent::{AgUiEvent, AgentEvent, ag_ui_json_with_conversation, agent_event_to_ag_ui};
 use rusvel_core::domain::{
-    AgentConfig, Content, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID, RUSVEL_META_MODEL_TIER,
+    AgentConfig, Content, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID,
+    RUSVEL_META_MODEL_TIER,
 };
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{AgentPort, StoragePort};
@@ -214,9 +215,7 @@ pub async fn chat_handler(
                         serde_json::Value::String(conv_id.clone()),
                     );
                 }
-                Event::default()
-                    .event(ev.sse_name())
-                    .data(v.to_string())
+                Event::default().event(ev.sse_name()).data(v.to_string())
             }
             other => {
                 let ag = agent_event_to_ag_ui(&run_id_str, other);

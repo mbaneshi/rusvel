@@ -153,9 +153,7 @@ pub enum Commands {
 #[derive(Subcommand, Debug)]
 pub enum BrowserCmd {
     /// Connect to Chrome remote debugging (default `http://127.0.0.1:9222`).
-    Connect {
-        endpoint: Option<String>,
-    },
+    Connect { endpoint: Option<String> },
     /// Show whether the CLI has an active CDP session (connect first).
     Status,
     /// Print recent capture records as JSON.
@@ -291,8 +289,7 @@ pub async fn run(
                 .await
         }
         Some(Commands::Code { action }) => {
-            departments::handle_dept(departments::DeptCmd::Code { action }, storage, &engines)
-                .await
+            departments::handle_dept(departments::DeptCmd::Code { action }, storage, &engines).await
         }
         Some(Commands::Harvest { action }) => {
             departments::handle_dept(departments::DeptCmd::Harvest { action }, storage, &engines)
@@ -303,8 +300,7 @@ pub async fn run(
                 .await
         }
         Some(Commands::Gtm { action }) => {
-            departments::handle_dept(departments::DeptCmd::Gtm { action }, storage, &engines)
-                .await
+            departments::handle_dept(departments::DeptCmd::Gtm { action }, storage, &engines).await
         }
         Some(Commands::Browser { action }) => handle_browser(action).await,
     }

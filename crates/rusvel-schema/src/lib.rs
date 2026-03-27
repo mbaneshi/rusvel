@@ -6,8 +6,8 @@
 use rusqlite::{Connection, OptionalExtension, Row};
 use serde::Serialize;
 
-use rusvel_core::error::RusvelError;
 use rusvel_core::Result;
+use rusvel_core::error::RusvelError;
 
 /// User-facing table listing (name + approximate row count).
 #[derive(Debug, Clone, Serialize)]
@@ -54,10 +54,7 @@ pub struct SchemaIntrospector;
 impl SchemaIntrospector {
     /// Allowed unquoted SQL identifiers: ASCII alphanumeric + underscore (MVP safety).
     pub fn validate_table_name(name: &str) -> bool {
-        !name.is_empty()
-            && name
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
 
     /// Same rules as table names for column identifiers we interpolate into SQL.

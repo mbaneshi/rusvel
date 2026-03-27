@@ -7,6 +7,7 @@
 
 pub mod events;
 pub mod mission;
+pub mod pipeline;
 pub mod personas;
 pub mod safety;
 
@@ -19,10 +20,13 @@ use rusvel_core::ports::*;
 use std::sync::Arc;
 
 pub use mission::{
-    forge_route_contributions_for_manifest, mission_tool_contributions_for_manifest, DailyPlan,
-    Review,
+    DailyPlan, Review, forge_route_contributions_for_manifest,
+    mission_tool_contributions_for_manifest,
 };
-pub use personas::{persona_contributions_for_manifest, PersonaManager};
+pub use pipeline::{
+    PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner, FLOW_EXECUTIONS_OBJECT_KIND,
+};
+pub use personas::{PersonaManager, persona_contributions_for_manifest};
 pub use safety::SafetyGuard;
 
 /// The Forge Engine — agent orchestration + Mission planning.

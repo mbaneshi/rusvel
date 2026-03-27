@@ -43,8 +43,9 @@ fn kit_indie_saas() -> StarterKit {
     StarterKit {
         id: "indie-saas".into(),
         name: "Indie SaaS".into(),
-        description: "Ship and grow a SaaS: content, code quality, funnel, and product feedback loops."
-            .into(),
+        description:
+            "Ship and grow a SaaS: content, code quality, funnel, and product feedback loops."
+                .into(),
         target_audience: "indie saas".into(),
         departments: vec![
             "content".into(),
@@ -124,8 +125,9 @@ fn kit_freelancer() -> StarterKit {
     StarterKit {
         id: "freelancer".into(),
         name: "Freelancer".into(),
-        description: "Find clients, write proposals, stay paid: harvest, proposals, outreach, and invoicing."
-            .into(),
+        description:
+            "Find clients, write proposals, stay paid: harvest, proposals, outreach, and invoicing."
+                .into(),
         target_audience: "freelancer".into(),
         departments: vec![
             "harvest".into(),
@@ -322,9 +324,7 @@ pub async fn list_kits() -> Json<Vec<StarterKitListItem>> {
 }
 
 /// `GET /api/kits/{id}` — full kit definition.
-pub async fn get_kit(
-    Path(id): Path<String>,
-) -> Result<Json<StarterKit>, (StatusCode, String)> {
+pub async fn get_kit(Path(id): Path<String>) -> Result<Json<StarterKit>, (StatusCode, String)> {
     let kit = BUILTIN_KITS
         .iter()
         .find(|k| k.id == id)

@@ -132,7 +132,9 @@ pub struct ToolRegistration {
 
 /// Async tool handler function.
 pub type ToolHandler = Arc<
-    dyn Fn(serde_json::Value) -> std::pin::Pin<
+    dyn Fn(
+            serde_json::Value,
+        ) -> std::pin::Pin<
             Box<dyn std::future::Future<Output = crate::error::Result<ToolOutput>> + Send>,
         > + Send
         + Sync,
@@ -196,9 +198,11 @@ impl Default for ToolRegistrar {
 
 /// Async handler for incoming events.
 pub type EventHandlerFn = Arc<
-    dyn Fn(crate::domain::Event) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = crate::error::Result<()>> + Send>,
-        > + Send
+    dyn Fn(
+            crate::domain::Event,
+        )
+            -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::error::Result<()>> + Send>>
+        + Send
         + Sync,
 >;
 
@@ -261,7 +265,9 @@ impl Default for EventHandlerRegistrar {
 
 /// Async handler for a specific job kind.
 pub type JobHandlerFn = Arc<
-    dyn Fn(crate::domain::Job) -> std::pin::Pin<
+    dyn Fn(
+            crate::domain::Job,
+        ) -> std::pin::Pin<
             Box<dyn std::future::Future<Output = crate::error::Result<serde_json::Value>> + Send>,
         > + Send
         + Sync,
@@ -288,12 +294,7 @@ impl JobHandlerRegistrar {
 
     /// Register a handler for a job kind.
     /// Later registrations for the same kind overwrite earlier ones.
-    pub fn handle(
-        &mut self,
-        department_id: &str,
-        kind: impl Into<String>,
-        handler: JobHandlerFn,
-    ) {
+    pub fn handle(&mut self, department_id: &str, kind: impl Into<String>, handler: JobHandlerFn) {
         let kind = kind.into();
         self.handlers.insert(
             kind.clone(),
@@ -337,26 +338,24 @@ impl DepartmentRegistry {
     pub fn from_manifests(manifests: &[DepartmentManifest]) -> Self {
         let departments = manifests
             .iter()
-            .map(|m| {
-                DepartmentDef {
-                    id: m.id.clone(),
-                    name: m.name.clone(),
-                    title: m.name.clone(),
-                    icon: m.icon.clone(),
-                    color: m.color.clone(),
-                    system_prompt: m.system_prompt.clone(),
-                    capabilities: m.capabilities.clone(),
-                    tabs: m.ui.tabs.clone(),
-                    quick_actions: m
-                        .quick_actions
-                        .iter()
-                        .map(|qa| RegQuickAction {
-                            label: qa.label.clone(),
-                            prompt: qa.prompt.clone(),
-                        })
-                        .collect(),
-                    default_config: m.default_config.clone(),
-                }
+            .map(|m| DepartmentDef {
+                id: m.id.clone(),
+                name: m.name.clone(),
+                title: m.name.clone(),
+                icon: m.icon.clone(),
+                color: m.color.clone(),
+                system_prompt: m.system_prompt.clone(),
+                capabilities: m.capabilities.clone(),
+                tabs: m.ui.tabs.clone(),
+                quick_actions: m
+                    .quick_actions
+                    .iter()
+                    .map(|qa| RegQuickAction {
+                        label: qa.label.clone(),
+                        prompt: qa.prompt.clone(),
+                    })
+                    .collect(),
+                default_config: m.default_config.clone(),
             })
             .collect();
 
@@ -498,10 +497,7 @@ mod tests {
 
     #[test]
     fn dependency_order_detects_cycle() {
-        let manifests = vec![
-            make_manifest("a", vec!["b"]),
-            make_manifest("b", vec!["a"]),
-        ];
+        let manifests = vec![make_manifest("a", vec!["b"]), make_manifest("b", vec!["a"])];
         assert!(resolve_dependency_order(&manifests).is_err());
     }
 

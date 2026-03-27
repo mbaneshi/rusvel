@@ -7,7 +7,9 @@ use rusvel_api::auth::AuthConfig;
 use tower::ServiceExt;
 
 fn req(uri: &str, token: Option<&str>) -> Request<Body> {
-    let mut builder = Request::builder().uri(uri).header("content-type", "application/json");
+    let mut builder = Request::builder()
+        .uri(uri)
+        .header("content-type", "application/json");
     if let Some(t) = token {
         builder = builder.header("authorization", format!("Bearer {t}"));
     }

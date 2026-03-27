@@ -177,10 +177,7 @@ fn parse_cursor_stdout(stdout: &str) -> std::result::Result<CursorCliResult, Str
 
 #[async_trait]
 impl LlmPort for CursorAgentProvider {
-    async fn stream(
-        &self,
-        request: LlmRequest,
-    ) -> Result<mpsc::Receiver<LlmStreamEvent>> {
+    async fn stream(&self, request: LlmRequest) -> Result<mpsc::Receiver<LlmStreamEvent>> {
         self.warn_if_tools(&request);
         let (tx, rx) = mpsc::channel(64);
 
@@ -195,9 +192,8 @@ impl LlmPort for CursorAgentProvider {
         tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
 
-            let stream_result = tokio::time::timeout(
-                std::time::Duration::from_secs(timeout_secs),
-                async {
+            let stream_result =
+                tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
                     while let Ok(Some(line)) = lines.next_line().await {
                         if line.trim().is_empty() {
                             continue;
@@ -258,7 +254,8 @@ impl LlmPort for CursorAgentProvider {
                                     let num_turns = parsed
                                         .get("num_turns")
                                         .and_then(serde_json::Value::as_u64)
-                                        .unwrap_or(0) as u32;
+                                        .unwrap_or(0)
+                                        as u32;
                                     let duration_ms = parsed
                                         .get("duration_ms")
                                         .and_then(serde_json::Value::as_u64)
@@ -296,15 +293,16 @@ impl LlmPort for CursorAgentProvider {
                             _ => {}
                         }
                     }
-                },
-            )
-            .await;
+                })
+                .await;
 
             let _ = child.kill().await;
 
             if stream_result.is_err() {
                 let _ = tx
-                    .send(LlmStreamEvent::Error("cursor agent stream timed out".into()))
+                    .send(LlmStreamEvent::Error(
+                        "cursor agent stream timed out".into(),
+                    ))
                     .await;
             }
         });
@@ -456,10 +454,7 @@ mod tests {
 
         #[async_trait]
         impl LlmPort for FakeCursor {
-            async fn generate(
-                &self,
-                _request: LlmRequest,
-            ) -> Result<LlmResponse> {
+            async fn generate(&self, _request: LlmRequest) -> Result<LlmResponse> {
                 Ok(LlmResponse {
                     content: Content::text(format!("from {}", self.tag)),
                     finish_reason: FinishReason::Stop,
@@ -468,11 +463,7 @@ mod tests {
                 })
             }
 
-            async fn embed(
-                &self,
-                _model: &ModelRef,
-                _text: &str,
-            ) -> Result<Vec<f32>> {
+            async fn embed(&self, _model: &ModelRef, _text: &str) -> Result<Vec<f32>> {
                 Err(RusvelError::Llm("no".into()))
             }
 

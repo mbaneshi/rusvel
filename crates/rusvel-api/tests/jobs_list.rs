@@ -57,9 +57,7 @@ async fn get_jobs_filters_by_session_and_kind() {
         .await
         .unwrap();
 
-    let uri = format!(
-        "/api/jobs?session_id={sid}&kinds=ProposalDraft&status=Queued&limit=10"
-    );
+    let uri = format!("/api/jobs?session_id={sid}&kinds=ProposalDraft&status=Queued&limit=10");
     let (status, body) = json_request(&mut h.router, "GET", &uri, None).await;
     assert_eq!(status, StatusCode::OK);
     let arr: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();

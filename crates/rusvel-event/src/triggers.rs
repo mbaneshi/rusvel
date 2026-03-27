@@ -91,9 +91,14 @@ impl TriggerManager {
                                         prompt_template,
                                         tools,
                                     } => {
-                                        if let Err(e) =
-                                            run_trigger_agent(&agent, &event, persona, prompt_template, tools)
-                                                .await
+                                        if let Err(e) = run_trigger_agent(
+                                            &agent,
+                                            &event,
+                                            persona,
+                                            prompt_template,
+                                            tools,
+                                        )
+                                        .await
                                         {
                                             tracing::warn!(
                                                 trigger_id = %t.id,
@@ -201,7 +206,9 @@ async fn run_trigger_flow(
     let id: FlowId = flow_id
         .parse::<uuid::Uuid>()
         .map(FlowId::from_uuid)
-        .map_err(|e| rusvel_core::error::RusvelError::Validation(format!("invalid flow_id: {e}")))?;
+        .map_err(|e| {
+            rusvel_core::error::RusvelError::Validation(format!("invalid flow_id: {e}"))
+        })?;
 
     let trigger_data = json!({
         "event_trigger": true,
@@ -226,9 +233,18 @@ mod tests {
 
     #[test]
     fn pattern_exact_and_suffix() {
-        assert!(matches_event_pattern("code.chat.completed", "code.chat.completed"));
-        assert!(matches_event_pattern("chat.completed", "code.chat.completed"));
-        assert!(!matches_event_pattern("chat.completed", "code.chat.started"));
+        assert!(matches_event_pattern(
+            "code.chat.completed",
+            "code.chat.completed"
+        ));
+        assert!(matches_event_pattern(
+            "chat.completed",
+            "code.chat.completed"
+        ));
+        assert!(!matches_event_pattern(
+            "chat.completed",
+            "code.chat.started"
+        ));
     }
 
     #[test]

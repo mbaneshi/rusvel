@@ -7,22 +7,22 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::Json;
+use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
-use axum::middleware::{from_fn_with_state, Next};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
+use axum::middleware::{Next, from_fn_with_state};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::Json;
-use axum::Router;
-use futures::stream;
 use futures::Stream;
+use futures::stream;
 
 use tokio::sync::RwLock;
 
-use crate::jsonrpc::{self, JsonRpcResponse};
 use crate::RusvelMcp;
+use crate::jsonrpc::{self, JsonRpcResponse};
 
 /// OAuth / bearer placeholder for streamable HTTP MCP.
 #[derive(Debug, Clone)]
@@ -184,11 +184,9 @@ async fn handle_mcp_sse(
     }
 
     let stream = stream::empty::<Result<Event, Infallible>>();
-    Ok(
-        Sse::new(stream).keep_alive(
-            KeepAlive::new()
-                .interval(Duration::from_secs(15))
-                .text("heartbeat"),
-        ),
-    )
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(15))
+            .text("heartbeat"),
+    ))
 }

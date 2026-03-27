@@ -153,17 +153,10 @@ impl TuiApp {
                     .unwrap_or(&[]);
 
                 frame.render_widget(
-                    terminal_pane_list_widget(
-                        &self.terminal_panes,
-                        sel,
-                        self.terminal_focus,
-                    ),
+                    terminal_pane_list_widget(&self.terminal_panes, sel, self.terminal_focus),
                     list_area,
                 );
-                frame.render_widget(
-                    terminal_output_widget(lines, self.terminal_focus),
-                    out_area,
-                );
+                frame.render_widget(terminal_output_widget(lines, self.terminal_focus), out_area);
             })?;
 
             if !event::poll(std::time::Duration::from_millis(100))? {

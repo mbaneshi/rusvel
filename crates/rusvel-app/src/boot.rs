@@ -72,12 +72,10 @@ pub fn installed_departments() -> Vec<Box<dyn DepartmentApp>> {
         // Core departments (no deps on other depts)
         Box::new(dept_forge::ForgeDepartment::new()),
         Box::new(dept_code::CodeDepartment::new()),
-
         // Departments with cross-dept event subscriptions
         Box::new(dept_content::ContentDepartment::new()),
         Box::new(dept_harvest::HarvestDepartment::new()),
         Box::new(dept_flow::FlowDepartment::new()),
-
         // Departments with minimal logic (progressive enhancement)
         Box::new(dept_gtm::GtmDepartment::new()),
         Box::new(dept_finance::FinanceDepartment::new()),
@@ -148,10 +146,7 @@ pub async fn boot_departments(
         ctx.add_manifest(manifest.clone());
 
         if let Err(e) = dept.register(&mut ctx).await {
-            tracing::error!(
-                "Failed to register department '{}': {e}",
-                manifest.id
-            );
+            tracing::error!("Failed to register department '{}': {e}", manifest.id);
             // Continue — don't let one failed department block the rest
         }
     }
@@ -182,8 +177,8 @@ mod tests {
     use rusvel_auth::InMemoryAuthAdapter;
     use rusvel_config::TomlConfig;
     use rusvel_core::domain::{
-        Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef, Session, SessionSummary,
-        ToolDefinition, ToolResult,
+        Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef, Session,
+        SessionSummary, ToolDefinition, ToolResult,
     };
     use rusvel_core::error::Result;
     use rusvel_core::id::SessionId;
@@ -202,7 +197,10 @@ mod tests {
 
     #[async_trait]
     impl SessionPort for SessionAdapter {
-        async fn create(&self, session: rusvel_core::domain::Session) -> rusvel_core::error::Result<SessionId> {
+        async fn create(
+            &self,
+            session: rusvel_core::domain::Session,
+        ) -> rusvel_core::error::Result<SessionId> {
             let id = session.id;
             self.0.sessions().put_session(&session).await?;
             Ok(id)
@@ -275,15 +273,13 @@ mod tests {
         let db_path = base.join("rusvel.db");
         let db: Arc<Database> = Arc::new(Database::open(&db_path).expect("db"));
         let storage: Arc<dyn StoragePort> = db.clone();
-        let config: Arc<dyn ConfigPort> = Arc::new(
-            TomlConfig::load(base.join("config.toml")).expect("config"),
-        );
+        let config: Arc<dyn ConfigPort> =
+            Arc::new(TomlConfig::load(base.join("config.toml")).expect("config"));
         let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
-            db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+            db.clone() as Arc<dyn rusvel_core::ports::EventStore>
         ));
-        let memory: Arc<dyn MemoryPort> = Arc::new(
-            MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
-        );
+        let memory: Arc<dyn MemoryPort> =
+            Arc::new(MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"));
         let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
         let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
         let tools: Arc<dyn ToolPort> = Arc::new(StubTool);

@@ -3,9 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rusvel_core::domain::{
-    AgentConfig, AgentOutput, AgentStatus, Content, LlmUsage,
-};
+use rusvel_core::domain::{AgentConfig, AgentOutput, AgentStatus, Content, LlmUsage};
 use rusvel_core::error::Result;
 use rusvel_core::id::RunId;
 use rusvel_core::ports::{AgentPort, JobPort, StoragePort, ToolPort};
@@ -69,7 +67,7 @@ async fn code_tools_register_two_names() {
     let dir = tempdir().unwrap();
     let db = Arc::new(Database::open(dir.path().join("r.db")).unwrap());
     let events = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
     let reg = ToolRegistry::new();
     let engine = Arc::new(code_engine::CodeEngine::new(db, events));
@@ -84,7 +82,7 @@ async fn content_tools_register_five_names() {
     let dir = tempdir().unwrap();
     let db = Arc::new(Database::open(dir.path().join("r.db")).unwrap());
     let events = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
     let agent: Arc<dyn AgentPort> = Arc::new(StubAgent);
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;

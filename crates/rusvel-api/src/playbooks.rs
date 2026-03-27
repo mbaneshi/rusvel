@@ -10,9 +10,11 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde_json::json;
 
-use rusvel_core::domain::{Content, Part, Playbook, PlaybookAction, PlaybookRun, PlaybookRunStatus};
-use rusvel_core::id::FlowId;
 use crate::AppState;
+use rusvel_core::domain::{
+    Content, Part, Playbook, PlaybookAction, PlaybookRun, PlaybookRunStatus,
+};
+use rusvel_core::id::FlowId;
 
 type ApiResult<T> = Result<Json<T>, (StatusCode, String)>;
 

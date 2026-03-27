@@ -304,7 +304,11 @@ impl ToolPort for ToolRegistry {
             .collect();
 
         scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(limit).map(|(_, d)| d.clone()).collect()
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(_, d)| d.clone())
+            .collect()
     }
 
     /// Return the JSON Schema for a specific tool's parameters.
@@ -544,10 +548,7 @@ mod tests {
         assert!(!names.contains(&"other_tool"));
 
         // call allowed tool
-        let result = scoped
-            .call("echo", json!({"message": "hi"}))
-            .await
-            .unwrap();
+        let result = scoped.call("echo", json!({"message": "hi"})).await.unwrap();
         assert!(result.success);
 
         // call blocked tool

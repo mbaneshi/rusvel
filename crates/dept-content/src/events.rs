@@ -16,21 +16,24 @@ pub fn on_code_analyzed(engine: Arc<ContentEngine>) -> EventHandlerFn {
                 return Ok(());
             }
 
-            let session_id = event.session_id.or_else(|| {
-                event
-                    .payload
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| uuid::Uuid::parse_str(s).ok())
-                    .map(SessionId::from_uuid)
-            }).or_else(|| {
-                event
-                    .metadata
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .and_then(|s| uuid::Uuid::parse_str(s).ok())
-                    .map(SessionId::from_uuid)
-            });
+            let session_id = event
+                .session_id
+                .or_else(|| {
+                    event
+                        .payload
+                        .get("session_id")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| uuid::Uuid::parse_str(s).ok())
+                        .map(SessionId::from_uuid)
+                })
+                .or_else(|| {
+                    event
+                        .metadata
+                        .get("session_id")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| uuid::Uuid::parse_str(s).ok())
+                        .map(SessionId::from_uuid)
+                });
 
             let Some(sid) = session_id else {
                 tracing::debug!(

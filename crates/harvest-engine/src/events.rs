@@ -7,3 +7,4 @@ pub const OPPORTUNITY_SCORED: &str = "harvest.opportunity.scored";
 pub const PROPOSAL_GENERATED: &str = "harvest.proposal.generated";
 pub const PROPOSAL_PERSISTED: &str = "harvest.proposal.persisted";
 pub const PIPELINE_ADVANCED: &str = "harvest.pipeline.advanced";
+pub const OUTCOME_RECORDED: &str = "harvest.outcome.recorded";
