@@ -453,6 +453,7 @@ impl ForgeEngine {
                     status: "red".into(),
                     highlights: vec![format!("Brief section failed: {e}")],
                     metrics: serde_json::json!({}),
+                    metadata: Default::default(),
                 },
             };
             sections.push(section);
@@ -491,6 +492,7 @@ impl ForgeEngine {
             summary: parsed.summary,
             action_items: parsed.action_items,
             created_at: Utc::now(),
+            metadata: Default::default(),
         };
 
         self.persist_executive_brief(session_id, &brief).await;
@@ -604,6 +606,7 @@ impl ForgeEngine {
                 parsed.highlights
             },
             metrics: parsed.metrics,
+            metadata: Default::default(),
         })
     }
 }

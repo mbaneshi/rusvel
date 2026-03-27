@@ -62,6 +62,7 @@ impl DeployPort for FlyDeployPort {
         Ok(DeployedUrl {
             url: url.clone(),
             deployment_id: service_name.to_string(),
+            metadata: Default::default(),
         })
     }
 
@@ -98,6 +99,7 @@ impl DeployPort for FlyDeployPort {
             id: deployment_id.to_string(),
             state,
             url: None,
+            metadata: Default::default(),
         })
     }
 }

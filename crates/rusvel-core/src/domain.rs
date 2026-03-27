@@ -843,6 +843,8 @@ pub struct ExecutiveBrief {
     pub summary: String,
     pub action_items: Vec<String>,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// One department’s slice of an [`ExecutiveBrief`].
@@ -852,6 +854,8 @@ pub struct BriefSection {
     pub status: String,
     pub highlights: Vec<String>,
     pub metrics: serde_json::Value,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -922,6 +926,8 @@ pub enum TriggerAction {
 pub struct RepoRef {
     pub local_path: PathBuf,
     pub remote_url: Option<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// Reference to a point-in-time code snapshot.
@@ -941,6 +947,8 @@ pub struct CodeAnalysisSummary {
     pub total_symbols: usize,
     pub top_symbols: Vec<String>,
     pub largest_function: Option<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// Result of a successful deploy (URL + provider-specific id).
@@ -948,6 +956,8 @@ pub struct CodeAnalysisSummary {
 pub struct DeployedUrl {
     pub url: String,
     pub deployment_id: String,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// Observed state of a deployment on the provider.
@@ -956,6 +966,8 @@ pub struct DeployStatus {
     pub id: String,
     pub state: String,
     pub url: Option<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1258,6 +1270,8 @@ pub struct VectorSearchResult {
     pub entry: VectorEntry,
     /// Cosine similarity score (higher = more relevant).
     pub score: f64,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// Single hit from hybrid FTS + vector fusion ([`reciprocal_rank_fusion`](crate::rrf::reciprocal_rank_fusion)).
@@ -1289,6 +1303,8 @@ pub struct TabInfo {
     pub url: String,
     pub title: String,
     pub platform: Option<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 /// Streamed observation events from a tab (network, navigation, lifecycle).
@@ -1405,6 +1421,8 @@ pub struct FlowConnectionDef {
     /// Input port name: "main".
     #[serde(default = "default_output")]
     pub target_input: String,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 fn default_output() -> String {

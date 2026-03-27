@@ -48,6 +48,7 @@ pub fn cross_engine_handoff_template() -> FlowDef {
             source_output: "main".into(),
             target_node: n2,
             target_input: "main".into(),
+            metadata: Default::default(),
         }],
         variables: std::collections::HashMap::new(),
         metadata: serde_json::json!({

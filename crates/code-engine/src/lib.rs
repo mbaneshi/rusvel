@@ -49,6 +49,7 @@ impl CodeAnalysis {
             total_symbols: self.metrics.total_symbols,
             top_symbols,
             largest_function: self.metrics.largest_function.clone(),
+            metadata: Default::default(),
         }
     }
 }
@@ -113,6 +114,7 @@ impl CodeEngine {
             repo: RepoRef {
                 local_path: repo_path.to_path_buf(),
                 remote_url: None,
+                metadata: Default::default(),
             },
             analyzed_at: Utc::now(),
         };

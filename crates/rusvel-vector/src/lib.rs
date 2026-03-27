@@ -294,6 +294,7 @@ impl VectorStorePort for LanceVectorStore {
                         created_at,
                     },
                     score,
+                    metadata: Default::default(),
                 });
             }
         }

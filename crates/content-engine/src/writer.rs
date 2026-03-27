@@ -269,6 +269,7 @@ mod prompt_tests {
             total_symbols: 200,
             top_symbols: vec!["main".into(), "run".into()],
             largest_function: Some("process_batch".into()),
+            metadata: Default::default(),
         }
     }
 

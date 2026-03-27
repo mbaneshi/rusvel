@@ -262,6 +262,7 @@ mod tests {
                 url: "about:blank".into(),
                 title: String::new(),
                 platform: None,
+                metadata: Default::default(),
             }])
         }
 

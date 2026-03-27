@@ -151,6 +151,7 @@ impl BrowserPort for CdpClient {
                 url: t.url.clone(),
                 title: t.title,
                 platform: Self::platform_hint(&t.url),
+                metadata: Default::default(),
             });
         }
         Ok(out)

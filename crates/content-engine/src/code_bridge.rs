@@ -84,6 +84,7 @@ pub fn summary_from_stored_code_analysis(v: &serde_json::Value) -> Result<CodeAn
         total_symbols,
         top_symbols,
         largest_function,
+        metadata: Default::default(),
     })
 }
 
