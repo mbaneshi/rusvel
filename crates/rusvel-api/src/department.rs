@@ -17,16 +17,20 @@ use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
 
-use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
+use rusvel_agent::{
+    AgUiEvent, AgentEvent, ContextPack, ag_ui_json_with_conversation, agent_event_to_ag_ui,
+    to_prompt_section,
+};
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
 use rusvel_core::domain::{
     AgentConfig, Content, EventFilter, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID,
     RUSVEL_META_MODEL_TIER, UserProfile,
 };
+use rusvel_core::error::RusvelError;
 use rusvel_core::id::{EventId, SessionId};
-use uuid::Uuid;
 use rusvel_core::ports::{AgentPort, StoragePort};
 use rusvel_core::registry::DepartmentDef;
+use uuid::Uuid;
 
 use crate::AppState;
 use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
@@ -71,6 +75,39 @@ fn resolve_dept_config(
     // Stored overrides on top of registry defaults
     let merged = stored.overlay(&base);
     merged.resolve()
+}
+
+async fn assemble_context_pack(
+    state: &Arc<AppState>,
+    sid: &SessionId,
+) -> Result<ContextPack, RusvelError> {
+    let session = state.sessions.load(sid).await?;
+    let goals = state.forge.list_goals(sid).await.unwrap_or_default();
+    let goal_titles: Vec<String> = goals.iter().map(|g| g.title.clone()).collect();
+    let evs = state
+        .events
+        .query(EventFilter {
+            session_id: Some(*sid),
+            limit: Some(16),
+            ..Default::default()
+        })
+        .await
+        .unwrap_or_default();
+    let recent_event_summaries: Vec<String> = evs
+        .into_iter()
+        .rev()
+        .take(10)
+        .map(|e| {
+            let pl = e.payload.to_string();
+            let short = pl.chars().take(120).collect::<String>();
+            format!("{}: {short}", e.kind)
+        })
+        .collect();
+    Ok(ContextPack {
+        session_name: session.name,
+        goal_titles,
+        recent_event_summaries,
+    })
 }
 
 // ── Legacy DepartmentConfig (for backward-compatible JSON responses) ──
@@ -328,6 +365,22 @@ pub async fn dept_chat(
         }
     }
 
+    if let Some(sid_str) = body.session_id.as_ref()
+        && let Ok(u) = Uuid::parse_str(sid_str)
+    {
+        let sid = SessionId::from_uuid(u);
+        if let Ok(pack) = assemble_context_pack(&state, &sid).await {
+            resolved.system_prompt.push_str(&to_prompt_section(&pack));
+        }
+    }
+
+    resolved.system_prompt.push_str(
+        "\n\n--- Platform APIs ---\n\
+         - Webhooks: POST /api/webhooks {name, event_kind} → id + secret; POST /api/webhooks/{id} with body + X-Rusvel-Signature (HMAC-SHA256)\n\
+         - Cron: GET/POST /api/cron; GET/PUT/DELETE /api/cron/{id}; POST /api/cron/tick (manual scheduler tick). Schedules use presets hourly|daily|weekly or cron expressions; jobs enqueue as ScheduledCron. Use event_kind \"forge.daily_briefing\" with schedule daily (or custom) to run the executive daily briefing for that session (S-043).\n\
+         - Jobs: GET /api/jobs?session_id=<uuid>&kinds=<comma-separated>&status=<Queued|Running|...>&limit=<n>\n",
+    );
+
     // Inject engine-specific capabilities into system prompt
     match dept.as_str() {
         "code" => {
@@ -362,7 +415,17 @@ pub async fn dept_chat(
                  - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage}\n\
                  - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile} — default queues ProposalDraft for worker + approval; add \"sync\": true for immediate JSON response\n\
                  - Pipeline stats: GET /api/dept/harvest/pipeline?session_id=<id>\n\
-                 - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>",
+                 - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>\n\
+                 - Record outcome (won/lost): POST /api/dept/harvest/outcome {session_id, opportunity_id, result, notes?}\n\
+                 - List outcomes: GET /api/dept/harvest/outcomes?session_id=<id>&limit=<n>",
+            );
+        }
+        "forge" => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Department Actions ---\n\
+                 Forge mission + briefings:\n\
+                 - Executive brief: GET /api/brief?session_id=<id> or POST /api/brief/generate {session_id}\n\
+                 - Autonomous daily briefing (S-043): POST /api/cron with {session_id, name, schedule: \"daily\", event_kind: \"forge.daily_briefing\", enabled: true} — worker runs generate_brief, persists brief, emits forge.brief.generated.\n",
             );
         }
         "gtm" => {
@@ -548,9 +611,7 @@ pub async fn dept_chat(
                         serde_json::Value::String(conv_id.clone()),
                     );
                 }
-                Event::default()
-                    .event(ev.sse_name())
-                    .data(v.to_string())
+                Event::default().event(ev.sse_name()).data(v.to_string())
             }
             other => {
                 let ag = agent_event_to_ag_ui(&run_id_str, other);
@@ -709,7 +770,10 @@ fn parse_model_ref(model: &str) -> ModelRef {
             "gemini" => ModelProvider::Gemini,
             other => ModelProvider::Other(other.into()),
         };
-        ModelRef { provider, model: name.into() }
+        ModelRef {
+            provider,
+            model: name.into(),
+        }
     } else {
         // Bare model names default to Claude
         ModelRef {
