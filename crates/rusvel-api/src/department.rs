@@ -357,7 +357,7 @@ pub async fn dept_chat(
                  - CDP scan: use source \"cdp\" and query = listing page URL (Chrome remote debugging; RUSVEL_CDP_ENDPOINT)\n\
                  - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id} → score + reasoning\n\
                  - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage}\n\
-                 - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile}\n\
+                 - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile} — default queues ProposalDraft for worker + approval; add \"sync\": true for immediate JSON response\n\
                  - Pipeline stats: GET /api/dept/harvest/pipeline?session_id=<id>\n\
                  - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>",
             );

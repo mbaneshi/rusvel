@@ -9,6 +9,7 @@
 	let jobs: Job[] = $state([]);
 	let loading = $state(true);
 	let busyId = $state<string | null>(null);
+	let rejectNote: Record<string, string> = $state({});
 
 	async function load() {
 		loading = true;
@@ -63,7 +64,9 @@
 	async function reject(id: string) {
 		busyId = id;
 		try {
-			await rejectJob(id);
+			const r = rejectNote[id]?.trim();
+			await rejectJob(id, r || undefined);
+			delete rejectNote[id];
 			jobs = jobs.filter((j) => j.id !== id);
 			await refreshPendingApprovalCount();
 			toast.success('Rejected');
@@ -121,27 +124,41 @@
 								{job.status}
 							</p>
 						</div>
-						<div class="flex shrink-0 gap-2">
-							<Button
-								variant="primary"
-								size="sm"
-								disabled={busyId !== null}
-								loading={busyId === job.id}
-								onclick={() => approve(job.id)}
-							>
-								Approve
-							</Button>
-							<Button
-								variant="danger"
-								size="sm"
-								disabled={busyId !== null}
-								loading={busyId === job.id}
-								onclick={() => reject(job.id)}
-							>
-								Reject
-							</Button>
+						<div class="flex shrink-0 flex-col items-end gap-2">
+							<div class="flex gap-2">
+								<Button
+									variant="primary"
+									size="sm"
+									disabled={busyId !== null}
+									loading={busyId === job.id}
+									onclick={() => approve(job.id)}
+								>
+									Approve
+								</Button>
+								<Button
+									variant="danger"
+									size="sm"
+									disabled={busyId !== null}
+									loading={busyId === job.id}
+									onclick={() => reject(job.id)}
+								>
+									Reject
+								</Button>
+							</div>
 						</div>
 					</div>
+					<label class="sr-only" for="reject-{job.id}">Reject reason (optional)</label>
+					<textarea
+						id="reject-{job.id}"
+						rows="2"
+						placeholder="Optional reason if rejecting…"
+						class="mt-2 w-full max-w-md rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+						value={rejectNote[job.id] ?? ''}
+						oninput={(e) => {
+							const v = (e.currentTarget as HTMLTextAreaElement).value;
+							rejectNote = { ...rejectNote, [job.id]: v };
+						}}
+					></textarea>
 					<pre
 						class="mt-3 max-h-40 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
 					>{formatPayload(job.payload)}</pre>

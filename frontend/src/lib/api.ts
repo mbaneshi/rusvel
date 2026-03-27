@@ -518,10 +518,11 @@ export async function getPendingApprovals(): Promise<Job[]> {
 	return request('/api/approvals');
 }
 
-async function postApprovalAction(path: string): Promise<void> {
+async function postApprovalAction(path: string, body?: Record<string, unknown>): Promise<void> {
 	const res = await fetch(`${BASE}${path}`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' }
+		headers: { 'Content-Type': 'application/json' },
+		body: body !== undefined ? JSON.stringify(body) : undefined
 	});
 	if (!res.ok) {
 		const text = await res.text();
@@ -530,11 +531,13 @@ async function postApprovalAction(path: string): Promise<void> {
 }
 
 export async function approveJob(id: string): Promise<void> {
-	return postApprovalAction(`/api/approvals/${id}/approve`);
+	return postApprovalAction(`/api/approvals/${id}/approve`, {});
 }
 
-export async function rejectJob(id: string): Promise<void> {
-	return postApprovalAction(`/api/approvals/${id}/reject`);
+export async function rejectJob(id: string, reason?: string): Promise<void> {
+	return postApprovalAction(`/api/approvals/${id}/reject`, {
+		...(reason?.trim() ? { reason: reason.trim() } : {})
+	});
 }
 
 // ── Chat (God Agent) ─────────────────────────────────────────

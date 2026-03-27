@@ -13,7 +13,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use rusvel_core::domain::{
-    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, Opportunity, OpportunityStage,
+    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, JobKind, NewJob, Opportunity,
+    OpportunityStage,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContentId, SessionId};
@@ -395,6 +396,11 @@ pub struct ProposalRequest {
     pub session_id: String,
     pub opportunity_id: String,
     pub profile: String,
+    /// When `true`, run [`HarvestEngine::generate_proposal`] inline and return proposal JSON.
+    /// When `false` or omitted (default), enqueue [`JobKind::ProposalDraft`] for the app worker
+    /// and human approval gate (`hold_for_approval`).
+    #[serde(default)]
+    pub sync: bool,
 }
 
 pub async fn harvest_proposal(
@@ -406,11 +412,34 @@ pub async fn harvest_proposal(
         .as_ref()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
     let sid = parse_session_id(&body.session_id)?;
-    let proposal = engine
-        .generate_proposal(&sid, &body.opportunity_id, &body.profile)
+    if body.sync {
+        let proposal = engine
+            .generate_proposal(&sid, &body.opportunity_id, &body.profile)
+            .await
+            .map_err(engine_err)?;
+        return Ok(Json(serde_json::to_value(proposal).map_err(engine_err)?));
+    }
+
+    let job_id = state
+        .jobs
+        .enqueue(NewJob {
+            session_id: sid,
+            kind: JobKind::ProposalDraft,
+            payload: serde_json::json!({
+                "opportunity_id": body.opportunity_id,
+                "profile": body.profile,
+            }),
+            max_retries: 3,
+            metadata: serde_json::json!({}),
+        })
         .await
-        .map_err(engine_err)?;
-    Ok(Json(serde_json::to_value(proposal).map_err(engine_err)?))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "job_id": job_id.to_string(),
+        "status": "queued",
+        "message": "ProposalDraft job queued; the worker generates the proposal and parks it in /api/approvals when ready."
+    })))
 }
 
 #[derive(Debug, Deserialize)]

@@ -7,6 +7,8 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use serde::Deserialize;
+use serde_json::json;
 
 use rusvel_core::domain::{Job, JobFilter, JobStatus};
 use rusvel_core::error::RusvelError;
@@ -55,17 +57,25 @@ pub async fn approve_job(
     Ok(StatusCode::OK)
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct RejectBody {
+    /// Optional human-readable reason stored on `job.metadata.reject_reason`.
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
 /// `POST /api/approvals/{id}/reject` — reject a pending job (sets status to Cancelled).
 pub async fn reject_job(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
+    Json(body): Json<RejectBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let uuid = uuid::Uuid::parse_str(&id)
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid job id".into()))?;
     let job_id = JobId::from_uuid(uuid);
 
     // Reject is only valid for the approval gate; `JobPort::cancel` also allows `Queued`.
-    let job = state
+    let mut job = state
         .storage
         .jobs()
         .get(&job_id)
@@ -78,6 +88,25 @@ pub async fn reject_job(
             StatusCode::CONFLICT,
             format!("job is not awaiting approval (status: {:?})", job.status),
         ));
+    }
+
+    if let Some(r) = body
+        .reason
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+    {
+        if let Some(m) = job.metadata.as_object_mut() {
+            m.insert("reject_reason".into(), json!(r));
+        } else {
+            job.metadata = json!({ "reject_reason": r });
+        }
+        state
+            .storage
+            .jobs()
+            .update(&job)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
     state.jobs.cancel(&job_id).await.map_err(|e| match e {

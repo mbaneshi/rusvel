@@ -377,6 +377,7 @@ async fn post_harvest_proposal_persists_proposal() {
             "session_id": session_a.to_string(),
             "opportunity_id": opp_id,
             "profile": "Senior Rust engineer",
+            "sync": true,
         })),
     )
     .await;
@@ -421,6 +422,41 @@ async fn harvest_session_isolation() {
     assert_eq!(st2, StatusCode::OK);
     let listed: Vec<Value> = serde_json::from_slice(&list_b).unwrap();
     assert!(listed.is_empty());
+}
+
+#[tokio::test]
+async fn post_harvest_proposal_default_queues_job_without_sync() {
+    let (mut router, session_a, _, _, _) = test_router().await;
+    let (st, scan_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/scan",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "sources": ["mock"],
+            "query": "rust",
+        })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    let ops: Vec<Value> = serde_json::from_slice(&scan_body).unwrap();
+    let opp_id = ops[0]["id"].as_str().unwrap();
+
+    let (st2, body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/proposal",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "opportunity_id": opp_id,
+            "profile": "Senior Rust engineer",
+        })),
+    )
+    .await;
+    assert_eq!(st2, StatusCode::OK);
+    let v: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["status"].as_str().unwrap(), "queued");
+    assert!(v["job_id"].as_str().is_some());
 }
 
 /// Sprint S-032: mock scan → score → ProposalDraft job → worker hold → pending approval visible via API.
