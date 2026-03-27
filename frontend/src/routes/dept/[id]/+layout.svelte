@@ -1,10 +1,13 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
-	import { departments } from '$lib/stores';
+	import { departments, contextPanelOpen } from '$lib/stores';
 	import type { DepartmentDef } from '$lib/api';
-	import { MessageSquare, Sliders, Activity, LayoutGrid, Calendar } from 'lucide-svelte';
+	import { MessageSquare, Sliders, Activity, LayoutGrid, Calendar, PanelRightOpen } from 'lucide-svelte';
 	import { deptExtraSections } from '$lib/departmentManifest';
+	import ContextPanel from '$lib/components/shell/ContextPanel.svelte';
 
 	let allDepts: DepartmentDef[] = $state([]);
 	departments.subscribe((v) => (allDepts = v));
@@ -21,6 +24,19 @@
 		if (segment === 'chat') return p.endsWith('/chat') || p === `/dept/${page.params.id}`;
 		return p.endsWith(`/${segment}`);
 	}
+
+	onMount(() => {
+		if (!browser) return;
+		const onKey = (e: KeyboardEvent) => {
+			if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'j') return;
+			const el = e.target as HTMLElement | null;
+			if (el?.closest('input, textarea, [contenteditable="true"]')) return;
+			e.preventDefault();
+			contextPanelOpen.update((v) => !v);
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 </script>
 
 {#if !dept}
@@ -82,9 +98,37 @@
 					{ex.label}
 				</a>
 			{/each}
+
+			<button
+				type="button"
+				class="mt-auto flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+				onclick={() => contextPanelOpen.update((v) => !v)}
+				title="Toggle context panel (⌘J / Ctrl+J)"
+			>
+				<PanelRightOpen size={16} strokeWidth={1.75} class="shrink-0" />
+				<span>Context</span>
+				<kbd class="ml-auto hidden rounded border border-border bg-secondary/80 px-1 font-mono text-[9px] lg:inline"
+					>⌘J</kbd
+				>
+			</button>
 		</aside>
-		<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
-			{@render children()}
+
+		<div class="flex min-h-0 min-w-0 flex-1">
+			<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
+				{@render children()}
+			</div>
+			{#if $contextPanelOpen}
+				<ContextPanel deptId={dept.id} deptTitle={dept.title} />
+			{:else}
+				<button
+					type="button"
+					class="flex w-9 shrink-0 flex-col items-center justify-center gap-1 border-l border-border bg-muted/20 py-2 text-muted-foreground hover:bg-muted/40"
+					onclick={() => contextPanelOpen.set(true)}
+					title="Open context panel (⌘J)"
+				>
+					<PanelRightOpen size={18} strokeWidth={1.75} />
+				</button>
+			{/if}
 		</div>
 	</div>
 {/if}

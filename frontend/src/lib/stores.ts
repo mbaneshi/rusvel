@@ -24,6 +24,14 @@ export const departments = writable<DepartmentDef[]>([]);
 export const commandPaletteOpen = writable(false);
 export const pendingCommand = writable<{ prompt: string } | null>(null);
 
+/** Sprint S-020: right context panel on `/dept/*` (chat, properties, execution). */
+export type ContextPanelMode = 'chat' | 'properties' | 'execution';
+
+export const contextPanelOpen = writable(false);
+export const contextPanelMode = writable<ContextPanelMode>('chat');
+/** JSON payload for Properties mode; set from main content when an entity is selected. */
+export const contextPanelProperties = writable<unknown>(null);
+
 // ── Onboarding state ─────────────────────────────────────────
 export interface OnboardingState {
 	sessionCreated: boolean;

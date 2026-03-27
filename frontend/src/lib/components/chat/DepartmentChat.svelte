@@ -41,8 +41,9 @@
 	let {
 		dept,
 		title = 'Department',
-		suggestedPrompts = []
-	}: { dept: string; title?: string; suggestedPrompts?: string[] } = $props();
+		suggestedPrompts = [],
+		compact = false
+	}: { dept: string; title?: string; suggestedPrompts?: string[]; compact?: boolean } = $props();
 
 	let messages: DisplayMessage[] = $state([]);
 	let conversations: Conversation[] = $state([]);
@@ -274,16 +275,20 @@
 	}
 </script>
 
-<div class="flex h-full flex-col">
+<div class="flex h-full min-h-0 flex-col {compact ? 'text-[11px]' : ''}">
 	<!-- Header -->
-	<div class="flex items-center justify-between border-b border-border bg-card px-3 py-2">
+	<div
+		class="flex shrink-0 items-center justify-between border-b border-border bg-card {compact
+			? 'px-2 py-1.5'
+			: 'px-3 py-2'}"
+	>
 		<div class="flex items-center gap-2">
 			<div
 				class="flex h-6 w-6 items-center justify-center rounded-md bg-chart-2/30 text-chart-2"
 			>
 				<DeptIcon deptId={dept} size={14} strokeWidth={1.75} class="text-chart-2" />
 			</div>
-			<span class="text-sm font-medium text-foreground">{title}</span>
+			<span class="{compact ? 'text-xs' : 'text-sm'} font-medium text-foreground">{title}</span>
 		</div>
 		<div class="flex items-center gap-1">
 			<button
@@ -372,7 +377,7 @@
 	{/if}
 
 	<!-- Messages -->
-	<div bind:this={messagesEl} class="flex-1 overflow-y-auto">
+	<div bind:this={messagesEl} class="min-h-0 flex-1 overflow-y-auto">
 		{#if messages.length === 0}
 			<div class="flex h-full items-center justify-center p-4">
 				<div class="text-center">
@@ -508,7 +513,7 @@
 	{/if}
 
 	<!-- Input -->
-	<div class="border-t border-border p-2">
+	<div class="shrink-0 border-t border-border {compact ? 'p-1.5' : 'p-2'}">
 		<div class="flex items-end gap-2">
 			<textarea
 				bind:this={textareaEl}
