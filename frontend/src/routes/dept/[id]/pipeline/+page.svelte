@@ -29,9 +29,21 @@
 	let proposalJobs = $state<JobListItem[]>([]);
 	let refreshingJobs = $state(false);
 	let dragOverStage = $state<string | null>(null);
+	/** Minimum score (0–100) for cards shown in the Kanban; persisted per session in sessionStorage. */
+	let minScorePercent = $state(0);
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
+
+	function scorePct(row: OpportunityRow): number {
+		const s = row.score;
+		if (typeof s !== 'number' || Number.isNaN(s)) return 0;
+		return s <= 1 ? s * 100 : Math.min(100, s);
+	}
+
+	let filteredRows = $derived(
+		rows.filter((r) => scorePct(r) >= minScorePercent)
+	);
 
 	function normalizeStage(s: string): string {
 		const t = s.replace(/"/g, '').trim();
@@ -50,7 +62,38 @@
 	}
 
 	function byStage(stage: string): OpportunityRow[] {
-		return rows.filter((r) => stageOf(r) === stage);
+		return filteredRows.filter((r) => stageOf(r) === stage);
+	}
+
+	function minScoreStorageKey(): string | null {
+		if (!sessionId) return null;
+		return `rusvel:harvest:${sessionId}:minScorePct`;
+	}
+
+	function hydrateMinScoreFromStorage() {
+		if (!browser || !isHarvest) return;
+		const key = minScoreStorageKey();
+		if (!key) return;
+		const raw = sessionStorage.getItem(key);
+		if (raw === null) {
+			minScorePercent = 0;
+			return;
+		}
+		const n = Number.parseInt(raw, 10);
+		if (!Number.isNaN(n) && n >= 0 && n <= 100) minScorePercent = n;
+	}
+
+	function persistMinScore(v: number) {
+		if (!browser) return;
+		const key = minScoreStorageKey();
+		if (!key) return;
+		sessionStorage.setItem(key, String(v));
+	}
+
+	function setMinScorePercent(v: number) {
+		const clamped = Math.max(0, Math.min(100, Math.round(v)));
+		minScorePercent = clamped;
+		persistMinScore(clamped);
 	}
 
 	async function loadProposalJobs() {
@@ -90,6 +133,7 @@
 
 	$effect(() => {
 		if (!sessionId || !isHarvest) return;
+		hydrateMinScoreFromStorage();
 		void load();
 		void loadProposalJobs();
 		const onVis = () => {
@@ -206,10 +250,59 @@
 	<div class="border-b border-border px-4 py-3">
 		<h1 class="text-lg font-semibold">Opportunity pipeline</h1>
 		<p class="text-xs text-muted-foreground">
-			Kanban by stage — drag cards between columns or use arrows. Minimum score: Harvest config; re-score in
-			Engine tab.
+			Kanban by stage — drag cards between columns or use arrows. Pipeline scan minimum is set in Harvest
+			config; use the slider to hide lower-scoring cards here.
 		</p>
 		{#if isHarvest && sessionId}
+			<div class="mt-3 flex flex-col gap-2 sm:max-w-xl">
+				<div class="flex flex-wrap items-end gap-3">
+					<div class="min-w-[200px] flex-1">
+						<label class="mb-1 block text-[11px] font-medium text-muted-foreground" for="min-score-range">
+							Min. score (show cards at or above)
+						</label>
+						<div class="flex items-center gap-2">
+							<input
+								id="min-score-range"
+								type="range"
+								min="0"
+								max="100"
+								step="1"
+								value={minScorePercent}
+								oninput={(e) =>
+									setMinScorePercent(Number((e.currentTarget as HTMLInputElement).value))}
+								class="h-2 w-full flex-1 cursor-pointer accent-primary"
+								aria-valuemin={0}
+								aria-valuemax={100}
+								aria-valuenow={minScorePercent}
+								aria-label="Minimum opportunity score percent"
+							/>
+							<span class="w-10 shrink-0 text-right font-mono text-xs tabular-nums text-foreground"
+								>{minScorePercent}%</span
+							>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								class="!h-8 shrink-0 !px-2 !text-[10px]"
+								onclick={() => setMinScorePercent(0)}
+							>
+								Reset
+							</Button>
+						</div>
+					</div>
+				</div>
+				{#if rows.length > 0}
+					<p class="text-[11px] text-muted-foreground">
+						Showing <span class="font-medium text-foreground">{filteredRows.length}</span> of
+						<span class="tabular-nums">{rows.length}</span> opportunities
+						{#if filteredRows.length < rows.length}
+							<span class="text-muted-foreground/80">
+								(scores below {minScorePercent}% hidden)</span
+							>
+						{/if}
+					</p>
+				{/if}
+			</div>
 			<div class="mt-3 max-w-md">
 				<Input
 					label="Proposal profile"
@@ -315,12 +408,18 @@
 								>
 									<p class="font-medium leading-snug text-foreground">{o.title}</p>
 									<p class="mt-1 text-[10px] text-muted-foreground">
-										score {(o.score * 100).toFixed(0)}%
+										<span class="text-foreground/90">Score</span>
+										{scorePct(o).toFixed(0)}%
+										<span class="mx-1 text-muted-foreground/60">·</span>
+										<span class="text-foreground/90">Budget</span>
 										{#if o.value_estimate != null && o.value_estimate !== undefined}
-											· ~${o.value_estimate}
+											~${o.value_estimate}
+										{:else}
+											—
 										{/if}
 									</p>
-									<p class="mt-0.5 truncate text-[10px] text-muted-foreground">
+									<p class="mt-0.5 truncate text-[10px] text-muted-foreground" title={typeof o.source === 'string' ? o.source : JSON.stringify(o.source ?? '')}>
+										<span class="text-foreground/80">Source</span>
 										{typeof o.source === 'string' ? o.source : JSON.stringify(o.source ?? '')}
 									</p>
 									<div class="mt-2 flex flex-wrap gap-1">
