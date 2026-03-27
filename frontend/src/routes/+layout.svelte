@@ -4,19 +4,23 @@
 	import OnboardingChecklist from '$lib/components/onboarding/OnboardingChecklist.svelte';
 	import ProductTour from '$lib/components/onboarding/ProductTour.svelte';
 	import CommandPalette from '$lib/components/onboarding/CommandPalette.svelte';
+	import IconRail from '$lib/components/shell/IconRail.svelte';
 	import TopBar from '$lib/components/shell/TopBar.svelte';
-	import DeptBar from '$lib/components/shell/DeptBar.svelte';
 	import { Toaster } from 'svelte-sonner';
 
 	let { children }: { children: Snippet } = $props();
 </script>
 
 <div class="flex h-screen flex-col bg-background text-foreground">
-	<TopBar />
-	<DeptBar />
-	<main class="min-h-0 flex-1 overflow-hidden">
-		{@render children()}
-	</main>
+	<div class="flex min-h-0 flex-1 overflow-hidden">
+		<IconRail />
+		<div class="flex min-h-0 min-w-0 flex-1 flex-col">
+			<TopBar />
+			<main class="min-h-0 flex-1 overflow-hidden">
+				{@render children()}
+			</main>
+		</div>
+	</div>
 </div>
 
 <Toaster richColors position="bottom-right" theme="dark" />

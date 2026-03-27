@@ -1,25 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/state';
 	import { getSessions, createSession, getDepartments } from '$lib/api';
 	import {
 		sessions,
 		activeSession,
 		departments,
-		pendingApprovalCount,
 		refreshPendingApprovalCount,
 		commandPaletteOpen
 	} from '$lib/stores';
-	import {
-		MessageSquare,
-		LayoutDashboard,
-		Database,
-		GitBranch,
-		Settings,
-		ClipboardCheck,
-		TerminalSquare
-	} from 'lucide-svelte';
-
 	let loading = $state(true);
 	let error = $state('');
 	let showNewSession = $state(false);
@@ -30,16 +18,6 @@
 	let currentActive: import('$lib/api').SessionSummary | null = $state(null);
 	sessions.subscribe((v) => (currentSessions = v));
 	activeSession.subscribe((v) => (currentActive = v));
-
-	const topLinks = [
-		{ href: '/chat', label: 'Chat', icon: MessageSquare, tour: 'nav-chat' },
-		{ href: '/approvals', label: 'Approvals', icon: ClipboardCheck, tour: '' },
-		{ href: '/', label: 'Dashboard', icon: LayoutDashboard, tour: 'nav-dashboard' },
-		{ href: '/database/schema', label: 'Database', icon: Database, tour: '' },
-		{ href: '/flows', label: 'Flows', icon: GitBranch, tour: '' },
-		{ href: '/terminal', label: 'Terminal', icon: TerminalSquare, tour: '' },
-		{ href: '/settings', label: 'Settings', icon: Settings, tour: 'nav-settings' }
-	];
 
 	onMount(async () => {
 		try {
@@ -98,18 +76,6 @@
 <header
 	class="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-sidebar px-3 text-sidebar-foreground"
 >
-	<a
-		href="/"
-		data-tour="sidebar-logo"
-		class="flex shrink-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-sidebar-accent"
-	>
-		<span
-			class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
-			>R</span
-		>
-		<span class="hidden text-lg font-semibold tracking-tight sm:inline">RUSVEL</span>
-	</a>
-
 	<div class="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" data-tour="session-switcher">
 		{#if loading}
 			<span class="text-xs text-muted-foreground">Sessions…</span>
@@ -162,35 +128,6 @@
 			<span class="text-xs text-destructive">{error}</span>
 		{/if}
 	</div>
-
-	<nav class="hidden items-center gap-0.5 md:flex" aria-label="App">
-		{#each topLinks as item}
-			{@const Icon = item.icon}
-			{@const isActive =
-				item.href === '/'
-					? page.url.pathname === '/'
-					: page.url.pathname === item.href || page.url.pathname.startsWith(item.href + '/')}
-			<a
-				href={item.href}
-				data-tour={item.tour || undefined}
-				class="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs transition-colors
-					{isActive
-					? 'bg-sidebar-primary/15 text-sidebar-primary font-medium'
-					: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
-				title={item.label}
-			>
-				<Icon size={16} strokeWidth={1.75} class="shrink-0" />
-				<span class="hidden lg:inline">{item.label}</span>
-				{#if item.href === '/approvals' && $pendingApprovalCount > 0}
-					<span
-						class="inline-flex min-h-[1.125rem] min-w-[1.125rem] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold tabular-nums leading-none text-destructive-foreground"
-					>
-						{$pendingApprovalCount > 99 ? '99+' : $pendingApprovalCount}
-					</span>
-				{/if}
-			</a>
-		{/each}
-	</nav>
 
 	<button
 		type="button"

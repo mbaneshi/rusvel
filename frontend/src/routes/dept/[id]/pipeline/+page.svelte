@@ -15,6 +15,7 @@
 	import Input from '$lib/components/ui/Input.svelte';
 
 	const STAGES = ['Cold', 'Contacted', 'Qualified', 'ProposalSent', 'Won', 'Lost'] as const;
+	const DND_PAYLOAD = 'application/x-rusvel-opp+json';
 
 	let sessionId = $state<string | null>(null);
 	activeSession.subscribe((s) => (sessionId = s?.id ?? null));
@@ -27,6 +28,7 @@
 	let proposalProfile = $state('default');
 	let proposalJobs = $state<JobListItem[]>([]);
 	let refreshingJobs = $state(false);
+	let dragOverStage = $state<string | null>(null);
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
@@ -104,6 +106,58 @@
 		};
 	});
 
+	$effect(() => {
+		if (!browser) return;
+		const clearDrag = () => {
+			dragOverStage = null;
+		};
+		window.addEventListener('dragend', clearDrag);
+		return () => window.removeEventListener('dragend', clearDrag);
+	});
+
+	function dragStart(e: DragEvent, oppId: string, fromStage: string) {
+		if (!e.dataTransfer || busy !== null || busyProposal !== null) {
+			e.preventDefault();
+			return;
+		}
+		e.dataTransfer.setData(DND_PAYLOAD, JSON.stringify({ oppId, fromStage }));
+		e.dataTransfer.effectAllowed = 'move';
+	}
+
+	function dragOverColumn(e: DragEvent, stage: string) {
+		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'move';
+		}
+		dragOverStage = stage;
+	}
+
+	function dragOverCard(e: DragEvent, stage: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragOverColumn(e, stage);
+	}
+
+	async function dropOnColumn(e: DragEvent, targetStage: string) {
+		e.preventDefault();
+		dragOverStage = null;
+		const raw = e.dataTransfer?.getData(DND_PAYLOAD);
+		if (!raw) return;
+		try {
+			const { oppId, fromStage } = JSON.parse(raw) as { oppId: string; fromStage: string };
+			if (fromStage === targetStage) return;
+			await moveTo(oppId, targetStage);
+		} catch {
+			/* ignore */
+		}
+	}
+
+	async function dropOnCard(e: DragEvent, targetStage: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		await dropOnColumn(e, targetStage);
+	}
+
 	async function moveTo(oppId: string, stage: string) {
 		if (!sessionId) return;
 		busy = oppId;
@@ -152,7 +206,8 @@
 	<div class="border-b border-border px-4 py-3">
 		<h1 class="text-lg font-semibold">Opportunity pipeline</h1>
 		<p class="text-xs text-muted-foreground">
-			Kanban by stage. Minimum score filter: use Harvest config; re-score in Engine tab.
+			Kanban by stage — drag cards between columns or use arrows. Minimum score: Harvest config; re-score in
+			Engine tab.
 		</p>
 		{#if isHarvest && sessionId}
 			<div class="mt-3 max-w-md">
@@ -224,16 +279,40 @@
 		<div class="min-h-0 flex-1 overflow-x-auto p-3">
 			<div class="flex min-w-max gap-3">
 				{#each STAGES as stage}
-					<div class="flex w-56 shrink-0 flex-col rounded-lg border border-border bg-card">
+					<div
+						role="region"
+						aria-label={`${stage} column`}
+						class="flex w-56 shrink-0 flex-col rounded-lg border bg-card transition-shadow {dragOverStage ===
+						stage
+							? 'border-primary ring-2 ring-primary/40'
+							: 'border-border'}"
+						ondragover={(e) => dragOverColumn(e, stage)}
+						ondrop={(e) => dropOnColumn(e, stage)}
+					>
 						<div
 							class="border-b border-border px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
 						>
 							{stage}
 							<span class="text-muted-foreground/70">({byStage(stage).length})</span>
 						</div>
-						<div class="flex max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto p-2">
+						<div
+							role="list"
+							class="flex min-h-24 max-h-[calc(100vh-14rem)] flex-col gap-2 overflow-y-auto p-2"
+							ondragover={(e) => dragOverColumn(e, stage)}
+							ondrop={(e) => dropOnColumn(e, stage)}
+						>
 							{#each byStage(stage) as o (o.id)}
-								<div class="rounded-md border border-border bg-secondary/40 p-2 text-xs shadow-sm">
+								<div
+									role="listitem"
+									class="rounded-md border border-border bg-secondary/40 p-2 text-xs shadow-sm {busy ===
+									o.id
+										? 'opacity-60'
+										: 'cursor-grab active:cursor-grabbing'}"
+									draggable={busy === null && busyProposal === null}
+									ondragstart={(e) => dragStart(e, o.id, stage)}
+									ondragover={(e) => dragOverCard(e, stage)}
+									ondrop={(e) => dropOnCard(e, stage)}
+								>
 									<p class="font-medium leading-snug text-foreground">{o.title}</p>
 									<p class="mt-1 text-[10px] text-muted-foreground">
 										score {(o.score * 100).toFixed(0)}%
