@@ -29,6 +29,14 @@ impl DealId {
     }
 }
 
+impl std::str::FromStr for DealId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
+}
+
 impl std::fmt::Display for DealId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)

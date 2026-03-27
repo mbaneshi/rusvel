@@ -10,6 +10,8 @@
 		Sliders,
 		LayoutGrid,
 		Calendar,
+		Kanban,
+		Users,
 		PanelRightOpen,
 		PanelBottomOpen,
 		Zap,
@@ -148,6 +150,10 @@
 						<LayoutGrid size={16} strokeWidth={1.75} class="shrink-0" />
 					{:else if ex.segment === 'calendar'}
 						<Calendar size={16} strokeWidth={1.75} class="shrink-0" />
+					{:else if ex.segment === 'deals'}
+						<Kanban size={16} strokeWidth={1.75} class="shrink-0" />
+					{:else if ex.segment === 'contacts'}
+						<Users size={16} strokeWidth={1.75} class="shrink-0" />
 					{/if}
 					{ex.label}
 				</a>

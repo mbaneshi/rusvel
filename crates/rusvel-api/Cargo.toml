@@ -18,6 +18,7 @@ code-engine = { workspace = true }
 content-engine = { workspace = true }
 harvest-engine = { workspace = true }
 flow-engine = { workspace = true }
+gtm-engine = { workspace = true }
 rusvel-cdp = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }

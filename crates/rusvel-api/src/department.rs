@@ -365,6 +365,16 @@ pub async fn dept_chat(
                  - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>",
             );
         }
+        "gtm" => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Department Actions ---\n\
+                 GTM CRM (contacts, deals, invoicing) uses shared storage:\n\
+                 - List contacts: GET /api/dept/gtm/contacts?session_id=<id>\n\
+                 - Create contact: POST /api/dept/gtm/contacts {session_id, name, email, company?, role?, tags?, links?}\n\
+                 - List deals (with contact names for UI): GET /api/dept/gtm/deals?session_id=<id>&stage=<optional>\n\
+                 - Advance deal stage: POST /api/dept/gtm/deals/advance {session_id, deal_id, stage} — stages: Lead, Qualified, Proposal, Negotiation, Won, Lost",
+            );
+        }
         _ => {}
     }
 
