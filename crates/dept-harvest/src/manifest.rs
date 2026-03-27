@@ -3,11 +3,12 @@
 //! No side effects — pure data declaration.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_HARVEST;
 use rusvel_core::department::*;
 
 pub fn harvest_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "harvest".into(),
+        id: DEPT_HARVEST.into(),
         name: "Harvest Department".into(),
         description: "Opportunity discovery, scoring, proposal generation, pipeline management"
             .into(),

@@ -1,11 +1,12 @@
 //! Static manifest for the Legal Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_LEGAL;
 use rusvel_core::department::*;
 
 pub fn legal_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "legal".into(),
+        id: DEPT_LEGAL.into(),
         name: "Legal Department".into(),
         description: "Contracts, IP protection, terms of service, GDPR compliance, licensing, privacy policies".into(),
         icon: "\u{00a7}".into(),

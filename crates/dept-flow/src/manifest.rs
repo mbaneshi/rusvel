@@ -3,11 +3,12 @@
 //! No side effects — pure data declaration.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_FLOW;
 use rusvel_core::department::*;
 
 pub fn flow_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "flow".into(),
+        id: DEPT_FLOW.into(),
         name: "Flow Department".into(),
         description: "DAG workflow automation — create, execute, and monitor workflows".into(),
         icon: "~".into(),

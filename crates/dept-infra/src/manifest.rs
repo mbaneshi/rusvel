@@ -1,11 +1,12 @@
 //! Static manifest for the Infra Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_INFRA;
 use rusvel_core::department::*;
 
 pub fn infra_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "infra".into(),
+        id: DEPT_INFRA.into(),
         name: "Infra Department".into(),
         description: "CI/CD pipelines, deployments, monitoring, incident response, performance, cost analysis".into(),
         icon: ">".into(),

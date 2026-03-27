@@ -3,11 +3,12 @@
 //! No side effects — pure data declaration.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_CONTENT;
 use rusvel_core::department::*;
 
 pub fn content_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "content".into(),
+        id: DEPT_CONTENT.into(),
         name: "Content Department".into(),
         description: "Content creation, platform adaptation, publishing strategy".into(),
         icon: "*".into(),

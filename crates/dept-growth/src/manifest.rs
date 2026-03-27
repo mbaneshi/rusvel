@@ -1,11 +1,12 @@
 //! Static manifest for the Growth Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_GROWTH;
 use rusvel_core::department::*;
 
 pub fn growth_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "growth".into(),
+        id: DEPT_GROWTH.into(),
         name: "Growth Department".into(),
         description: "Funnel optimization, conversion tracking, cohort analysis, churn prediction, retention strategies, KPI dashboards".into(),
         icon: "&".into(),

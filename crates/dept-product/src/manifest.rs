@@ -1,11 +1,12 @@
 //! Static manifest for the Product Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_PRODUCT;
 use rusvel_core::department::*;
 
 pub fn product_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "product".into(),
+        id: DEPT_PRODUCT.into(),
         name: "Product Department".into(),
         description: "Product roadmaps, feature prioritization, pricing strategy, user feedback analysis, A/B testing".into(),
         icon: "@".into(),

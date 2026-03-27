@@ -1,11 +1,12 @@
 //! Static manifest for the Support Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_SUPPORT;
 use rusvel_core::department::*;
 
 pub fn support_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "support".into(),
+        id: DEPT_SUPPORT.into(),
         name: "Support Department".into(),
         description: "Customer support tickets, knowledge base, NPS tracking, auto-triage, customer success".into(),
         icon: "?".into(),

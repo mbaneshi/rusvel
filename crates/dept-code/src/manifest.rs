@@ -3,11 +3,12 @@
 //! No side effects — pure data declaration.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_CODE;
 use rusvel_core::department::*;
 
 pub fn code_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "code".into(),
+        id: DEPT_CODE.into(),
         name: "Code Department".into(),
         description: "Code intelligence, implementation, debugging, testing, refactoring".into(),
         icon: "#".into(),

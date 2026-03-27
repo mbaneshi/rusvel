@@ -1,0 +1,14 @@
+pub const DEPT_FORGE: &str = "forge";
+pub const DEPT_CODE: &str = "code";
+pub const DEPT_CONTENT: &str = "content";
+pub const DEPT_HARVEST: &str = "harvest";
+pub const DEPT_GTM: &str = "gtm";
+pub const DEPT_FINANCE: &str = "finance";
+pub const DEPT_PRODUCT: &str = "product";
+pub const DEPT_GROWTH: &str = "growth";
+pub const DEPT_DISTRO: &str = "distro";
+pub const DEPT_LEGAL: &str = "legal";
+pub const DEPT_SUPPORT: &str = "support";
+pub const DEPT_INFRA: &str = "infra";
+pub const DEPT_FLOW: &str = "flow";
+pub const DEPT_MESSAGING: &str = "messaging";

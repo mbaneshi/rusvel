@@ -26,6 +26,7 @@
 // ── Modules ────────────────────────────────────────────────────────
 
 pub mod config;
+pub mod constants;
 pub mod department;
 pub mod domain;
 pub mod engine;

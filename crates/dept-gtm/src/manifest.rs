@@ -1,11 +1,12 @@
 //! Static manifest for the go-to-market department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_GTM;
 use rusvel_core::department::*;
 
 pub fn gtm_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "gtm".into(),
+        id: DEPT_GTM.into(),
         name: "GoToMarket Department".into(),
         description: "CRM, outreach sequences, deal management, invoicing".into(),
         icon: "^".into(),

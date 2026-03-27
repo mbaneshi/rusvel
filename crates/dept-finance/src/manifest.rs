@@ -1,11 +1,12 @@
 //! Static manifest for the Finance Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_FINANCE;
 use rusvel_core::department::*;
 
 pub fn finance_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "finance".into(),
+        id: DEPT_FINANCE.into(),
         name: "Finance Department".into(),
         description: "Revenue tracking, expense management, tax optimization, runway forecasting, P&L reports, unit economics".into(),
         icon: "%".into(),

@@ -5,11 +5,12 @@ use forge_engine::{
     persona_contributions_for_manifest,
 };
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_FORGE;
 use rusvel_core::department::*;
 
 pub fn forge_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "forge".into(),
+        id: DEPT_FORGE.into(),
         name: "Forge Department".into(),
         description: "Agent orchestration, goal planning, mission management, daily plans, reviews"
             .into(),

@@ -1,11 +1,12 @@
 //! Static manifest for the Distribution Department.
 
 use rusvel_core::config::LayeredConfig;
+use rusvel_core::constants::DEPT_DISTRO;
 use rusvel_core::department::*;
 
 pub fn distro_manifest() -> DepartmentManifest {
     DepartmentManifest {
-        id: "distro".into(),
+        id: DEPT_DISTRO.into(),
         name: "Distribution Department".into(),
         description: "Marketplace listings, SEO optimization, affiliate programs, partnerships, API distribution channels".into(),
         icon: "!".into(),
