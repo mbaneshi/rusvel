@@ -1,9 +1,10 @@
-//! GoToMarket Department — DepartmentApp implementation.
+//! Go-to-market department — [`DepartmentApp`](rusvel_core::department::DepartmentApp) implementation.
 //!
 //! Wraps `gtm-engine` (CRM, outreach, invoicing) with the
 //! ADR-014 department contract.
 
 mod manifest;
+mod tools;
 
 use std::sync::{Arc, OnceLock};
 
@@ -48,7 +49,9 @@ impl DepartmentApp for GtmDepartment {
             ctx.agent.clone(),
             ctx.jobs.clone(),
         ));
-        let _ = self.engine.set(engine);
+        let _ = self.engine.set(engine.clone());
+
+        tools::register(&engine, ctx);
 
         tracing::info!("GTM department registered");
         Ok(())
@@ -82,5 +85,10 @@ mod tests {
         let m2 = dept.manifest();
         assert_eq!(m1.id, m2.id);
         assert_eq!(m1.quick_actions.len(), m2.quick_actions.len());
+    }
+
+    #[test]
+    fn agent_tool_ids_match_sprint_manifest() {
+        assert_eq!(crate::tools::GTM_TOOL_IDS.len(), 5);
     }
 }

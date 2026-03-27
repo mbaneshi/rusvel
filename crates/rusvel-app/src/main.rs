@@ -1301,6 +1301,7 @@ async fn main() -> Result<()> {
             tools: tools.clone(),
             terminal: Some(terminal_for_flow.clone()),
             cdp: Some(cdp_client.clone()),
+            auth: rusvel_api::auth::AuthConfig::from_env(),
         };
 
         let frontend_dir = [
@@ -1406,6 +1407,7 @@ async fn main() -> Result<()> {
             tools: tools.clone(),
             terminal: Some(terminal_for_flow.clone()),
             cdp: Some(cdp_client.clone()),
+            auth: rusvel_api::auth::AuthConfig::from_env(),
         };
 
         // Look for frontend build in known locations (filesystem first)

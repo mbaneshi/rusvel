@@ -1,4 +1,4 @@
-//! Static manifest for the GoToMarket Department.
+//! Static manifest for the go-to-market department.
 
 use rusvel_core::config::LayeredConfig;
 use rusvel_core::department::*;

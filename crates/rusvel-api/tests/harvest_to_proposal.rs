@@ -265,6 +265,7 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         tools,
         terminal: None,
         cdp: None,
+        auth: rusvel_api::auth::AuthConfig::from_env(),
     };
 
     (

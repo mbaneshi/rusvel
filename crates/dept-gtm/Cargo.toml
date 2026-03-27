@@ -11,6 +11,7 @@ description = "GoToMarket Department — DepartmentApp wrapper for gtm-engine"
 rusvel-core = { workspace = true }
 gtm-engine = { path = "../gtm-engine" }
 async-trait = { workspace = true }
+chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

@@ -133,6 +133,7 @@ pub struct TestHarness {
     pub mock_twitter: Arc<MockPlatformAdapter>,
 }
 
+#[allow(dead_code)]
 pub async fn json_request(
     router: &mut Router,
     method: &str,
@@ -156,7 +157,12 @@ pub async fn json_request(
     (status, bytes.to_vec())
 }
 
+#[allow(dead_code)]
 pub async fn build_harness() -> TestHarness {
+    build_harness_with_auth(rusvel_api::auth::AuthConfig::from_env()).await
+}
+
+pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> TestHarness {
     let base = std::env::temp_dir().join(format!("rusvel-api-ict-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&base).expect("temp dir");
     let db_path = base.join("rusvel.db");
@@ -236,6 +242,7 @@ pub async fn build_harness() -> TestHarness {
         tools,
         terminal: None,
         cdp: None,
+        auth,
     };
 
     let router = build_router(state);

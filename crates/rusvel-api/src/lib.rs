@@ -9,6 +9,7 @@
 pub mod agents;
 pub mod analytics;
 pub mod approvals;
+pub mod auth;
 pub mod browser;
 pub mod build_cmd;
 pub mod capability;
@@ -83,6 +84,8 @@ pub struct AppState {
     pub terminal: Option<Arc<dyn TerminalPort>>,
     /// Chrome CDP client (passive capture + actions); `None` when not wired.
     pub cdp: Option<Arc<rusvel_cdp::CdpClient>>,
+    /// Bearer token auth (opt-in via `RUSVEL_API_TOKEN`); see [`auth::AuthConfig`].
+    pub auth: auth::AuthConfig,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -344,7 +347,7 @@ pub fn build_router_with_frontend(
             get(browser::browser_captures_stream),
         )
         .route("/api/browser/act", axum::routing::post(browser::browser_act))
-        .with_state(shared);
+        .with_state(shared.clone());
 
     // Serve frontend SPA if build directory exists.
     let app = if let Some(dir) = frontend_dir.filter(|d| d.exists()) {
@@ -371,12 +374,16 @@ pub fn build_router_with_frontend(
         api
     };
 
-    app.layer(
+    app    .layer(
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
             .allow_headers(Any),
     )
+    .layer(axum::middleware::from_fn_with_state(
+        shared.clone(),
+        auth::bearer_auth,
+    ))
     .layer(TraceLayer::new_for_http())
 }
 
