@@ -4,7 +4,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use cron::Schedule;
 use rusvel_core::domain::{JobKind, NewJob, ObjectFilter};
 use rusvel_core::error::{Result, RusvelError};
@@ -13,8 +13,8 @@ use rusvel_core::ports::{JobPort, ObjectStore, StoragePort};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// Object-store `kind` for persisted schedules (plan: bucket `cron_schedules`).
-pub const CRON_SCHEDULE_OBJECT_KIND: &str = "cron_schedule";
+/// Object-store `kind` for persisted schedules (S-041 bucket `cron_schedules`).
+pub const CRON_SCHEDULE_OBJECT_KIND: &str = "cron_schedules";
 
 /// Persisted schedule row.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn five_field_unix_wraps() {
         let s = parse_schedule("0 * * * *").unwrap();
-        let next = next_fire_after(&s, Utc::now() - Duration::hours(1));
+        let next = next_fire_after(&s, Utc::now() - chrono::Duration::hours(1));
         assert!(next.is_some());
     }
 }
