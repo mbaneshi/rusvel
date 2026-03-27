@@ -9,10 +9,14 @@ use rusvel_core::id::EventId;
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
 
 pub mod crm;
+pub mod email;
 pub mod invoice;
 pub mod outreach;
 
 pub use crm::{CrmManager, Deal, DealId, DealStage};
+pub use email::{
+    send_email_with_event, EmailAdapter, EmailMessage, MockEmailAdapter, SmtpEmailAdapter,
+};
 pub use invoice::{Invoice, InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 pub use outreach::{
     FollowUp, FollowUpId, OutreachManager, OutreachSequence, SequenceId, SequenceStatus,
@@ -21,6 +25,7 @@ pub use outreach::{
 
 pub mod events {
     pub const OUTREACH_SENT: &str = "gtm.outreach.sent";
+    pub const EMAIL_SENT: &str = "gtm.email.sent";
     pub const DEAL_UPDATED: &str = "gtm.deal.updated";
     pub const CONTACT_ADDED: &str = "gtm.contact.added";
     pub const INVOICE_CREATED: &str = "gtm.invoice.created";

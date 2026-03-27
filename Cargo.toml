@@ -120,6 +120,14 @@ toml = "0.8"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
 
+# Email (GTM outreach)
+lettre = { version = "0.11", default-features = false, features = [
+    "tokio1",
+    "tokio1-native-tls",
+    "smtp-transport",
+    "builder",
+] }
+
 # ID generation
 uuid = { version = "1", features = ["v7", "serde"] }
 

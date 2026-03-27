@@ -10,6 +10,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+lettre = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
