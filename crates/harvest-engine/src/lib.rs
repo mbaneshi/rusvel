@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use rusvel_core::domain::BrowserEvent;
 use rusvel_core::engine::Engine;
-use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort};
+use rusvel_core::domain::VectorSearchResult;
+use rusvel_core::ports::{AgentPort, BrowserPort, EmbeddingPort, EventPort, StoragePort, VectorStorePort};
 use rusvel_core::{
     Capability, Contact, ContactId, Event, EventId, HealthStatus, ObjectFilter, Opportunity,
     OpportunityId, OpportunitySource, OpportunityStage, Result, RusvelError, SessionId,
@@ -44,6 +45,24 @@ pub(crate) struct StoredProposalRecord {
 use scorer::OpportunityScorer;
 use source::HarvestSource;
 
+fn filter_session_outcome_hits(results: Vec<VectorSearchResult>, sid: &str) -> Vec<String> {
+    results
+        .into_iter()
+        .filter(|r| {
+            r.entry.metadata.get("kind").and_then(|v| v.as_str()) == Some("harvest_outcome")
+                && r.entry.metadata.get("session_id").and_then(|v| v.as_str()) == Some(sid)
+        })
+        .take(5)
+        .map(|r| {
+            format!(
+                "- (similar outcome, score={:.2}) {}",
+                r.score,
+                r.entry.content.chars().take(120).collect::<String>()
+            )
+        })
+        .collect()
+}
+
 /// Configuration for the Harvest engine.
 #[derive(Debug, Clone)]
 pub struct HarvestConfig {
@@ -69,6 +88,8 @@ pub struct HarvestEngine {
     #[allow(dead_code)]
     browser: Option<Arc<dyn BrowserPort>>,
     config: HarvestConfig,
+    /// Optional RAG: embed outcomes and retrieve similar rows for scoring (S-044 extension).
+    rag: std::sync::Mutex<Option<(Arc<dyn EmbeddingPort>, Arc<dyn VectorStorePort>)>>,
 }
 
 impl HarvestEngine {
@@ -79,6 +100,20 @@ impl HarvestEngine {
             agent: None,
             browser: None,
             config: HarvestConfig::default(),
+            rag: std::sync::Mutex::new(None),
+        }
+    }
+
+    /// Wire session-scoped embedding + vector store (same KB as knowledge when host configures both).
+    pub fn configure_rag(
+        &self,
+        embedding: Option<Arc<dyn EmbeddingPort>>,
+        vector_store: Option<Arc<dyn VectorStorePort>>,
+    ) {
+        if let (Some(e), Some(v)) = (embedding, vector_store) {
+            if let Ok(mut g) = self.rag.lock() {
+                *g = Some((e, v));
+            }
         }
     }
 
@@ -124,10 +159,63 @@ impl HarvestEngine {
         }
     }
 
-    async fn scoring_outcome_hints(&self, session_id: &SessionId) -> Vec<String> {
-        outcomes::recent_outcome_prompt_lines(&self.storage, session_id, 12)
+    async fn scoring_outcome_hints_for_raw(
+        &self,
+        session_id: &SessionId,
+        raw: &source::RawOpportunity,
+    ) -> Vec<String> {
+        let mut lines = outcomes::recent_outcome_prompt_lines(&self.storage, session_id, 12)
             .await
-            .unwrap_or_default()
+            .unwrap_or_default();
+        lines.extend(self.vector_outcome_hints(session_id, raw).await);
+        lines
+    }
+
+    async fn vector_outcome_hints(
+        &self,
+        session_id: &SessionId,
+        raw: &source::RawOpportunity,
+    ) -> Vec<String> {
+        let (emb, vs) = match self.rag.lock().ok().and_then(|g| g.clone()) {
+            Some(pair) => pair,
+            None => return vec![],
+        };
+        let query_text = format!("{} {}", raw.title, raw.description);
+        let Ok(qv) = emb.embed_one(&query_text).await else {
+            return vec![];
+        };
+        let Ok(results) = vs.search(&qv, 12).await else {
+            return vec![];
+        };
+        let sid = session_id.to_string();
+        filter_session_outcome_hits(results, &sid)
+    }
+
+    async fn index_outcome_vector(&self, record: &HarvestOutcomeRecord) -> Result<()> {
+        let (emb, vs) = match self.rag.lock().ok().and_then(|g| g.clone()) {
+            Some(p) => p,
+            None => return Ok(()),
+        };
+        let title = record
+            .opportunity_snapshot
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let text = format!("{title} {:?} {}", record.result, record.notes);
+        let vec = emb.embed_one(&text).await?;
+        let id = format!("harvest_outcome_{}", record.id);
+        vs.upsert(
+            &id,
+            &text,
+            vec,
+            serde_json::json!({
+                "session_id": record.session_id.to_string(),
+                "outcome_id": record.id,
+                "kind": "harvest_outcome",
+            }),
+        )
+        .await?;
+        Ok(())
     }
 
     /// Scan a source, score results, store them, and return opportunities.
@@ -144,19 +232,18 @@ impl HarvestEngine {
         .await;
 
         let raw_items = source.scan().await?;
-        let hints = self.scoring_outcome_hints(session_id).await;
-        let scorer = OpportunityScorer::new(
-            self.agent.clone(),
-            self.config.skills.clone(),
-            self.config.min_budget,
-        )
-        .with_scoring_session(*session_id)
-        .with_outcome_hints(hints);
-
         let pipe = Pipeline::new(self.storage.clone());
         let mut results = Vec::new();
 
         for raw in &raw_items {
+            let hints = self.scoring_outcome_hints_for_raw(session_id, raw).await;
+            let scorer = OpportunityScorer::new(
+                self.agent.clone(),
+                self.config.skills.clone(),
+                self.config.min_budget,
+            )
+            .with_scoring_session(*session_id)
+            .with_outcome_hints(hints);
             let scored = scorer.score(raw).await?;
 
             let opportunity = Opportunity {
@@ -236,7 +323,7 @@ impl HarvestEngine {
             source_data: serde_json::json!({}),
         };
 
-        let hints = self.scoring_outcome_hints(session_id).await;
+        let hints = self.scoring_outcome_hints_for_raw(session_id, &raw).await;
         let scorer = OpportunityScorer::new(
             self.agent.clone(),
             self.config.skills.clone(),
@@ -400,6 +487,9 @@ impl HarvestEngine {
         let record =
             outcomes::record_outcome(&self.storage, session_id, opportunity_id, result, notes)
                 .await?;
+        if let Err(e) = self.index_outcome_vector(&record).await {
+            tracing::warn!("Outcome vector index skipped: {e}");
+        }
         self.emit(
             session_id,
             events::OUTCOME_RECORDED,

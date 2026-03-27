@@ -48,11 +48,11 @@ impl DepartmentApp for HarvestDepartment {
     }
 
     async fn register(&self, ctx: &mut RegistrationContext) -> Result<()> {
-        let engine = Arc::new(
-            HarvestEngine::new(ctx.storage.clone())
-                .with_events(ctx.events.clone())
-                .with_agent(ctx.agent.clone()),
-        );
+        let harvest = HarvestEngine::new(ctx.storage.clone())
+            .with_events(ctx.events.clone())
+            .with_agent(ctx.agent.clone());
+        harvest.configure_rag(ctx.embedding.clone(), ctx.vector_store.clone());
+        let engine = Arc::new(harvest);
         let _ = self.engine.set(engine);
 
         tracing::info!("Harvest department registered");

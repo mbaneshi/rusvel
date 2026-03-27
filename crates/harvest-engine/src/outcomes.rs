@@ -1,7 +1,8 @@
 //! Record won/lost/withdrawn outcomes for opportunities to improve scoring prompts (S-044).
 //!
-//! Stored in [`ObjectStore`] kind `harvest_outcome`. Vector indexing for similarity search is a
-//! future extension; the scorer consumes recent outcomes as few-shot hints in the LLM prompt.
+//! Stored in [`ObjectStore`] kind `harvest_outcome`. When the host wires embedding + vector store
+//! via `HarvestEngine::configure_rag`, outcomes are upserted for similarity retrieval during
+//! scoring.
 
 use std::sync::Arc;
 
