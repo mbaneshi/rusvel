@@ -5,6 +5,7 @@
 	import {
 		getHarvestOpportunities,
 		postHarvestAdvance,
+		postHarvestProposal,
 		type OpportunityRow
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
@@ -18,6 +19,7 @@
 	let rows: OpportunityRow[] = $state([]);
 	let loading = $state(true);
 	let busy = $state<string | null>(null);
+	let busyProposal = $state<string | null>(null);
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
@@ -76,6 +78,31 @@
 			busy = null;
 		}
 	}
+
+	async function queueProposal(oppId: string) {
+		if (!sessionId) return;
+		busyProposal = oppId;
+		try {
+			const res = await postHarvestProposal(sessionId, oppId, 'default');
+			if (
+				res &&
+				typeof res === 'object' &&
+				'status' in res &&
+				res.status === 'queued' &&
+				'job_id' in res &&
+				typeof (res as { job_id: unknown }).job_id === 'string'
+			) {
+				const id = (res as { job_id: string }).job_id;
+				toast.success(`Proposal queued (job ${id}). Check Approvals when ready.`);
+			} else {
+				toast.success('Proposal request sent.');
+			}
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Proposal queue failed');
+		} finally {
+			busyProposal = null;
+		}
+	}
 </script>
 
 <div class="flex h-full min-h-0 flex-col overflow-hidden">
@@ -123,13 +150,23 @@
 										{typeof o.source === 'string' ? o.source : JSON.stringify(o.source ?? '')}
 									</p>
 									<div class="mt-2 flex flex-wrap gap-1">
+										<Button
+											variant="outline"
+											size="sm"
+											class="!h-7 !px-1.5 !text-[10px]"
+											disabled={busy !== null || busyProposal !== null}
+											loading={busyProposal === o.id}
+											onclick={() => queueProposal(o.id)}
+										>
+											Queue proposal
+										</Button>
 										{#each STAGES as next}
 											{#if next !== stage}
 												<Button
 													variant="secondary"
 													size="sm"
 													class="!h-7 !px-1.5 !text-[10px]"
-													disabled={busy !== null}
+													disabled={busy !== null || busyProposal !== null}
 													loading={busy === o.id}
 													onclick={() => moveTo(o.id, next)}
 												>

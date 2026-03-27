@@ -824,6 +824,35 @@ export async function postHarvestAdvance(
 	});
 }
 
+/** Omitted or `sync: false` enqueues ProposalDraft; worker + approvals. `sync: true` returns proposal JSON inline. */
+export type HarvestProposalResponse =
+	| {
+			job_id: string;
+			status: 'queued';
+			message?: string;
+	  }
+	| Record<string, unknown>;
+
+export async function postHarvestProposal(
+	sessionId: string,
+	opportunityId: string,
+	profile: string,
+	opts?: { sync?: boolean }
+): Promise<HarvestProposalResponse> {
+	const body: Record<string, unknown> = {
+		session_id: sessionId,
+		opportunity_id: opportunityId,
+		profile
+	};
+	if (opts?.sync === true) {
+		body.sync = true;
+	}
+	return request<HarvestProposalResponse>('/api/dept/harvest/proposal', {
+		method: 'POST',
+		body: JSON.stringify(body)
+	});
+}
+
 export interface ScheduledPostRow {
 	content_id: string;
 	platform: string | Record<string, unknown>;
