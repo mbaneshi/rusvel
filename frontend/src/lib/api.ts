@@ -920,6 +920,71 @@ export async function postGtmDealAdvance(
 	});
 }
 
+/** Aligns with `gtm_engine::InvoiceStatus` (S-038). */
+export type GtmInvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
+
+export interface GtmLineItem {
+	description: string;
+	quantity: number;
+	unit_price: number;
+}
+
+export interface GtmInvoiceRow {
+	id: string;
+	contact_id: string;
+	contact_name: string | null;
+	items: GtmLineItem[];
+	total: number;
+	status: GtmInvoiceStatus;
+	due_date: string;
+	paid_at: string | null;
+	metadata: Record<string, unknown>;
+}
+
+export async function getGtmInvoices(
+	sessionId: string,
+	status?: GtmInvoiceStatus
+): Promise<GtmInvoiceRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	if (status) sp.set('status', status);
+	return request(`/api/dept/gtm/invoices?${sp}`);
+}
+
+export async function postGtmInvoice(body: {
+	session_id: string;
+	contact_id: string;
+	items: GtmLineItem[];
+	due_date: string;
+}): Promise<{ id: string }> {
+	return request('/api/dept/gtm/invoices', {
+		method: 'POST',
+		body: JSON.stringify(body)
+	});
+}
+
+export interface GtmInvoiceDetail extends GtmInvoiceRow {
+	session_id: string;
+}
+
+export async function getGtmInvoice(
+	sessionId: string,
+	invoiceId: string
+): Promise<GtmInvoiceDetail> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	return request(`/api/dept/gtm/invoices/${encodeURIComponent(invoiceId)}?${sp}`);
+}
+
+export async function postGtmInvoiceStatus(
+	sessionId: string,
+	invoiceId: string,
+	status: GtmInvoiceStatus
+): Promise<void> {
+	await request(`/api/dept/gtm/invoices/${encodeURIComponent(invoiceId)}/status`, {
+		method: 'POST',
+		body: JSON.stringify({ session_id: sessionId, status })
+	});
+}
+
 export interface OpportunityRow {
 	id: string;
 	title: string;

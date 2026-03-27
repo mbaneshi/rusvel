@@ -12,6 +12,7 @@
 		Calendar,
 		Kanban,
 		Users,
+		Receipt,
 		PanelRightOpen,
 		PanelBottomOpen,
 		Zap,
@@ -154,6 +155,8 @@
 						<Kanban size={16} strokeWidth={1.75} class="shrink-0" />
 					{:else if ex.segment === 'contacts'}
 						<Users size={16} strokeWidth={1.75} class="shrink-0" />
+					{:else if ex.segment === 'invoices'}
+						<Receipt size={16} strokeWidth={1.75} class="shrink-0" />
 					{/if}
 					{ex.label}
 				</a>
