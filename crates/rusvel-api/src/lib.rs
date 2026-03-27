@@ -245,6 +245,15 @@ pub fn build_router_with_frontend(
         .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
         .route("/api/dept/harvest/advance", post(engine_routes::harvest_advance))
+        .route(
+            "/api/dept/gtm/contacts",
+            get(engine_routes::gtm_contacts_list).post(engine_routes::gtm_contacts_create),
+        )
+        .route("/api/dept/gtm/deals", get(engine_routes::gtm_deals_list))
+        .route(
+            "/api/dept/gtm/deals/advance",
+            post(engine_routes::gtm_deal_advance),
+        )
         // Flow Engine (DAG workflows)
         .route("/api/flows", get(flow_routes::list_flows).post(flow_routes::create_flow))
         .route(
@@ -287,6 +296,7 @@ pub fn build_router_with_frontend(
         .route("/api/capability/build", post(capability::build_capability))
         // Analytics
         .route("/api/analytics", get(analytics::get_analytics))
+        .route("/api/analytics/spend", get(analytics::get_spend))
         // Help (AI-powered)
         .route("/api/help", post(help::help_handler))
         // Job queue (ADR-003)

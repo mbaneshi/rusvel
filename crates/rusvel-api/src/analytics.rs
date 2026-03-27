@@ -2,16 +2,22 @@
 //!
 //! `GET /api/analytics` returns a JSON object with counts of agents, skills,
 //! rules, MCP servers, hooks, conversations, events, and departments.
+//!
+//! `GET /api/analytics/spend` returns LLM spend from [`MetricStore`] (`llm.cost_usd`),
+//! optionally filtered by department and scoped to a session for budget warnings.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use rusvel_core::domain::{EventFilter, ObjectFilter};
+use rusvel_core::domain::{EventFilter, MetricFilter, ObjectFilter};
+use rusvel_core::id::SessionId;
+use rusvel_core::ports::MetricStore;
+use uuid::Uuid;
 
 use crate::AppState;
 
@@ -92,5 +98,117 @@ pub async fn get_analytics(
         conversations,
         events,
         departments: 5, // Code, Content, Harvest, GTM, Forge
+    }))
+}
+
+// ── Spend (S-035) ─────────────────────────────────────────────
+
+const SPEND_METRIC: &str = "llm.cost_usd";
+const BUDGET_WARN_RATIO: f64 = 0.8;
+
+#[derive(Debug, Deserialize)]
+pub struct SpendQuery {
+    /// Filter totals to this department id (e.g. `harvest`, `content`). Omit for all departments.
+    pub dept: Option<String>,
+    /// When set, include session budget from [`Session::config`] and session-wide spend for warnings.
+    pub session_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SpendResponse {
+    /// Sum of `llm.cost_usd` for the selected department (or all departments if `dept` omitted).
+    pub total_usd: f64,
+    /// Aggregated spend per `dept:` tag (from metrics).
+    pub by_department: HashMap<String, f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    /// Total LLM spend attributed to this session (any department), when `session_id` is set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_total_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_budget_limit_usd: Option<f64>,
+    /// True when session spend is at or above 80% of the configured budget.
+    pub budget_warning: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_usage_ratio: Option<f64>,
+}
+
+fn dept_from_tags(tags: &[String]) -> Option<String> {
+    tags.iter().find_map(|t| t.strip_prefix("dept:").map(|s| s.to_string()))
+}
+
+fn session_from_tags(tags: &[String]) -> Option<String> {
+    tags.iter().find_map(|t| t.strip_prefix("session:").map(|s| s.to_string()))
+}
+
+/// `GET /api/analytics/spend` — LLM spend breakdown by department; optional session budget warning.
+pub async fn get_spend(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<SpendQuery>,
+) -> Result<Json<SpendResponse>, (StatusCode, String)> {
+    let filter = MetricFilter {
+        name: Some(SPEND_METRIC.into()),
+        limit: Some(50_000),
+        ..Default::default()
+    };
+    let points = state
+        .database
+        .query(filter)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut by_department: HashMap<String, f64> = HashMap::new();
+    let mut session_totals: HashMap<String, f64> = HashMap::new();
+
+    for p in &points {
+        let d = dept_from_tags(&p.tags).unwrap_or_else(|| "unknown".into());
+        *by_department.entry(d).or_insert(0.0) += p.value;
+        if let Some(sid) = session_from_tags(&p.tags) {
+            *session_totals.entry(sid).or_insert(0.0) += p.value;
+        }
+    }
+
+    let total_usd = if let Some(ref d) = q.dept {
+        *by_department.get(d.as_str()).unwrap_or(&0.0)
+    } else {
+        points.iter().map(|p| p.value).sum()
+    };
+
+    let mut session_id_out: Option<String> = None;
+    let mut session_total_usd: Option<f64> = None;
+    let mut session_budget_limit_usd: Option<f64> = None;
+    let mut budget_warning = false;
+    let mut budget_usage_ratio: Option<f64> = None;
+
+    if let Some(ref sid_str) = q.session_id {
+        if let Ok(uuid) = Uuid::parse_str(sid_str) {
+            let sid = SessionId::from(uuid);
+            session_id_out = Some(sid_str.clone());
+            session_total_usd = session_totals.get(&sid.to_string()).copied().or(Some(0.0));
+
+            if let Ok(session) = state.sessions.load(&sid).await {
+                session_budget_limit_usd = session.config.budget_limit;
+            }
+
+            if let (Some(spent), Some(limit)) = (session_total_usd, session_budget_limit_usd) {
+                if limit > 0.0 {
+                    let ratio = spent / limit;
+                    budget_usage_ratio = Some(ratio);
+                    if spent >= limit * BUDGET_WARN_RATIO {
+                        budget_warning = true;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(SpendResponse {
+        total_usd,
+        by_department,
+        session_id: session_id_out,
+        session_total_usd,
+        session_budget_limit_usd,
+        budget_warning,
+        budget_usage_ratio,
     }))
 }

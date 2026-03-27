@@ -20,9 +20,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use rusvel_agent::{agent_event_to_ag_ui, ag_ui_json_with_conversation, AgUiEvent, AgentEvent};
 use rusvel_core::config::{LayeredConfig, ResolvedConfig};
 use rusvel_core::domain::{
-    AgentConfig, Content, EventFilter, ModelProvider, ModelRef, RUSVEL_META_MODEL_TIER, UserProfile,
+    AgentConfig, Content, EventFilter, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID,
+    RUSVEL_META_MODEL_TIER, UserProfile,
 };
 use rusvel_core::id::{EventId, SessionId};
+use uuid::Uuid;
 use rusvel_core::ports::{AgentPort, StoragePort};
 use rusvel_core::registry::DepartmentDef;
 
@@ -392,9 +394,19 @@ pub async fn dept_chat(
     if let Some(t) = &body.model_tier {
         meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!(t));
     }
+    meta.insert(
+        RUSVEL_META_DEPARTMENT_ID.into(),
+        serde_json::json!(dept.as_str()),
+    );
+    let sid = body
+        .session_id
+        .as_ref()
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .map(SessionId::from)
+        .unwrap_or_else(SessionId::new);
     let agent_config = AgentConfig {
         profile_id: None,
-        session_id: SessionId::new(),
+        session_id: sid,
         model: Some(model_ref),
         tools: resolved.allowed_tools.clone(),
         instructions: Some(resolved.system_prompt.clone()),

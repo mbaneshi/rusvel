@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { Streamdown } from 'svelte-streamdown';
 	import { streamChat, getConversations, getChatHistory } from '$lib/api';
+	import { activeSession } from '$lib/stores';
 	import type { Conversation } from '$lib/api';
 	import ChatTopBar from './ChatTopBar.svelte';
 
@@ -20,6 +21,8 @@
 	let messagesContainer: HTMLDivElement | undefined = $state(undefined);
 	let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 	let showHistory = $state(false);
+	let currentSessionId = $state<string | null>(null);
+	activeSession.subscribe((s) => (currentSessionId = s?.id ?? null));
 
 	onMount(async () => {
 		try {
@@ -82,6 +85,7 @@
 			await streamChat(
 				text,
 				conversationId,
+				currentSessionId,
 				(deltaText, convId) => {
 					conversationId = convId;
 					const last = messages[messages.length - 1];

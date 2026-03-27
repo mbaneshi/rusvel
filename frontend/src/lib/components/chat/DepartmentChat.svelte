@@ -12,11 +12,18 @@
 		updateDeptConfig,
 		getModels,
 		getTools,
+		getAnalyticsSpend,
 		approveJob,
 		rejectJob
 	} from '$lib/api';
-	import type { Conversation, DepartmentConfig, ModelOption, ToolOption } from '$lib/api';
-	import { onboarding, pendingCommand, refreshPendingApprovalCount } from '$lib/stores';
+	import type {
+		AnalyticsSpendResponse,
+		Conversation,
+		DepartmentConfig,
+		ModelOption,
+		ToolOption
+	} from '$lib/api';
+	import { activeSession, onboarding, pendingCommand, refreshPendingApprovalCount } from '$lib/stores';
 	import { cached } from '$lib/cache';
 	import ToolCallCard from './ToolCallCard.svelte';
 	import ApprovalCard from './ApprovalCard.svelte';
@@ -61,6 +68,11 @@
 	let config: DepartmentConfig | null = $state(null);
 	let models: ModelOption[] = $state([]);
 	let tools: ToolOption[] = $state([]);
+	let currentSessionId = $state<string | null>(null);
+	let spendInfo = $state<AnalyticsSpendResponse | null>(null);
+	let spendLoading = $state(false);
+
+	activeSession.subscribe((s) => (currentSessionId = s?.id ?? null));
 
 	// Streamdown handles markdown rendering with streaming support
 
@@ -173,6 +185,7 @@
 				dept,
 				text,
 				conversationId,
+				currentSessionId,
 				(delta, convId) => {
 					conversationId = convId;
 					const last = messages[messages.length - 1];
@@ -283,6 +296,23 @@
 				: [...config.disallowed_tools, name];
 		saveConfig();
 	}
+
+	async function loadSpend() {
+		spendLoading = true;
+		try {
+			spendInfo = await getAnalyticsSpend(dept, currentSessionId);
+		} catch {
+			spendInfo = null;
+		} finally {
+			spendLoading = false;
+		}
+	}
+
+	$effect(() => {
+		if (showConfig) {
+			void loadSpend();
+		}
+	});
 </script>
 
 <div class="flex h-full min-h-0 flex-col {compact ? 'text-[11px]' : ''}">
@@ -330,6 +360,31 @@
 	<!-- Config panel -->
 	{#if showConfig && config}
 		<div class="border-b border-border bg-card px-3 py-2 space-y-2">
+			{#if spendLoading}
+				<p class="text-[10px] text-muted-foreground">Loading spend…</p>
+			{:else if spendInfo}
+				<div class="rounded-md border border-border bg-muted/20 px-2 py-1.5 space-y-1">
+					<p class="text-[10px] font-medium text-foreground">LLM spend (this department)</p>
+					<p class="text-xs text-foreground">
+						${spendInfo.total_usd.toFixed(4)}
+						<span class="text-muted-foreground">USD estimated</span>
+					</p>
+					{#if spendInfo.session_id && spendInfo.session_budget_limit_usd != null && spendInfo.session_budget_limit_usd > 0}
+						<p class="text-[10px] text-muted-foreground">
+							Session total: ${(spendInfo.session_total_usd ?? 0).toFixed(4)} /
+							${spendInfo.session_budget_limit_usd.toFixed(2)} cap
+							{#if spendInfo.budget_usage_ratio != null}
+								<span class="text-foreground">({Math.round(spendInfo.budget_usage_ratio * 100)}%)</span>
+							{/if}
+						</p>
+						{#if spendInfo.budget_warning}
+							<p class="text-[10px] text-amber-600 dark:text-amber-400">
+								Approaching session budget (≥80% of cap).
+							</p>
+						{/if}
+					{/if}
+				</div>
+			{/if}
 			<div class="flex items-center gap-2">
 				<span class="text-xs text-muted-foreground">Model</span>
 				<select

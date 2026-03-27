@@ -3,7 +3,7 @@
 	import { Streamdown } from 'svelte-streamdown';
 	import { copy } from 'svelte-copy';
 	import { streamChat, getConversations, getChatHistory, approveJob, rejectJob } from '$lib/api';
-	import { refreshPendingApprovalCount } from '$lib/stores';
+	import { activeSession, refreshPendingApprovalCount } from '$lib/stores';
 	import type { Conversation } from '$lib/api';
 	import ChatTopBar from '$lib/components/chat/ChatTopBar.svelte';
 	import ToolCallCard from '$lib/components/chat/ToolCallCard.svelte';
@@ -34,6 +34,8 @@
 	let messagesContainer: HTMLDivElement | undefined = $state(undefined);
 	let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
 	let toolCalls: Map<string, ToolCallState> = $state(new Map());
+	let currentSessionId = $state<string | null>(null);
+	activeSession.subscribe((s) => (currentSessionId = s?.id ?? null));
 
 	onMount(async () => {
 		try {
@@ -97,6 +99,7 @@
 			await streamChat(
 				text,
 				conversationId,
+				currentSessionId,
 				(deltaText, convId) => {
 					conversationId = convId;
 					const last = messages[messages.length - 1];

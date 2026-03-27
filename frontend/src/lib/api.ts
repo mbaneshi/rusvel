@@ -243,10 +243,33 @@ export async function getDeptEvents(dept: string): Promise<Event[]> {
 	return request(`/api/dept/${dept}/events`);
 }
 
+export interface AnalyticsSpendResponse {
+	total_usd: number;
+	by_department: Record<string, number>;
+	session_id?: string;
+	session_total_usd?: number;
+	session_budget_limit_usd?: number;
+	budget_warning: boolean;
+	budget_usage_ratio?: number;
+}
+
+/** GET /api/analytics/spend — LLM spend by department; optional session for budget context (S-035). */
+export async function getAnalyticsSpend(
+	dept?: string,
+	sessionId?: string | null
+): Promise<AnalyticsSpendResponse> {
+	const sp = new URLSearchParams();
+	if (dept) sp.set('dept', dept);
+	if (sessionId) sp.set('session_id', sessionId);
+	const q = sp.toString();
+	return request<AnalyticsSpendResponse>(`/api/analytics/spend${q ? `?${q}` : ''}`);
+}
+
 export async function streamDeptChat(
 	dept: string,
 	message: string,
 	conversationId: string | undefined,
+	sessionId: string | null | undefined,
 	onDelta: (text: string, conversationId: string) => void,
 	onDone: (fullText: string, conversationId: string) => void,
 	onError: (message: string) => void,
@@ -256,7 +279,11 @@ export async function streamDeptChat(
 	const res = await fetch(`${BASE}/api/dept/${dept}/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ message, conversation_id: conversationId })
+		body: JSON.stringify({
+			message,
+			conversation_id: conversationId,
+			...(sessionId ? { session_id: sessionId } : {})
+		})
 	});
 	await parseSSE(
 		res,
@@ -622,6 +649,7 @@ export async function streamHelp(
 export async function streamChat(
 	message: string,
 	conversationId: string | undefined,
+	sessionId: string | null | undefined,
 	onDelta: (text: string, conversationId: string) => void,
 	onDone: (fullText: string, conversationId: string) => void,
 	onError: (message: string) => void,
@@ -631,7 +659,11 @@ export async function streamChat(
 	const res = await fetch(`${BASE}/api/chat`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ message, conversation_id: conversationId })
+		body: JSON.stringify({
+			message,
+			conversation_id: conversationId,
+			...(sessionId ? { session_id: sessionId } : {})
+		})
 	});
 	await parseSSE(
 		res,

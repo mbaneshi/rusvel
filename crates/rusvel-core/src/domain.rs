@@ -208,6 +208,9 @@ pub const RUSVEL_META_MODEL_TIER: &str = "rusvel.model_tier";
 /// Optional session scope for cost metrics (`SessionId` as string).
 pub const RUSVEL_META_SESSION_ID: &str = "rusvel.session_id";
 
+/// Department id for LLM spend attribution (`dept` path segment, e.g. `"harvest"`, or `"global"` for god chat).
+pub const RUSVEL_META_DEPARTMENT_ID: &str = "rusvel.department_id";
+
 /// Marks spend from async batch API (e.g. 50% discount vs sync).
 pub const RUSVEL_META_BATCH: &str = "rusvel.batch";
 
@@ -595,6 +598,9 @@ pub struct NewJob {
     pub payload: serde_json::Value,
     pub max_retries: u32,
     pub metadata: serde_json::Value,
+    /// When set, the job is not eligible for dequeue until this instant (UTC).
+    #[serde(default)]
+    pub scheduled_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// What kind of work a job represents.

@@ -73,6 +73,13 @@ impl CostTrackingLlm {
         {
             tags.push(format!("session:{sid}"));
         }
+        if let Some(d) = req_for_cost
+            .metadata
+            .get(RUSVEL_META_DEPARTMENT_ID)
+            .and_then(|v| v.as_str())
+        {
+            tags.push(format!("dept:{d}"));
+        }
         let point = MetricPoint {
             name: "llm.cost_usd".into(),
             value: usd,
@@ -313,6 +320,34 @@ mod tests {
         assert!(pts[0].value > 0.0);
         assert!(pts[0].tags.iter().any(|t| t.contains("session:sess-test-1")));
         assert!(pts[0].tags.iter().any(|t| t.starts_with("tier:")));
+    }
+
+    #[tokio::test]
+    async fn records_dept_tag_when_present() {
+        let metrics = RecordingMetrics::new();
+        let llm = CostTrackingLlm::with_metrics(
+            Arc::new(EchoModelProvider),
+            metrics.clone() as Arc<dyn MetricStore>,
+        );
+        let mut meta = serde_json::Map::new();
+        meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!("fast"));
+        meta.insert(RUSVEL_META_SESSION_ID.into(), serde_json::json!("sess-test-1"));
+        meta.insert(RUSVEL_META_DEPARTMENT_ID.into(), serde_json::json!("harvest"));
+        let req = LlmRequest {
+            model: ModelRef {
+                provider: ModelProvider::Claude,
+                model: "claude-sonnet-4-20250514".into(),
+            },
+            messages: vec![],
+            tools: vec![],
+            temperature: None,
+            max_tokens: None,
+            metadata: serde_json::Value::Object(meta),
+        };
+        let _ = llm.generate(req).await.unwrap();
+        let pts = metrics.points.lock().unwrap();
+        assert_eq!(pts.len(), 1);
+        assert!(pts[0].tags.iter().any(|t| t == "dept:harvest"));
     }
 
     struct BatchPollOnlyProvider;
