@@ -15,7 +15,7 @@ use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
 use serde_json::Value;
 
-use super::ChannelPort;
+use rusvel_core::ports::ChannelPort;
 
 /// Sends messages via `https://api.telegram.org/bot<token>/sendMessage`.
 pub struct TelegramChannel {

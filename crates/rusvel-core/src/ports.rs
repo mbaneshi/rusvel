@@ -20,6 +20,7 @@
 //! | [`ConfigPort`] | Settings + per-session overrides |
 //! | [`EmbeddingPort`] | Text → dense vector embeddings |
 //! | [`VectorStorePort`] | Similarity search over embeddings |
+//! | [`ChannelPort`] | Outbound messaging: Telegram, Discord, … |
 //! | [`BrowserPort`] | Chrome DevTools Protocol: tabs, observe, evaluate, navigate |
 //!
 //! **Not here (ADR-006):** `HarvestPort` and `PublishPort` are
@@ -528,6 +529,21 @@ pub trait TerminalPort: Send + Sync {
 // ════════════════════════════════════════════════════════════════════
 //  16. BrowserPort — Chrome DevTools Protocol (passive + agent-driven)
 // ════════════════════════════════════════════════════════════════════
+
+// ════════════════════════════════════════════════════════════════════
+//  17. ChannelPort — outbound messaging (Telegram, Discord, …)
+// ════════════════════════════════════════════════════════════════════
+
+/// Sends notifications or interactive messages to an external channel.
+///
+/// Implementations live in `rusvel-channel` (e.g. `TelegramChannel`).
+/// Engines receive `Option<Arc<dyn ChannelPort>>` via composition.
+#[async_trait]
+pub trait ChannelPort: Send + Sync {
+    fn channel_kind(&self) -> &'static str;
+
+    async fn send_message(&self, session_id: &SessionId, payload: serde_json::Value) -> Result<()>;
+}
 
 /// Chrome/Chromium session via CDP (WebSocket to `--remote-debugging-port`).
 ///
