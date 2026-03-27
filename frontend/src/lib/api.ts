@@ -8,7 +8,9 @@ export {
 	normalizeDepartmentList,
 	tabsFromDepartment,
 	deptHref,
-	resolveDeptId
+	resolveDeptId,
+	deptShellNavItems,
+	isDeptShellTabVisible
 } from './departmentManifest';
 
 export interface SessionSummary {

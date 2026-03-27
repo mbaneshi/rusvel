@@ -66,7 +66,30 @@ export function tabsFromDepartment(d: DepartmentDef): string[] {
 }
 
 export function deptHref(deptId: string): string {
-	return `/dept/${encodeURIComponent(deptId)}/chat`;
+	return `/dept/${encodeURIComponent(deptId)}/actions`;
+}
+
+/** Ordered shell nav for department section routes (matches former DepartmentPanel tabs). */
+export const deptShellNavItems: { id: string; label: string; pathSegment: string }[] = [
+	{ id: 'actions', label: 'Actions', pathSegment: 'actions' },
+	{ id: 'engine', label: 'Engine', pathSegment: 'engine' },
+	{ id: 'terminal', label: 'Terminal', pathSegment: 'terminal' },
+	{ id: 'agents', label: 'Agents', pathSegment: 'agents' },
+	{ id: 'workflows', label: 'Flows', pathSegment: 'workflows' },
+	{ id: 'skills', label: 'Skills', pathSegment: 'skills' },
+	{ id: 'rules', label: 'Rules', pathSegment: 'rules' },
+	{ id: 'mcp', label: 'MCP', pathSegment: 'mcp' },
+	{ id: 'hooks', label: 'Hooks', pathSegment: 'hooks' },
+	{ id: 'projects', label: 'Dirs', pathSegment: 'dirs' },
+	{ id: 'events', label: 'Events', pathSegment: 'events' }
+];
+
+/** Whether a panel tab should appear in the dept shell for this department. */
+export function isDeptShellTabVisible(tabId: string, d: DepartmentDef): boolean {
+	const t = tabsFromDepartment(d);
+	if (tabId === 'projects') return t.includes('projects') || t.includes('dirs');
+	if (tabId === 'terminal') return true;
+	return t.includes(tabId);
 }
 
 /** Optional dept sub-routes (pipeline, calendar) — single registry for the shell. */

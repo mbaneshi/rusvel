@@ -1,12 +1,12 @@
 <script lang="ts">
 	import DeptSectionScaffold from '$lib/components/department/DeptSectionScaffold.svelte';
-	import EventsTab from '$lib/components/department/EventsTab.svelte';
+	import McpTab from '$lib/components/department/McpTab.svelte';
 </script>
 
 <DeptSectionScaffold>
-	{#snippet children({ dept, deptHsl })}
+	{#snippet children({ dept })}
 		<div class="h-full overflow-auto">
-			<EventsTab dept={dept.id} {deptHsl} />
+			<McpTab dept={dept.id} />
 		</div>
 	{/snippet}
 </DeptSectionScaffold>
