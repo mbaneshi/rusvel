@@ -80,6 +80,20 @@ impl ContentCalendar {
         Ok(())
     }
 
+    /// List scheduled posts whose `publish_at` falls within `[from, to]` (inclusive).
+    pub async fn list_scheduled_in_range(
+        &self,
+        session_id: &SessionId,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Vec<ScheduledPost>> {
+        let all = self.list_scheduled(session_id).await?;
+        Ok(all
+            .into_iter()
+            .filter(|p| p.publish_at >= from && p.publish_at <= to)
+            .collect())
+    }
+
     /// List all scheduled (not-yet-published) posts for a session.
     pub async fn list_scheduled(&self, session_id: &SessionId) -> Result<Vec<ScheduledPost>> {
         let filter = ObjectFilter {

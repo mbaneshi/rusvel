@@ -296,6 +296,23 @@ impl ContentEngine {
         Ok(items)
     }
 
+    /// Scheduled posts (content calendar).
+    pub async fn list_scheduled(&self, session_id: &SessionId) -> Result<Vec<ScheduledPost>> {
+        self.calendar.list_scheduled(session_id).await
+    }
+
+    /// Scheduled posts within a date range (inclusive).
+    pub async fn list_scheduled_in_range(
+        &self,
+        session_id: &SessionId,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Vec<ScheduledPost>> {
+        self.calendar
+            .list_scheduled_in_range(session_id, from, to)
+            .await
+    }
+
     /// Get engagement metrics for a content item.
     pub async fn get_metrics(&self, content_id: ContentId) -> Result<Vec<(Platform, PostMetrics)>> {
         self.analytics.get_metrics(content_id).await

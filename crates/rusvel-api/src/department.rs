@@ -344,6 +344,7 @@ pub async fn dept_chat(
                  - Draft content: POST /api/dept/content/draft {session_id, topic, kind}\n\
                  - Publish content: POST /api/dept/content/publish {session_id, content_id, platform}\n\
                  - List content: GET /api/dept/content/list?session_id=<id>&status=<filter>\n\
+                 - Scheduled posts: GET /api/dept/content/scheduled?session_id=<id>&from=<RFC3339>&to=<RFC3339>\n\
                  Content kinds: LongForm, Tweet, Thread, LinkedInPost, Blog, VideoScript, Email, Proposal\n\
                  Platforms: DevTo, Twitter, LinkedIn, Mastodon, Bluesky, Medium",
             );
@@ -352,7 +353,10 @@ pub async fn dept_chat(
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
                  This department has a wired Harvest Engine with real capabilities:\n\
-                 - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id}\n\
+                 - Scan sources: POST /api/dept/harvest/scan {session_id, sources: [mock|upwork|freelancer|cdp], query}\n\
+                 - CDP scan: use source \"cdp\" and query = listing page URL (Chrome remote debugging; RUSVEL_CDP_ENDPOINT)\n\
+                 - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id} → score + reasoning\n\
+                 - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage}\n\
                  - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile}\n\
                  - Pipeline stats: GET /api/dept/harvest/pipeline?session_id=<id>\n\
                  - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>",

@@ -12,14 +12,24 @@ use rusvel_core::{
 };
 use rusvel_core::domain::BrowserEvent;
 
+pub mod cdp_source;
 pub mod events;
 pub mod pipeline;
 pub mod proposal;
 pub mod scorer;
 pub mod source;
 
+pub use cdp_source::CdpSource;
+
 use pipeline::{Pipeline, PipelineStats};
 use proposal::{Proposal, ProposalGenerator};
+
+/// Result of re-scoring a stored opportunity (LLM or keyword path).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpportunityScoreUpdate {
+    pub score: f64,
+    pub reasoning: String,
+}
 
 /// Persisted proposal row in the object store (`kind`: `"proposal"`).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -176,12 +186,12 @@ impl HarvestEngine {
         Ok(results)
     }
 
-    /// Re-score an existing opportunity and update its stored score.
+    /// Re-score an existing opportunity and update its stored score and metadata reasoning.
     pub async fn score_opportunity(
         &self,
         session_id: &SessionId,
         opportunity_id: &str,
-    ) -> Result<f64> {
+    ) -> Result<OpportunityScoreUpdate> {
         let value = self
             .storage
             .objects()
@@ -217,6 +227,19 @@ impl HarvestEngine {
         );
         let scored = scorer.score(&raw).await?;
         opp.score = scored.score;
+        {
+            let mut meta = opp.metadata;
+            if !meta.is_object() {
+                meta = serde_json::json!({});
+            }
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert(
+                    "reasoning".into(),
+                    serde_json::json!(scored.reasoning),
+                );
+            }
+            opp.metadata = meta;
+        }
 
         let updated = serde_json::to_value(&opp)?;
         self.storage
@@ -227,11 +250,18 @@ impl HarvestEngine {
         self.emit(
             session_id,
             events::OPPORTUNITY_SCORED,
-            serde_json::json!({"id": opportunity_id, "score": scored.score}),
+            serde_json::json!({
+                "id": opportunity_id,
+                "score": scored.score,
+                "reasoning": &scored.reasoning
+            }),
         )
         .await;
 
-        Ok(scored.score)
+        Ok(OpportunityScoreUpdate {
+            score: scored.score,
+            reasoning: scored.reasoning,
+        })
     }
 
     /// Generate a proposal for a stored opportunity.
@@ -326,6 +356,17 @@ impl HarvestEngine {
     ) -> Result<Vec<Opportunity>> {
         Pipeline::new(self.storage.clone())
             .list(session_id, stage)
+            .await
+    }
+
+    /// Move an opportunity to a new pipeline stage (Kanban).
+    pub async fn advance_opportunity(
+        &self,
+        opportunity_id: &str,
+        new_stage: OpportunityStage,
+    ) -> Result<()> {
+        Pipeline::new(self.storage.clone())
+            .advance(opportunity_id, new_stage)
             .await
     }
 

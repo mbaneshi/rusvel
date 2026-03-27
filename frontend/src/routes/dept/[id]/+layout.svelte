@@ -3,7 +3,8 @@
 	import { page } from '$app/state';
 	import { departments } from '$lib/stores';
 	import type { DepartmentDef } from '$lib/api';
-	import { MessageSquare, Sliders, Activity } from 'lucide-svelte';
+	import { MessageSquare, Sliders, Activity, LayoutGrid, Calendar } from 'lucide-svelte';
+	import { deptExtraSections } from '$lib/departmentManifest';
 
 	let allDepts: DepartmentDef[] = $state([]);
 	departments.subscribe((v) => (allDepts = v));
@@ -12,6 +13,8 @@
 
 	let dept = $derived(allDepts.find((d) => d.id === page.params.id));
 	let base = $derived(`/dept/${page.params.id}`);
+
+	let extras = $derived(deptExtraSections[page.params.id ?? ''] ?? []);
 
 	function sectionActive(segment: string): boolean {
 		const p = page.url.pathname;
@@ -63,6 +66,22 @@
 				<Activity size={16} strokeWidth={1.75} class="shrink-0" />
 				Events
 			</a>
+			{#each extras as ex}
+				<a
+					href="{base}/{ex.segment}"
+					class="flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors
+						{sectionActive(ex.segment)
+						? 'bg-sidebar-primary/15 text-sidebar-primary font-medium'
+						: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+				>
+					{#if ex.segment === 'pipeline'}
+						<LayoutGrid size={16} strokeWidth={1.75} class="shrink-0" />
+					{:else if ex.segment === 'calendar'}
+						<Calendar size={16} strokeWidth={1.75} class="shrink-0" />
+					{/if}
+					{ex.label}
+				</a>
+			{/each}
 		</aside>
 		<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 			{@render children()}

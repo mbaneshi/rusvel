@@ -233,11 +233,16 @@ pub fn build_router_with_frontend(
         )
         .route("/api/dept/content/publish", post(engine_routes::content_publish))
         .route("/api/dept/content/list", get(engine_routes::content_list))
+        .route(
+            "/api/dept/content/scheduled",
+            get(engine_routes::content_scheduled),
+        )
         .route("/api/dept/harvest/score", post(engine_routes::harvest_score))
         .route("/api/dept/harvest/scan", post(engine_routes::harvest_scan))
         .route("/api/dept/harvest/proposal", post(engine_routes::harvest_proposal))
         .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
+        .route("/api/dept/harvest/advance", post(engine_routes::harvest_advance))
         // Flow Engine (DAG workflows)
         .route("/api/flows", get(flow_routes::list_flows).post(flow_routes::create_flow))
         .route(

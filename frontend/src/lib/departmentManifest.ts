@@ -69,6 +69,12 @@ export function deptHref(deptId: string): string {
 	return `/dept/${encodeURIComponent(deptId)}/chat`;
 }
 
+/** Optional dept sub-routes (pipeline, calendar) — single registry for the shell. */
+export const deptExtraSections: Record<string, { segment: string; label: string }[]> = {
+	harvest: [{ segment: 'pipeline', label: 'Pipeline' }],
+	content: [{ segment: 'calendar', label: 'Calendar' }]
+};
+
 /**
  * Pick a department id for deep links when the registry order or IDs may differ.
  * Prefers `preferred` if present; otherwise first department; otherwise `fallback`.

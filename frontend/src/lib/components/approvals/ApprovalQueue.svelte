@@ -37,6 +37,15 @@
 		}
 	}
 
+	function jobTitle(job: import('$lib/api').Job): string | null {
+		const p = job.payload;
+		if (p && typeof p === 'object' && p !== null && 'title' in p) {
+			const t = (p as { title?: unknown }).title;
+			if (typeof t === 'string' && t.trim()) return t;
+		}
+		return null;
+	}
+
 	async function approve(id: string) {
 		busyId = id;
 		try {
@@ -89,6 +98,7 @@
 	{:else}
 		<ul class="space-y-3">
 			{#each jobs as job (job.id)}
+				{@const title = jobTitle(job)}
 				<li
 					class="rounded-lg border border-border bg-card p-4 shadow-sm"
 				>
@@ -102,6 +112,9 @@
 								</span>
 								<span class="font-mono text-[10px] text-muted-foreground">{job.id}</span>
 							</div>
+							{#if title}
+								<p class="mt-1 text-sm font-medium text-foreground">{title}</p>
+							{/if}
 							<p class="mt-1 text-[11px] text-muted-foreground">
 								Session <span class="font-mono">{job.session_id}</span>
 								<span class="mx-1">·</span>

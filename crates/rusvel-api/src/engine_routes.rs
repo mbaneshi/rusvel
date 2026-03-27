@@ -9,10 +9,11 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use rusvel_core::domain::{
-    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, Opportunity,
+    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, Opportunity, OpportunityStage,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{ContentId, SessionId};
@@ -298,6 +299,23 @@ pub async fn harvest_scan(
                 let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
                 all.append(&mut v);
             }
+            "cdp" => {
+                if body.query.trim().is_empty() {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        "cdp source requires `query` (listing page URL)".into(),
+                    ));
+                }
+                let browser = state
+                    .cdp
+                    .clone()
+                    .map(|c| c as std::sync::Arc<dyn rusvel_core::ports::BrowserPort>);
+                let endpoint = std::env::var("RUSVEL_CDP_ENDPOINT")
+                    .unwrap_or_else(|_| "http://127.0.0.1:9222".into());
+                let src = harvest_engine::CdpSource::new(browser, endpoint, body.query.clone());
+                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
+                all.append(&mut v);
+            }
             "upwork" => {
                 let src = harvest_engine::source::UpworkRssSource::new(
                     body.query.clone(),
@@ -336,11 +354,40 @@ pub async fn harvest_score(
         .as_ref()
         .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
     let sid = parse_session_id(&body.session_id)?;
-    let score = engine
+    let update = engine
         .score_opportunity(&sid, &body.opportunity_id)
         .await
         .map_err(engine_err)?;
-    Ok(Json(serde_json::json!({ "score": score })))
+    Ok(Json(serde_json::json!({
+        "score": update.score,
+        "reasoning": update.reasoning
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HarvestAdvanceRequest {
+    pub session_id: String,
+    pub opportunity_id: String,
+    pub stage: String,
+}
+
+/// POST /api/dept/harvest/advance — move opportunity to a pipeline stage.
+pub async fn harvest_advance(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HarvestAdvanceRequest>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .harvest_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let _sid = parse_session_id(&body.session_id)?;
+    let stage: OpportunityStage = serde_json::from_value(serde_json::json!(&body.stage))
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid opportunity stage".into()))?;
+    engine
+        .advance_opportunity(&body.opportunity_id, stage)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 #[derive(Debug, Deserialize)]
@@ -407,5 +454,40 @@ pub async fn harvest_list(
         .list_opportunities(&sid, stage.as_ref())
         .await
         .map_err(engine_err)?;
+    Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ContentScheduledQuery {
+    pub session_id: String,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+/// GET /api/dept/content/scheduled — list scheduled posts (optional RFC3339 `from` / `to` window).
+pub async fn content_scheduled(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<ContentScheduledQuery>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .content_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let sid = parse_session_id(&params.session_id)?;
+    let items = match (&params.from, &params.to) {
+        (Some(fs), Some(ts)) => {
+            let from = DateTime::parse_from_rfc3339(fs)
+                .map(|d| d.with_timezone(&Utc))
+                .map_err(|_| (StatusCode::BAD_REQUEST, "invalid `from` (use RFC3339)".into()))?;
+            let to = DateTime::parse_from_rfc3339(ts)
+                .map(|d| d.with_timezone(&Utc))
+                .map_err(|_| (StatusCode::BAD_REQUEST, "invalid `to` (use RFC3339)".into()))?;
+            engine
+                .list_scheduled_in_range(&sid, from, to)
+                .await
+                .map_err(engine_err)?
+        }
+        _ => engine.list_scheduled(&sid).await.map_err(engine_err)?,
+    };
     Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
 }

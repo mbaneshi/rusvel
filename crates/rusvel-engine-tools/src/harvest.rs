@@ -67,7 +67,9 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                         let sid = parse_session_id(&args, "session_id")?;
                         let opp_id = args["opportunity_id"].as_str().unwrap_or_default();
                         match engine.score_opportunity(&sid, opp_id).await {
-                            Ok(score) => ok_json(&json!({"score": score})),
+                            Ok(u) => ok_json(
+                                &json!({"score": u.score, "reasoning": u.reasoning}),
+                            ),
                             Err(e) => err_result(e),
                         }
                     })

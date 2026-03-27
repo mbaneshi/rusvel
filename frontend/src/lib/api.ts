@@ -785,6 +785,60 @@ export async function getHarvestPipeline(sessionId: string): Promise<unknown> {
 	return request(`/api/dept/harvest/pipeline?${sp}`);
 }
 
+export interface OpportunityRow {
+	id: string;
+	title: string;
+	description: string;
+	url?: string | null;
+	score: number;
+	stage: string;
+	value_estimate?: number | null;
+	metadata: Record<string, unknown>;
+	source?: string | Record<string, unknown>;
+}
+
+export async function getHarvestOpportunities(
+	sessionId: string,
+	stage?: string
+): Promise<OpportunityRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	if (stage) sp.set('stage', stage);
+	return request(`/api/dept/harvest/list?${sp}`);
+}
+
+export async function postHarvestAdvance(
+	sessionId: string,
+	opportunityId: string,
+	stage: string
+): Promise<void> {
+	await request('/api/dept/harvest/advance', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			opportunity_id: opportunityId,
+			stage
+		})
+	});
+}
+
+export interface ScheduledPostRow {
+	content_id: string;
+	platform: string | Record<string, unknown>;
+	publish_at: string;
+	status: string;
+}
+
+export async function getContentScheduled(
+	sessionId: string,
+	fromIso?: string,
+	toIso?: string
+): Promise<ScheduledPostRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	if (fromIso) sp.set('from', fromIso);
+	if (toIso) sp.set('to', toIso);
+	return request(`/api/dept/content/scheduled?${sp}`);
+}
+
 export async function getProfile(): Promise<unknown> {
 	const res = await fetch(`${BASE}/api/profile`);
 	return res.json();
