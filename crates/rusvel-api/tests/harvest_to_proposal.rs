@@ -14,8 +14,8 @@ use rusvel_api::{AppState, build_router};
 use rusvel_config::TomlConfig;
 use rusvel_agent::AgentRuntime;
 use rusvel_core::domain::{
-    AgentOutput, AgentStatus, Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef,
-    Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
+    AgentOutput, AgentStatus, Content, FinishReason, JobKind, JobResult, LlmRequest, LlmResponse,
+    LlmUsage, ModelRef, NewJob, Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
 };
 use rusvel_core::error::Result;
 use rusvel_core::id::{RunId, SessionId};
@@ -181,7 +181,48 @@ async fn json_request(
     (status, bytes.to_vec())
 }
 
-async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
+/// Same branch as `rusvel-app` for [`JobKind::ProposalDraft`]: generate, then park for approval.
+async fn run_proposal_draft_job(
+    harvest: &HarvestEngine,
+    jobs: &dyn JobPort,
+) -> rusvel_core::error::Result<()> {
+    let Some(job) = jobs.dequeue(&[JobKind::ProposalDraft]).await? else {
+        return Err(rusvel_core::error::RusvelError::Internal(
+            "expected a ProposalDraft job".into(),
+        ));
+    };
+    let job_id = job.id;
+    let sid = job.session_id;
+    let opp = job
+        .payload
+        .get("opportunity_id")
+        .and_then(|x| x.as_str())
+        .ok_or_else(|| {
+            rusvel_core::error::RusvelError::Validation(
+                "ProposalDraft job missing opportunity_id".into(),
+            )
+        })?;
+    let profile = job
+        .payload
+        .get("profile")
+        .and_then(|x| x.as_str())
+        .unwrap_or("");
+    let proposal = harvest.generate_proposal(&sid, opp, profile).await?;
+    let job_result = JobResult {
+        output: serde_json::to_value(&proposal).unwrap_or_default(),
+        metadata: json!({"engine": "harvest"}),
+    };
+    jobs.hold_for_approval(&job_id, job_result).await?;
+    Ok(())
+}
+
+async fn test_router() -> (
+    Router,
+    SessionId,
+    SessionId,
+    Arc<HarvestEngine>,
+    Arc<dyn JobPort>,
+) {
     let base = std::env::temp_dir().join(format!("rusvel-harvest-ict-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&base).expect("temp dir");
     let db_path = base.join("rusvel.db");
@@ -252,7 +293,7 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         flow_engine: None,
         sessions,
         events,
-        jobs,
+        jobs: jobs.clone(),
         database: db.clone(),
         storage,
         profile: None,
@@ -273,12 +314,13 @@ async fn test_router() -> (Router, SessionId, SessionId, Arc<HarvestEngine>) {
         session_a,
         session_b,
         harvest_for_tests,
+        jobs,
     )
 }
 
 #[tokio::test]
 async fn post_harvest_scan_mock_persists_opportunities() {
-    let (mut router, session_a, _, _) = test_router().await;
+    let (mut router, session_a, _, _, _) = test_router().await;
     let (status, body) = json_request(
         &mut router,
         "POST",
@@ -311,7 +353,7 @@ async fn post_harvest_scan_mock_persists_opportunities() {
 
 #[tokio::test]
 async fn post_harvest_proposal_persists_proposal() {
-    let (mut router, session_a, _, harvest) = test_router().await;
+    let (mut router, session_a, _, harvest, _) = test_router().await;
     let (st, scan_body) = json_request(
         &mut router,
         "POST",
@@ -352,7 +394,7 @@ async fn post_harvest_proposal_persists_proposal() {
 
 #[tokio::test]
 async fn harvest_session_isolation() {
-    let (mut router, session_a, session_b, _) = test_router().await;
+    let (mut router, session_a, session_b, _, _) = test_router().await;
     let (st, _) = json_request(
         &mut router,
         "POST",
@@ -379,4 +421,77 @@ async fn harvest_session_isolation() {
     assert_eq!(st2, StatusCode::OK);
     let listed: Vec<Value> = serde_json::from_slice(&list_b).unwrap();
     assert!(listed.is_empty());
+}
+
+/// Sprint S-032: mock scan → score → ProposalDraft job → worker hold → pending approval visible via API.
+#[tokio::test]
+async fn harvest_e2e_proposal_draft_appears_in_approval_queue() {
+    let (mut router, session_a, _, harvest, jobs) = test_router().await;
+
+    let (st, scan_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/scan",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "sources": ["mock"],
+            "query": "rust",
+        })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::OK);
+    let ops: Vec<Value> = serde_json::from_slice(&scan_body).unwrap();
+    let opp_id = ops[0]["id"].as_str().unwrap();
+
+    let (st_sc, score_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/score",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "opportunity_id": opp_id,
+        })),
+    )
+    .await;
+    assert_eq!(st_sc, StatusCode::OK);
+    let score_json: Value = serde_json::from_slice(&score_body).unwrap();
+    assert!(score_json.get("score").is_some());
+    assert!(score_json.get("reasoning").is_some());
+
+    jobs
+        .enqueue(NewJob {
+            session_id: session_a,
+            kind: JobKind::ProposalDraft,
+            payload: json!({
+                "opportunity_id": opp_id,
+                "profile": "Senior Rust engineer",
+            }),
+            max_retries: 3,
+            metadata: json!({}),
+        })
+        .await
+        .expect("enqueue ProposalDraft");
+
+    run_proposal_draft_job(&harvest, jobs.as_ref())
+        .await
+        .expect("proposal draft worker");
+
+    let (st_ap, body_ap) = json_request(&mut router, "GET", "/api/approvals", None).await;
+    assert_eq!(st_ap, StatusCode::OK);
+    let pending: Vec<Value> = serde_json::from_slice(&body_ap).unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(
+        pending[0]["status"].as_str().unwrap(),
+        "AwaitingApproval"
+    );
+    let kind = &pending[0]["kind"];
+    let kind_str = if kind.is_string() {
+        kind.as_str().unwrap().to_string()
+    } else {
+        kind.to_string()
+    };
+    assert!(
+        kind_str.contains("ProposalDraft"),
+        "expected ProposalDraft, got {kind_str}"
+    );
 }
