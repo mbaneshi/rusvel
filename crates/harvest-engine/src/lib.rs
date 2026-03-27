@@ -20,6 +20,7 @@ pub mod scorer;
 pub mod source;
 
 pub use cdp_source::{extract_js_listing_cards, CdpSource, DEFAULT_CDP_EXTRACT_JS};
+pub use scorer::ScoringMethod;
 
 use pipeline::{Pipeline, PipelineStats};
 use proposal::{Proposal, ProposalGenerator};
@@ -139,7 +140,8 @@ impl HarvestEngine {
             self.agent.clone(),
             self.config.skills.clone(),
             self.config.min_budget,
-        );
+        )
+        .with_scoring_session(*session_id);
 
         let pipe = Pipeline::new(self.storage.clone());
         let mut results = Vec::new();
@@ -161,6 +163,10 @@ impl HarvestEngine {
                     "reasoning": scored.reasoning,
                     "skills": scored.raw.skills,
                     "posted_at": scored.raw.posted_at,
+                    "scoring_method": match scored.scoring_method {
+                        ScoringMethod::Llm => "llm",
+                        ScoringMethod::Keyword => "keyword",
+                    },
                 }),
             };
 
@@ -224,7 +230,8 @@ impl HarvestEngine {
             self.agent.clone(),
             self.config.skills.clone(),
             self.config.min_budget,
-        );
+        )
+        .with_scoring_session(*session_id);
         let scored = scorer.score(&raw).await?;
         opp.score = scored.score;
         {
@@ -236,6 +243,13 @@ impl HarvestEngine {
                 obj.insert(
                     "reasoning".into(),
                     serde_json::json!(scored.reasoning),
+                );
+                obj.insert(
+                    "scoring_method".into(),
+                    serde_json::json!(match scored.scoring_method {
+                        ScoringMethod::Llm => "llm",
+                        ScoringMethod::Keyword => "keyword",
+                    }),
                 );
             }
             opp.metadata = meta;
