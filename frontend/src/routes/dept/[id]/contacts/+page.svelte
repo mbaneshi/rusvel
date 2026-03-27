@@ -9,6 +9,7 @@
 		type GtmDealRow
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
+	import { ArrowRight } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
@@ -116,11 +117,22 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col overflow-hidden">
-	<div class="border-b border-border px-4 py-3">
-		<h1 class="text-lg font-semibold">CRM contacts</h1>
-		<p class="text-xs text-muted-foreground">
-			Search and filter session contacts; deals show the link to your GTM pipeline (same session).
-		</p>
+	<div class="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+		<div>
+			<h1 class="text-lg font-semibold">CRM contacts</h1>
+			<p class="text-xs text-muted-foreground">
+				Search and filter session contacts; deal rows link to the same session’s pipeline.
+			</p>
+		</div>
+		{#if isGtm}
+			<a
+				href="/dept/gtm/deals"
+				class="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+			>
+				Deal pipeline
+				<ArrowRight class="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
+			</a>
+		{/if}
 	</div>
 
 	{#if !isGtm}

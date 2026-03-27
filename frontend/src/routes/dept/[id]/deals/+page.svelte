@@ -9,6 +9,7 @@
 		type GtmDealStage
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
+	import { Users } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	const STAGES: GtmDealStage[] = [
@@ -144,12 +145,23 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col overflow-hidden">
-	<div class="border-b border-border px-4 py-3">
-		<h1 class="text-lg font-semibold">Deal pipeline</h1>
-		<p class="text-xs text-muted-foreground">
-			Kanban by stage — drag cards between columns or use the arrows. Stages match the GTM CRM model
-			(Lead → Qualified → Proposal → Negotiation → Won / Lost).
-		</p>
+	<div class="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+		<div>
+			<h1 class="text-lg font-semibold">Deal pipeline</h1>
+			<p class="text-xs text-muted-foreground">
+				Kanban by stage — drag cards between columns or use the arrows. Stages match the GTM CRM model
+				(Lead → Qualified → Proposal → Negotiation → Won / Lost).
+			</p>
+		</div>
+		{#if isGtm}
+			<a
+				href="/dept/gtm/contacts"
+				class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+			>
+				<Users class="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
+				Contacts
+			</a>
+		{/if}
 	</div>
 
 	{#if !isGtm}

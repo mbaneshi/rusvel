@@ -96,7 +96,10 @@ export function isDeptShellTabVisible(tabId: string, d: DepartmentDef): boolean 
 export const deptExtraSections: Record<string, { segment: string; label: string }[]> = {
 	harvest: [{ segment: 'pipeline', label: 'Pipeline' }],
 	content: [{ segment: 'calendar', label: 'Calendar' }],
-	gtm: [{ segment: 'contacts', label: 'Contacts' }]
+	gtm: [
+		{ segment: 'contacts', label: 'Contacts' },
+		{ segment: 'deals', label: 'Deals' }
+	]
 };
 
 /**
