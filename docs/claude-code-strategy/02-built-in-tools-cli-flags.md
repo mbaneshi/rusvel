@@ -12,11 +12,11 @@ Claude Code tools serve RUSVEL in **two distinct ways**:
 
 ---
 
-## 1. File Operation Tools → 20-Crate Workspace Management
+## 1. File Operation Tools → Full workspace management
 
 ### Read — Cross-Crate Understanding
 
-**Challenge:** RUSVEL has 48 crates. Understanding a feature often requires reading 4-5 files across layers.
+**Challenge:** RUSVEL has **54** workspace members. Understanding a feature often requires reading 4-5 files across layers. Scale: [`docs/status/current-state.md`](../status/current-state.md).
 
 **Pattern:** When working on a feature, read the full vertical slice:
 ```
@@ -62,8 +62,8 @@ Grep: "metadata:"                   → audit schema evolution fields
 
 **Core RUSVEL commands that Bash executes:**
 ```bash
-cargo build                          # Build all 48 crates
-cargo test                           # Run 222 tests in 30 binaries
+cargo build                          # Build all workspace members
+cargo test                           # Full suite (~476 tests; see current-state)
 cargo test -p forge-engine           # Test single engine
 cargo run                            # Start API on :3000
 cargo run -- session create "demo"   # Test CLI
@@ -80,7 +80,7 @@ cd frontend && pnpm dev              # Start frontend dev server
 
 ### LSP → Code Intelligence
 
-**For RUSVEL:** LSP provides go-to-definition, find-references across the Rust workspace. Critical for refactoring port traits that touch all 48 crates.
+**For RUSVEL:** LSP provides go-to-definition, find-references across the Rust workspace. Critical for refactoring port traits that touch many crates.
 
 ---
 
@@ -116,7 +116,7 @@ Task 3: "Build GTM pipeline UI" → not started
 **Background tasks:** Long-running operations:
 - `cargo test` across all crates (background)
 - `pnpm build` for frontend (background)
-- Code search across ~43,670 lines (background via agent)
+- Code search across ~62k lines of Rust under `crates/` (background via agent; see [`docs/status/current-state.md`](../status/current-state.md))
 
 ---
 
@@ -144,7 +144,7 @@ Task 3: "Build GTM pipeline UI" → not started
 ### EnterWorktree → Isolated Experiments
 
 **When to use:**
-- Try a risky refactor of rusvel-core ports (could break 48 crates)
+- Try a risky refactor of rusvel-core ports (could break the whole workspace)
 - Experiment with a new LLM provider without affecting working Claude CLI setup
 - Test database migration changes in isolation
 

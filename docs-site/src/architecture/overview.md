@@ -117,7 +117,7 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 
 ```
 rusvel/
-├── crates/                   50 workspace members
+├── crates/                   54 workspace members
 │   ├── rusvel-core/          20 port traits in ports.rs + domain types + DepartmentApp
 │   ├── rusvel-db/            SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           4 LLM providers

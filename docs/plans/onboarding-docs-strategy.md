@@ -8,7 +8,7 @@
 
 | Layer | Tool | License | Size | Why |
 |-------|------|---------|------|-----|
-| Doc site | Starlight (Astro) | MIT | Static | Free, fast, MDX, embeds Svelte, minimal maintenance |
+| Doc site | **mdBook** (see `docs-site/`) | MIT / MPL-2.0 | Static | **Adopted:** Rust-native book, `SUMMARY.md`, CI via `.github/workflows/docs.yml`. Starlight (Astro) was evaluated in [`docs/proposals/docs-site-proposal.md`](../proposals/docs-site-proposal.md); not the active stack. |
 | Product tour | Driver.js | MIT | ~5KB | Zero deps, works with SvelteKit, clean highlight API |
 | Command palette | cmdk-sv | MIT | ~8KB | Svelte port of Linear/Vercel cmdk, unstyled for Tailwind |
 | CLI wizard | cliclack | MIT | Rust | Beautiful first-run prompts, Railway/Vercel aesthetic |

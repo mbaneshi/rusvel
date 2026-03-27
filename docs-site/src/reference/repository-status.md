@@ -28,24 +28,24 @@ When this mdBook page and the repo diverge, **trust the repo files above** and r
 
 | Metric | Count |
 |--------|------:|
-| Workspace members | 50 |
-| Rust LOC (`crates/*.rs`) | ~52,560 |
-| Rust source files (`crates/`) | 215 |
-| Tests (approx., full `cargo test`) | ~399 |
+| Workspace members | 54 |
+| Rust LOC (`crates/*.rs`) | ~62,485 |
+| Rust source files (`crates/`) | 258 |
+| Tests (approx., full `cargo test`) | ~476 |
 | Test targets (approx., `cargo test --no-run`) | ~61 |
-| HTTP route chains in API router | 105 |
-| API modules (`rusvel-api`) | 26 |
+| HTTP route chains in API router | 132 |
+| API modules (`rusvel-api`) | 31 |
 | Port traits (`rusvel-core/src/ports.rs`) | 20 |
-| Departments / `dept-*` crates | 12 / 13 |
+| Departments / `dept-*` crates | 12 / 14 |
 | Engines | 13 (via `DepartmentApp`) |
 
 ---
 
 ## Gaps (explicit)
 
-- **OutreachSend / GTM jobs** — job worker returns `engine_not_wired` until GTM is integrated.
+- **GTM / CRM depth** — OutreachSend job path is wired (approval-gated, `gtm-engine`); more CRM surfaces and polish remain.
 - **Auth** — not full API middleware; env/in-memory style for many paths.
-- **Depth** — Several business engines are thinner than Forge/Code/Content/Harvest; department chat still works via `DepartmentApp`.
+- **Depth** — Several business engines are thinner than Forge/Code/Content/Harvest/Flow; department chat still works via `DepartmentApp`.
 
 ---
 

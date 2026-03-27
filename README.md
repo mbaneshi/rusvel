@@ -10,7 +10,7 @@ A single Rust binary that replaces an entire agency. AI agents handle code, cont
 ## Quick Start
 
 ```bash
-cargo build                    # Build all 48 crates
+cargo build                    # Build all workspace members (see docs/status/current-state.md)
 cargo run                      # Start web server on http://localhost:3000
 ```
 
@@ -55,7 +55,7 @@ rusvel --mcp            # MCP server (stdio JSON-RPC) for Claude Code
 
 ## Architecture
 
-Hexagonal (ports & adapters). 48 crates (~43,670 lines Rust across 185 source files), 13 engines (12 departments + Flow), single binary. All departments migrated to DepartmentApp pattern (ADR-014) with dedicated `dept-*` wrapper crates.
+Hexagonal (ports & adapters). **54** workspace members, **~62,485** lines Rust across **258** `*.rs` files under `crates/`, **13** engines (12 departments + Flow), single binary. All departments migrated to DepartmentApp pattern (ADR-014) with dedicated `dept-*` wrapper crates (**14** `dept-*` crates). Full metrics: [docs/status/current-state.md](docs/status/current-state.md).
 
 ```
 SURFACES: CLI (Clap) | REPL (reedline) | TUI (Ratatui) | Web (Svelte) | MCP
@@ -65,7 +65,7 @@ DEPARTMENTS: 12 dept-* crates (DepartmentApp pattern)
 ENGINES:  Forge | Code | Harvest | Content | GTM | Finance | Product
           Growth | Distro | Legal | Support | Infra | Flow
     |
-FOUNDATION: rusvel-core (19 traits: 14 Port + 5 Store) + adapter crates (DB, LLM, Agent, Events, Vector, Terminal, ...)
+FOUNDATION: rusvel-core (20 port traits in ports.rs, incl. five *Store + BrowserPort) + adapter crates (DB, LLM, Agent, Events, Vector, Terminal, ...)
     |
 TOOLS:    22+ tools (10 built-in incl. tool_search + 12 engine)
 ```

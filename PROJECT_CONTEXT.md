@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT.md
 
-Authoritative snapshot of the **rusvel** / **RUSVEL** workspace: purpose, architecture, crates, stack, data flow, decisions, state, and how to work on it. Counts and membership are taken from the root `Cargo.toml` workspace list unless noted.
+Narrative overview of the **rusvel** / **RUSVEL** workspace: purpose, architecture, crates, stack, data flow, decisions, state, and how to work on it. **Live counts** (workspace members, LOC, routes, tests) are maintained in [`docs/status/current-state.md`](docs/status/current-state.md); treat that file as the written source of truth for metrics.
 
 ---
 
@@ -57,7 +57,7 @@ The **solo founder / indie builder**: one human operating one workspace, not a m
 
 | Area | Path | Role |
 |------|------|------|
-| Workspace root | `Cargo.toml`, `Cargo.lock` | Defines **48** workspace members (crates). |
+| Workspace root | `Cargo.toml`, `Cargo.lock` | Defines workspace members (see [`docs/status/current-state.md`](docs/status/current-state.md) for current count). |
 | Crates | `crates/*` | Foundation adapters, engines, API/CLI/MCP/TUI, app binary. |
 | Frontend | `frontend/` | SvelteKit 5 + Vite + Tailwind 4; build output `frontend/build/`. |
 | Design / plans | `docs/design/`, `docs/plans/` | Architecture v2, ADRs, roadmap, phase plans, flow-engine plan. |
@@ -301,7 +301,7 @@ See **`docs/plans/roadmap-v2.md`**: phases for deeper agent graphs, revenue engi
 - **Approval workflow:** types exist; end-to-end **API/UI** not fully productized (per project docs).
 - **GTM / OutreachSend:** some job paths still placeholders relative to full vision.
 - **Older docs** (e.g. `docs/design/vision.md` port list) may still describe pre-v2 ports; **source of truth** for ports is `crates/rusvel-core/src/ports.rs`.
-- **Roadmap crate-count table** updated to 48 crates (2026-03-26).
+- **Metrics:** use [`docs/status/current-state.md`](docs/status/current-state.md) for crate counts and scale; avoid hard-coding numbers in prose here.
 
 ---
 
@@ -343,7 +343,7 @@ uv sync && uv run <script.py>
 
 ### Tests
 
-- **Rust:** unit/integration tests per crate under `src` / `tests`; largest suites often **`rusvel-db`**, **`rusvel-api`**, **`forge-engine`**. Currently **222 tests in 30 test binaries**, 0 failures.
+- **Rust:** unit/integration tests per crate under `src` / `tests`; largest suites often **`rusvel-db`**, **`rusvel-api`**, **`forge-engine`**. Approx. **~476** tests and **~61** test targets (see [`docs/status/current-state.md`](docs/status/current-state.md)); 0 failures in a full local run.
 - **Frontend:** Playwright E2E and **visual** projects; `pnpm test:analyze` for optional AI-assisted diff analysis.
 
 ### CI/CD
@@ -360,7 +360,7 @@ uv sync && uv run <script.py>
 - **Extended engines:** Order of instantiation for finance/product/growth/distro/legal/support/infra vs keeping generic-agent-only behavior.
 - **Approval UX:** How approvals surface in API and frontend for content and outreach (ADR-008 intent vs implementation gap).
 - **Vector + memory productization:** UX and defaults for hybrid FTS5 + Lance retrieval across departments.
-- **Optional:** Ensure all docs consistently reference **48** workspace crates.
+- **Optional:** Ensure living docs link or match [`docs/status/current-state.md`](docs/status/current-state.md) for workspace scale.
 
 ### TODOs in code worth flagging
 

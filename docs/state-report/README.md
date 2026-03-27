@@ -1,5 +1,7 @@
 # RUSVEL State Report — Code Truth Edition
 
+> **Snapshot only (2026-03-27).** This folder is a generated code scan, not the living metrics source. For **current** workspace counts, routes, tests, and gaps, use [`docs/status/current-state.md`](../status/current-state.md) and dated verification logs under `docs/status/`.
+
 > Generated 2026-03-27 from actual source code, not documentation.
 > Every claim verified against disk artifacts under `crates/` and `frontend/src/`.
 

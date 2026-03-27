@@ -9,6 +9,7 @@
 | [`design/architecture-v2.md`](design/architecture-v2.md) | Layers, ports/adapters, surfaces — structural design. |
 | [`design/decisions.md`](design/decisions.md) | ADRs (why, not feature inventory). |
 | [`plans/sprints.md`](plans/sprints.md) | Active consolidated sprint / roadmap intent (verify numbers against `current-state` glossary). |
+| [`contributing/documentation-maintenance.md`](contributing/documentation-maintenance.md) | **Maintaining docs** — canonical sources, agent prompt, drift search commands, mdBook vs `docs/`. |
 
 ## Intent and research (not runtime truth)
 
