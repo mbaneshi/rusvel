@@ -3,21 +3,29 @@
 //! These routes expose real domain logic (code analysis, content drafting,
 //! harvest scoring) — not just CRUD or generic chat.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr as _;
 use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
+use gtm_engine::events as gtm_events;
+use gtm_engine::{DealId, DealStage};
 use serde::Deserialize;
+use serde::Serialize;
 
 use rusvel_core::domain::{
-    CodeAnalysisSummary, ContentItem, ContentKind, ExecutiveBrief, JobKind, NewJob, Opportunity,
-    OpportunityStage, Platform,
+    CodeAnalysisSummary, ContentItem, ContentKind, Event, ExecutiveBrief, JobKind, NewJob,
+    Opportunity, OpportunityStage, Platform,
 };
 use rusvel_core::error::RusvelError;
-use rusvel_core::id::{ContentId, SessionId};
+use rusvel_core::domain::Contact;
+use rusvel_core::id::{ContactId, ContentId, EventId, SessionId};
+
+use gtm_engine::crm::CrmManager;
 
 use crate::AppState;
 
@@ -474,6 +482,7 @@ pub async fn harvest_proposal(
             }),
             max_retries: 3,
             metadata: serde_json::json!({}),
+            scheduled_at: None,
         })
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -527,6 +536,193 @@ pub async fn harvest_list(
         .await
         .map_err(engine_err)?;
     Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
+}
+
+// ── GTM CRM (S-036) — contacts + deals via [`CrmManager`] on shared storage ──
+
+#[derive(Debug, Deserialize)]
+pub struct GtmSessionQuery {
+    pub session_id: String,
+}
+
+/// GET /api/dept/gtm/contacts — list CRM contacts for the session.
+pub async fn gtm_contacts_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<GtmSessionQuery>,
+) -> ApiResult<Vec<Contact>> {
+    let sid = parse_session_id(&q.session_id)?;
+    let crm = CrmManager::new(state.storage.clone());
+    let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
+    Ok(Json(contacts))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmContactCreateBody {
+    pub session_id: String,
+    pub name: String,
+    pub email: String,
+    #[serde(default)]
+    pub company: Option<String>,
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub links: Vec<String>,
+    #[serde(default)]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// POST /api/dept/gtm/contacts — create a contact (`email` becomes the primary entry in `emails`).
+pub async fn gtm_contacts_create(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<GtmContactCreateBody>,
+) -> ApiResult<serde_json::Value> {
+    let sid = parse_session_id(&body.session_id)?;
+    let crm = CrmManager::new(state.storage.clone());
+    let contact = Contact {
+        id: ContactId::new(),
+        session_id: sid,
+        name: body.name,
+        emails: vec![body.email],
+        links: body.links,
+        company: body.company,
+        role: body.role,
+        tags: body.tags,
+        last_contacted_at: None,
+        metadata: body.metadata.unwrap_or_else(|| serde_json::json!({})),
+    };
+    let id = crm.add_contact(sid, contact).await.map_err(engine_err)?;
+
+    let ev = Event {
+        id: EventId::new(),
+        session_id: Some(sid),
+        run_id: None,
+        source: "gtm".into(),
+        kind: gtm_events::CONTACT_ADDED.into(),
+        payload: serde_json::json!({ "contact_id": id.to_string() }),
+        created_at: Utc::now(),
+        metadata: serde_json::json!({}),
+    };
+    let _ = state.events.emit(ev).await;
+
+    Ok(Json(serde_json::json!({ "id": id.to_string() })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmDealsQuery {
+    pub session_id: String,
+    pub stage: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct GtmDealRow {
+    pub id: String,
+    pub contact_id: String,
+    pub title: String,
+    pub value: f64,
+    pub stage: DealStage,
+    pub notes: String,
+    pub created_at: DateTime<Utc>,
+    pub contact_name: Option<String>,
+    pub last_activity: DateTime<Utc>,
+}
+
+/// GET /api/dept/gtm/deals — list deals with contact names for the Kanban UI (S-037).
+pub async fn gtm_deals_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<GtmDealsQuery>,
+) -> ApiResult<Vec<GtmDealRow>> {
+    let sid = parse_session_id(&q.session_id)?;
+    let crm = CrmManager::new(state.storage.clone());
+    let stage_filter = q
+        .stage
+        .as_deref()
+        .and_then(|s| serde_json::from_value::<DealStage>(serde_json::json!(s)).ok());
+    let deals = crm.list_deals(sid, stage_filter).await.map_err(engine_err)?;
+    let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
+    let contact_map: HashMap<String, rusvel_core::domain::Contact> = contacts
+        .into_iter()
+        .map(|c| (c.id.to_string(), c))
+        .collect();
+
+    let mut rows = Vec::with_capacity(deals.len());
+    for d in deals {
+        let contact_name = contact_map
+            .get(&d.contact_id.to_string())
+            .map(|c| c.name.clone());
+        let last_activity = contact_map
+            .get(&d.contact_id.to_string())
+            .and_then(|c| c.last_contacted_at)
+            .map(|lc| lc.max(d.created_at))
+            .unwrap_or(d.created_at);
+        rows.push(GtmDealRow {
+            id: d.id.to_string(),
+            contact_id: d.contact_id.to_string(),
+            title: d.title,
+            value: d.value,
+            stage: d.stage,
+            notes: d.notes,
+            created_at: d.created_at,
+            contact_name,
+            last_activity,
+        });
+    }
+    Ok(Json(rows))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmDealAdvanceBody {
+    pub session_id: String,
+    pub deal_id: String,
+    pub stage: String,
+}
+
+/// POST /api/dept/gtm/deals/advance — move a deal to a new stage (drag-and-drop from the UI).
+pub async fn gtm_deal_advance(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<GtmDealAdvanceBody>,
+) -> ApiResult<serde_json::Value> {
+    let sid = parse_session_id(&body.session_id)?;
+    let deal_id = DealId::from_str(body.deal_id.trim()).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid deal_id (expected UUID)".into(),
+        )
+    })?;
+    let new_stage: DealStage = serde_json::from_value(serde_json::json!(&body.stage)).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid stage (use Lead, Qualified, Proposal, Negotiation, Won, Lost)".into(),
+        )
+    })?;
+
+    let crm = CrmManager::new(state.storage.clone());
+    let deals = crm.list_deals(sid, None).await.map_err(engine_err)?;
+    if !deals.iter().any(|d| d.id == deal_id) {
+        return Err((StatusCode::NOT_FOUND, "deal not found for session".into()));
+    }
+
+    crm.advance_deal(&deal_id, new_stage)
+        .await
+        .map_err(engine_err)?;
+
+    let ev = Event {
+        id: EventId::new(),
+        session_id: Some(sid),
+        run_id: None,
+        source: "gtm".into(),
+        kind: gtm_events::DEAL_UPDATED.into(),
+        payload: serde_json::json!({
+            "deal_id": deal_id.to_string(),
+            "stage": body.stage,
+        }),
+        created_at: Utc::now(),
+        metadata: serde_json::json!({}),
+    };
+    let _ = state.events.emit(ev).await;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 #[derive(Debug, Deserialize)]

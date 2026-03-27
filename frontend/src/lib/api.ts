@@ -835,6 +835,91 @@ export async function getHarvestPipeline(sessionId: string): Promise<unknown> {
 	return request(`/api/dept/harvest/pipeline?${sp}`);
 }
 
+/** CRM contact from `GET /api/dept/gtm/contacts` (S-036). */
+export interface GtmContactRow {
+	id: string;
+	session_id: string;
+	name: string;
+	emails: string[];
+	links: string[];
+	company: string | null;
+	role: string | null;
+	tags: string[];
+	last_contacted_at: string | null;
+	metadata: Record<string, unknown>;
+}
+
+export async function getGtmContacts(sessionId: string): Promise<GtmContactRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	return request(`/api/dept/gtm/contacts?${sp}`);
+}
+
+export async function postGtmContact(
+	sessionId: string,
+	body: {
+		name: string;
+		email: string;
+		company?: string | null;
+		role?: string | null;
+		tags?: string[];
+		links?: string[];
+	}
+): Promise<{ id: string }> {
+	return request('/api/dept/gtm/contacts', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			name: body.name,
+			email: body.email,
+			company: body.company ?? null,
+			role: body.role ?? null,
+			tags: body.tags ?? [],
+			links: body.links ?? []
+		})
+	});
+}
+
+export type GtmDealStage =
+	| 'Lead'
+	| 'Qualified'
+	| 'Proposal'
+	| 'Negotiation'
+	| 'Won'
+	| 'Lost';
+
+export interface GtmDealRow {
+	id: string;
+	contact_id: string;
+	title: string;
+	value: number;
+	stage: GtmDealStage;
+	notes: string;
+	created_at: string;
+	contact_name: string | null;
+	last_activity: string;
+}
+
+export async function getGtmDeals(sessionId: string, stage?: string): Promise<GtmDealRow[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	if (stage) sp.set('stage', stage);
+	return request(`/api/dept/gtm/deals?${sp}`);
+}
+
+export async function postGtmDealAdvance(
+	sessionId: string,
+	dealId: string,
+	stage: GtmDealStage
+): Promise<void> {
+	await request('/api/dept/gtm/deals/advance', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			deal_id: dealId,
+			stage
+		})
+	});
+}
+
 export interface OpportunityRow {
 	id: string;
 	title: string;
