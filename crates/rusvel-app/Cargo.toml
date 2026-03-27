@@ -17,6 +17,8 @@ rusvel-db     = { workspace = true }
 rusvel-llm    = { workspace = true }
 rusvel-agent  = { workspace = true }
 rusvel-event  = { workspace = true }
+rusvel-webhook = { workspace = true }
+rusvel-cron = { workspace = true }
 rusvel-memory = { workspace = true }
 rusvel-tool   = { workspace = true }
 rusvel-auth   = { workspace = true }

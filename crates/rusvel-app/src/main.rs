@@ -33,7 +33,7 @@ use rusvel_cli::Cli;
 use rusvel_config::TomlConfig;
 use rusvel_core::domain::*;
 use rusvel_core::id::AgentProfileId;
-use rusvel_core::id::SessionId;
+use rusvel_core::id::{EventId, SessionId};
 use rusvel_core::ports::{
     ConfigPort, DeployPort, EmbeddingPort, EventPort, JobPort, MetricStore, SessionPort,
     StoragePort,
@@ -1135,6 +1135,50 @@ async fn main() -> Result<()> {
                                 }
                             }
                         }
+                        JobKind::ScheduledCron => {
+                            let sid = job.session_id;
+                            let schedule_id = job
+                                .payload
+                                .get("schedule_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let event_kind = job
+                                .payload
+                                .get("event_kind")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("cron.fired")
+                                .to_string();
+                            let inner = job
+                                .payload
+                                .get("payload")
+                                .cloned()
+                                .unwrap_or_else(|| serde_json::json!({}));
+                            let ev = Event {
+                                id: EventId::new(),
+                                session_id: Some(sid),
+                                run_id: None,
+                                source: "cron".into(),
+                                kind: event_kind,
+                                payload: serde_json::json!({
+                                    "schedule_id": schedule_id,
+                                    "job_id": job_id.to_string(),
+                                    "data": inner,
+                                }),
+                                created_at: Utc::now(),
+                                metadata: serde_json::json!({}),
+                            };
+                            match events_worker.emit(ev).await {
+                                Ok(_) => Ok(Some(JobResult {
+                                    output: serde_json::json!({
+                                        "ok": true,
+                                        "schedule_id": schedule_id,
+                                    }),
+                                    metadata: serde_json::json!({ "engine": "cron" }),
+                                })),
+                                Err(e) => Err(e),
+                            }
+                        }
                         _ => {
                             tracing::warn!(job_id = %job_id, kind = ?job.kind, "Unknown job kind");
                             Ok(Some(JobResult {
@@ -1205,6 +1249,14 @@ async fn main() -> Result<()> {
 
     // 9. Dispatch
     let storage_port: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
+    let webhook_receiver = Arc::new(rusvel_webhook::WebhookReceiver::new(
+        storage_port.clone(),
+        events.clone(),
+    ));
+    let cron_scheduler = Arc::new(rusvel_cron::CronScheduler::new(
+        storage_port.clone(),
+        jobs.clone(),
+    ));
     if cli.command.is_some() {
         // Subcommand present -> CLI handler (includes `shell` command)
         let engine_refs = rusvel_cli::departments::EngineRefs {
@@ -1363,6 +1415,8 @@ async fn main() -> Result<()> {
             terminal: Some(terminal_for_flow.clone()),
             cdp: Some(cdp_client.clone()),
             auth: rusvel_api::auth::AuthConfig::from_env(),
+            webhook_receiver: webhook_receiver.clone(),
+            cron_scheduler: cron_scheduler.clone(),
         };
 
         let frontend_dir = [
@@ -1391,6 +1445,18 @@ async fn main() -> Result<()> {
         let router = rusvel_mcp::http::nest_mcp_http(base, mcp_srv, rusvel_mcp::http::McpAuth::from_env());
         let addr: SocketAddr = "127.0.0.1:3000".parse()?;
         tracing::info!("RUSVEL starting on http://{addr} (MCP HTTP)");
+
+        let cron_for_bg = cron_scheduler.clone();
+        let _cron_tick_task_mcp_http = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                if let Err(e) = cron_for_bg.tick().await {
+                    tracing::warn!(error = %e, "Cron tick failed");
+                }
+            }
+        });
 
         let server = rusvel_api::start_server(router, addr);
         let shutdown = tokio::signal::ctrl_c();
@@ -1470,6 +1536,8 @@ async fn main() -> Result<()> {
             terminal: Some(terminal_for_flow.clone()),
             cdp: Some(cdp_client.clone()),
             auth: rusvel_api::auth::AuthConfig::from_env(),
+            webhook_receiver: webhook_receiver.clone(),
+            cron_scheduler: cron_scheduler.clone(),
         };
 
         // Look for frontend build in known locations (filesystem first)
@@ -1498,6 +1566,18 @@ async fn main() -> Result<()> {
         let router = rusvel_api::build_router_with_frontend(state, frontend_dir);
         let addr: SocketAddr = "127.0.0.1:3000".parse()?;
         tracing::info!("RUSVEL starting on http://{addr}");
+
+        let cron_for_bg = cron_scheduler.clone();
+        let _cron_tick_task = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                if let Err(e) = cron_for_bg.tick().await {
+                    tracing::warn!(error = %e, "Cron tick failed");
+                }
+            }
+        });
 
         let server = rusvel_api::start_server(router, addr);
         let shutdown = tokio::signal::ctrl_c();
