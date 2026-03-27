@@ -3,11 +3,20 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
-	import { departments, contextPanelOpen } from '$lib/stores';
+	import { departments, contextPanelOpen, bottomPanelOpen } from '$lib/stores';
 	import type { DepartmentDef } from '$lib/api';
-	import { MessageSquare, Sliders, Activity, LayoutGrid, Calendar, PanelRightOpen } from 'lucide-svelte';
+	import {
+		MessageSquare,
+		Sliders,
+		Activity,
+		LayoutGrid,
+		Calendar,
+		PanelRightOpen,
+		PanelBottomOpen
+	} from 'lucide-svelte';
 	import { deptExtraSections } from '$lib/departmentManifest';
 	import ContextPanel from '$lib/components/shell/ContextPanel.svelte';
+	import BottomPanel from '$lib/components/shell/BottomPanel.svelte';
 
 	let allDepts: DepartmentDef[] = $state([]);
 	departments.subscribe((v) => (allDepts = v));
@@ -28,11 +37,18 @@
 	onMount(() => {
 		if (!browser) return;
 		const onKey = (e: KeyboardEvent) => {
-			if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'j') return;
 			const el = e.target as HTMLElement | null;
 			if (el?.closest('input, textarea, [contenteditable="true"]')) return;
-			e.preventDefault();
-			contextPanelOpen.update((v) => !v);
+			if (!(e.metaKey || e.ctrlKey)) return;
+			if (e.key.toLowerCase() === 'j') {
+				e.preventDefault();
+				contextPanelOpen.update((v) => !v);
+				return;
+			}
+			if (e.code === 'Backquote') {
+				e.preventDefault();
+				bottomPanelOpen.update((v) => !v);
+			}
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
@@ -44,9 +60,10 @@
 		<p class="text-sm text-[var(--muted-foreground)]">Department not found.</p>
 	</div>
 {:else}
-	<div class="flex h-full min-h-0">
+	<div class="flex h-full min-h-0 flex-col">
+		<div class="flex min-h-0 flex-1 overflow-hidden">
 		<aside
-			class="flex w-48 shrink-0 flex-col gap-1 border-r border-border bg-sidebar/40 px-2 py-3"
+			class="flex h-full min-h-0 w-48 shrink-0 flex-col gap-1 border-r border-border bg-sidebar/40 px-2 py-3"
 			aria-label="Department sections"
 		>
 			<p class="mb-1 px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -99,9 +116,11 @@
 				</a>
 			{/each}
 
+			<div class="min-h-0 flex-1"></div>
+
 			<button
 				type="button"
-				class="mt-auto flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+				class="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
 				onclick={() => contextPanelOpen.update((v) => !v)}
 				title="Toggle context panel (⌘J / Ctrl+J)"
 			>
@@ -109,6 +128,18 @@
 				<span>Context</span>
 				<kbd class="ml-auto hidden rounded border border-border bg-secondary/80 px-1 font-mono text-[9px] lg:inline"
 					>⌘J</kbd
+				>
+			</button>
+			<button
+				type="button"
+				class="flex items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+				onclick={() => bottomPanelOpen.update((v) => !v)}
+				title="Toggle bottom panel (⌘` / Ctrl+`)"
+			>
+				<PanelBottomOpen size={16} strokeWidth={1.75} class="shrink-0" />
+				<span>Bottom</span>
+				<kbd class="ml-auto hidden rounded border border-border bg-secondary/80 px-1 font-mono text-[9px] lg:inline"
+					>⌘`</kbd
 				>
 			</button>
 		</aside>
@@ -130,5 +161,21 @@
 				</button>
 			{/if}
 		</div>
+		</div>
+
+		{#if $bottomPanelOpen}
+			<BottomPanel deptId={dept.id} />
+		{:else}
+			<button
+				type="button"
+				class="flex h-7 w-full shrink-0 items-center justify-center gap-2 border-t border-border bg-muted/20 text-[10px] text-muted-foreground hover:bg-muted/35"
+				onclick={() => bottomPanelOpen.set(true)}
+				title="Open bottom panel: terminal, jobs, events (⌘`)"
+			>
+				<PanelBottomOpen size={14} strokeWidth={1.75} />
+				<span>Terminal · Jobs · Events</span>
+				<kbd class="rounded border border-border bg-secondary/80 px-1 font-mono text-[9px]">⌘`</kbd>
+			</button>
+		{/if}
 	</div>
 {/if}

@@ -32,6 +32,12 @@ export const contextPanelMode = writable<ContextPanelMode>('chat');
 /** JSON payload for Properties mode; set from main content when an entity is selected. */
 export const contextPanelProperties = writable<unknown>(null);
 
+/** Sprint S-021: collapsible bottom panel on `/dept/*` (terminal, jobs, events). */
+export type BottomPanelTab = 'terminal' | 'jobs' | 'events';
+
+export const bottomPanelOpen = writable(false);
+export const bottomPanelTab = writable<BottomPanelTab>('terminal');
+
 // ── Onboarding state ─────────────────────────────────────────
 export interface OnboardingState {
 	sessionCreated: boolean;
