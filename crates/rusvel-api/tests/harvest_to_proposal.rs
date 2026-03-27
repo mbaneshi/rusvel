@@ -15,7 +15,7 @@ use rusvel_config::TomlConfig;
 use rusvel_agent::AgentRuntime;
 use rusvel_core::domain::{
     AgentOutput, AgentStatus, Content, FinishReason, JobKind, JobResult, LlmRequest, LlmResponse,
-    LlmUsage, ModelRef, NewJob, Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
+    LlmUsage, ModelRef, Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
 };
 use rusvel_core::error::Result;
 use rusvel_core::id::{RunId, SessionId};
@@ -494,19 +494,21 @@ async fn harvest_e2e_proposal_draft_appears_in_approval_queue() {
     assert!(score_json.get("score").is_some());
     assert!(score_json.get("reasoning").is_some());
 
-    jobs
-        .enqueue(NewJob {
-            session_id: session_a,
-            kind: JobKind::ProposalDraft,
-            payload: json!({
-                "opportunity_id": opp_id,
-                "profile": "Senior Rust engineer",
-            }),
-            max_retries: 3,
-            metadata: json!({}),
-        })
-        .await
-        .expect("enqueue ProposalDraft");
+    let (st_pr, prop_queue_body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/proposal",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "opportunity_id": opp_id,
+            "profile": "Senior Rust engineer",
+        })),
+    )
+    .await;
+    assert_eq!(st_pr, StatusCode::OK);
+    let queued: Value = serde_json::from_slice(&prop_queue_body).unwrap();
+    assert_eq!(queued["status"].as_str().unwrap(), "queued");
+    assert!(queued["job_id"].as_str().is_some());
 
     run_proposal_draft_job(&harvest, jobs.as_ref())
         .await
