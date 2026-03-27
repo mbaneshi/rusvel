@@ -172,12 +172,30 @@
 </script>
 
 <div class="flex h-full min-h-0 flex-col overflow-y-auto">
-	<div class="border-b border-border px-4 py-3">
-		<h1 class="text-lg font-semibold">Invoices</h1>
-		<p class="text-xs text-muted-foreground">
-			Create and track invoices (Draft → Sent → Paid / Overdue). Detail view supports print-to-PDF from
-			the browser.
-		</p>
+	<div class="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+		<div>
+			<h1 class="text-lg font-semibold">Invoices</h1>
+			<p class="text-xs text-muted-foreground">
+				Create and track invoices (Draft → Sent → Paid / Overdue). Detail view supports print-to-PDF from
+				the browser.
+			</p>
+		</div>
+		{#if isGtm}
+			<div class="flex flex-wrap items-center gap-2">
+				<a
+					href="/dept/gtm/contacts"
+					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					Contacts
+				</a>
+				<a
+					href="/dept/gtm/deals"
+					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					Deals
+				</a>
+			</div>
+		{/if}
 	</div>
 
 	{#if !isGtm}

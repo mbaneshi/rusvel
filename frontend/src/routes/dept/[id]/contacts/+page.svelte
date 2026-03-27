@@ -9,7 +9,7 @@
 		type GtmDealRow
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
-	import { ArrowRight } from 'lucide-svelte';
+	import { ArrowRight, Receipt } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 
@@ -125,13 +125,22 @@
 			</p>
 		</div>
 		{#if isGtm}
-			<a
-				href="/dept/gtm/deals"
-				class="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
-			>
-				Deal pipeline
-				<ArrowRight class="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
-			</a>
+			<div class="flex flex-wrap items-center gap-2">
+				<a
+					href="/dept/gtm/deals"
+					class="inline-flex items-center gap-1 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					Deal pipeline
+					<ArrowRight class="h-3.5 w-3.5 opacity-70" strokeWidth={2} />
+				</a>
+				<a
+					href="/dept/gtm/invoices"
+					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					<Receipt class="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
+					Invoices
+				</a>
+			</div>
 		{/if}
 	</div>
 

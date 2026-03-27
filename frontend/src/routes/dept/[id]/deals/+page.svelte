@@ -9,7 +9,7 @@
 		type GtmDealStage
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
-	import { Users } from 'lucide-svelte';
+	import { Receipt, Users } from 'lucide-svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 
 	const STAGES: GtmDealStage[] = [
@@ -154,13 +154,22 @@
 			</p>
 		</div>
 		{#if isGtm}
-			<a
-				href="/dept/gtm/contacts"
-				class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
-			>
-				<Users class="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
-				Contacts
-			</a>
+			<div class="flex flex-wrap items-center gap-2">
+				<a
+					href="/dept/gtm/contacts"
+					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					<Users class="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
+					Contacts
+				</a>
+				<a
+					href="/dept/gtm/invoices"
+					class="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1.5 text-[11px] font-medium text-foreground hover:bg-accent"
+				>
+					<Receipt class="h-3.5 w-3.5 opacity-80" strokeWidth={2} />
+					Invoices
+				</a>
+			</div>
 		{/if}
 	</div>
 
