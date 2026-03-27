@@ -6238,6 +6238,8 @@ dependencies = [
  "futures",
  "gtm-engine",
  "harvest-engine",
+ "hex",
+ "hmac",
  "reqwest",
  "rusqlite",
  "rusvel-agent",
@@ -6249,8 +6251,10 @@ dependencies = [
  "rusvel-llm",
  "rusvel-memory",
  "rusvel-schema",
+ "rusvel-webhook",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tokio-stream",
  "tower",
@@ -6315,6 +6319,7 @@ dependencies = [
  "rusvel-tool",
  "rusvel-tui",
  "rusvel-vector",
+ "rusvel-webhook",
  "serde",
  "serde_json",
  "support-engine",
@@ -6642,6 +6647,21 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "rusvel-webhook"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "hex",
+ "hmac",
+ "rusvel-core",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "uuid",
 ]
 
 [[package]]

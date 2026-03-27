@@ -20,6 +20,7 @@ harvest-engine = { workspace = true }
 flow-engine = { workspace = true }
 gtm-engine = { workspace = true }
 rusvel-cdp = { workspace = true }
+rusvel-webhook = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -35,6 +36,9 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 reqwest = { workspace = true }
 
 [dev-dependencies]
+hex = "0.4"
+hmac = "0.12"
+sha2 = "0.10"
 async-trait = { workspace = true }
 forge-engine = { workspace = true }
 rusvel-agent = { workspace = true }

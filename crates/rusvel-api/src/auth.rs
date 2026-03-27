@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::State;
-use axum::http::{Request, StatusCode};
+use axum::http::{Method, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
@@ -17,6 +17,14 @@ use crate::AppState;
 
 /// Paths that bypass auth even when a token is configured.
 const EXEMPT_PATHS: &[&str] = &["/api/health"];
+
+fn webhook_receive_exempt(path: &str, method: &Method) -> bool {
+    if *method != Method::POST {
+        return false;
+    }
+    let t = path.trim_end_matches('/');
+    t.starts_with("/api/webhooks/") && t.len() > "/api/webhooks/".len()
+}
 
 /// Auth configuration resolved once at startup.
 #[derive(Clone)]
@@ -42,7 +50,7 @@ async fn bearer_check(config: &AuthConfig, req: Request<Body>, next: Next) -> Re
     };
 
     let path = req.uri().path();
-    if EXEMPT_PATHS.contains(&path) {
+    if EXEMPT_PATHS.contains(&path) || webhook_receive_exempt(path, req.method()) {
         return next.run(req).await;
     }
 
@@ -93,7 +101,7 @@ mod tests {
     use super::*;
     use axum::Router;
     use axum::body::to_bytes;
-    use axum::routing::get;
+    use axum::routing::{get, post};
     use tower::ServiceExt;
 
     fn router_with(token: Option<&str>) -> Router {
@@ -158,6 +166,26 @@ mod tests {
     async fn health_always_exempt() {
         let app = router_with(Some("secret123"));
         let res = app.oneshot(req("/api/health", None)).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn webhook_receive_post_exempt_without_bearer() {
+        let config = AuthConfig {
+            token: Some("secret123".into()),
+        };
+        let app = Router::new()
+            .route("/api/webhooks/{id}", post(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                config,
+                bearer_auth_with_config,
+            ));
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/webhooks/abc-id")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
 }

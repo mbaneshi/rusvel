@@ -33,6 +33,7 @@ pub mod skills;
 pub mod system;
 pub mod terminal;
 pub mod visual_report;
+pub mod webhooks;
 pub mod workflows;
 
 use std::net::SocketAddr;
@@ -59,6 +60,7 @@ use rusvel_core::ports::{
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_agent::AgentRuntime;
 use rusvel_db::Database;
+use rusvel_webhook::WebhookReceiver;
 
 /// Shared application state injected into all handlers.
 pub struct AppState {
@@ -110,6 +112,11 @@ pub fn build_router_with_frontend(
 
     let api = Router::new()
         .route("/api/health", get(routes::health))
+        .route(
+            "/api/webhooks",
+            get(webhooks::list_webhooks).post(webhooks::create_webhook),
+        )
+        .route("/api/webhooks/{id}", post(webhooks::receive_webhook))
         .route("/api/brief", get(engine_routes::brief_get))
         .route("/api/brief/generate", post(engine_routes::brief_generate))
         .route("/api/sessions", get(routes::list_sessions))

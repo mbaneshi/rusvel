@@ -10,9 +10,9 @@ use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use forge_engine::ForgeEngine;
 use harvest_engine::HarvestEngine;
+use rusvel_agent::AgentRuntime;
 use rusvel_api::{AppState, build_router};
 use rusvel_config::TomlConfig;
-use rusvel_agent::AgentRuntime;
 use rusvel_core::domain::{
     AgentOutput, AgentStatus, Content, FinishReason, JobKind, JobResult, LlmRequest, LlmResponse,
     LlmUsage, ModelRef, Session, SessionConfig, SessionKind, ToolDefinition, ToolResult,
@@ -228,15 +228,13 @@ async fn test_router() -> (
     let db_path = base.join("rusvel.db");
     let db: Arc<Database> = Arc::new(Database::open(&db_path).expect("db"));
     let storage: Arc<dyn StoragePort> = db.clone();
-    let config: Arc<dyn ConfigPort> = Arc::new(
-        TomlConfig::load(base.join("config.toml")).expect("config"),
-    );
+    let config: Arc<dyn ConfigPort> =
+        Arc::new(TomlConfig::load(base.join("config.toml")).expect("config"));
     let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
-        db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        db.clone() as Arc<dyn rusvel_core::ports::EventStore>
     ));
-    let memory: Arc<dyn MemoryPort> = Arc::new(
-        MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
-    );
+    let memory: Arc<dyn MemoryPort> =
+        Arc::new(MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"));
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
 
@@ -285,6 +283,11 @@ async fn test_router() -> (
         sessions.create(session).await.expect("session");
     }
 
+    let webhook_receiver = Arc::new(rusvel_webhook::WebhookReceiver::new(
+        storage.clone(),
+        events.clone(),
+    ));
+
     let state = AppState {
         forge,
         code_engine: None,
@@ -298,7 +301,9 @@ async fn test_router() -> (
         database: db.clone(),
         storage,
         profile: None,
-        registry: DepartmentRegistry::load(PathBuf::from("/__no_such__/departments.toml").as_path()),
+        registry: DepartmentRegistry::load(
+            PathBuf::from("/__no_such__/departments.toml").as_path(),
+        ),
         embedding: None,
         vector_store: None,
         memory: memory.clone(),
@@ -308,6 +313,7 @@ async fn test_router() -> (
         terminal: None,
         cdp: None,
         auth: rusvel_api::auth::AuthConfig::from_env(),
+        webhook_receiver,
     };
 
     (
@@ -519,10 +525,7 @@ async fn harvest_e2e_proposal_draft_appears_in_approval_queue() {
     assert_eq!(st_ap, StatusCode::OK);
     let pending: Vec<Value> = serde_json::from_slice(&body_ap).unwrap();
     assert_eq!(pending.len(), 1);
-    assert_eq!(
-        pending[0]["status"].as_str().unwrap(),
-        "AwaitingApproval"
-    );
+    assert_eq!(pending[0]["status"].as_str().unwrap(), "AwaitingApproval");
     let kind = &pending[0]["kind"];
     let kind_str = if kind.is_string() {
         kind.as_str().unwrap().to_string()
