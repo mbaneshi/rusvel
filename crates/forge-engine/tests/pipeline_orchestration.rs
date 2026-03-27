@@ -3,10 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use forge_engine::pipeline::{
-    PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner, FLOW_EXECUTIONS_OBJECT_KIND,
-};
 use forge_engine::ForgeEngine;
+use forge_engine::pipeline::{
+    FLOW_EXECUTIONS_OBJECT_KIND, PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner,
+};
 use rusvel_core::domain::{ContentKind, Event, EventFilter, ObjectFilter, Session};
 use rusvel_core::error::Result;
 use rusvel_core::id::{EventId, SessionId};
@@ -14,15 +14,12 @@ use rusvel_core::ports::{
     AgentPort, ConfigPort, EventPort, JobPort, MemoryPort, ObjectStore, SessionPort, StoragePort,
 };
 use rusvel_core::ports::{EventStore, JobStore, MetricStore, SessionStore};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 struct MockAgent;
 #[async_trait]
 impl AgentPort for MockAgent {
-    async fn create(
-        &self,
-        _: rusvel_core::domain::AgentConfig,
-    ) -> Result<rusvel_core::id::RunId> {
+    async fn create(&self, _: rusvel_core::domain::AgentConfig) -> Result<rusvel_core::id::RunId> {
         Ok(rusvel_core::id::RunId::new())
     }
     async fn run(
@@ -127,10 +124,17 @@ impl JobPort for MockJobs {
     async fn enqueue(&self, _: rusvel_core::domain::NewJob) -> Result<rusvel_core::id::JobId> {
         Ok(rusvel_core::id::JobId::new())
     }
-    async fn dequeue(&self, _: &[rusvel_core::domain::JobKind]) -> Result<Option<rusvel_core::domain::Job>> {
+    async fn dequeue(
+        &self,
+        _: &[rusvel_core::domain::JobKind],
+    ) -> Result<Option<rusvel_core::domain::Job>> {
         Ok(None)
     }
-    async fn complete(&self, _: &rusvel_core::id::JobId, _: rusvel_core::domain::JobResult) -> Result<()> {
+    async fn complete(
+        &self,
+        _: &rusvel_core::id::JobId,
+        _: rusvel_core::domain::JobResult,
+    ) -> Result<()> {
         Ok(())
     }
     async fn hold_for_approval(
@@ -156,7 +160,10 @@ impl JobPort for MockJobs {
     async fn approve(&self, _: &rusvel_core::id::JobId) -> Result<()> {
         Ok(())
     }
-    async fn list(&self, _: rusvel_core::domain::JobFilter) -> Result<Vec<rusvel_core::domain::Job>> {
+    async fn list(
+        &self,
+        _: rusvel_core::domain::JobFilter,
+    ) -> Result<Vec<rusvel_core::domain::Job>> {
         Ok(vec![])
     }
 }
@@ -271,7 +278,10 @@ async fn orchestrate_pipeline_persists_and_succeeds() {
         .await
         .expect("pipeline");
 
-    assert_eq!(exec.status, rusvel_core::domain::FlowExecutionStatus::Succeeded);
+    assert_eq!(
+        exec.status,
+        rusvel_core::domain::FlowExecutionStatus::Succeeded
+    );
     let found = store
         .data
         .lock()
@@ -284,6 +294,14 @@ async fn orchestrate_pipeline_persists_and_succeeds() {
         let guard = mem_events.0.lock().unwrap();
         guard.iter().map(|e| e.kind.clone()).collect()
     };
-    assert!(kinds.iter().any(|k| k == forge_engine::events::PIPELINE_STARTED));
-    assert!(kinds.iter().any(|k| k == forge_engine::events::PIPELINE_COMPLETED));
+    assert!(
+        kinds
+            .iter()
+            .any(|k| k == forge_engine::events::PIPELINE_STARTED)
+    );
+    assert!(
+        kinds
+            .iter()
+            .any(|k| k == forge_engine::events::PIPELINE_COMPLETED)
+    );
 }

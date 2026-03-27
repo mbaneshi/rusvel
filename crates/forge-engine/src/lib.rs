@@ -7,8 +7,8 @@
 
 pub mod events;
 pub mod mission;
-pub mod pipeline;
 pub mod personas;
+pub mod pipeline;
 pub mod safety;
 
 use async_trait::async_trait;
@@ -23,10 +23,10 @@ pub use mission::{
     DailyPlan, Review, forge_route_contributions_for_manifest,
     mission_tool_contributions_for_manifest,
 };
-pub use pipeline::{
-    PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner, FLOW_EXECUTIONS_OBJECT_KIND,
-};
 pub use personas::{PersonaManager, persona_contributions_for_manifest};
+pub use pipeline::{
+    FLOW_EXECUTIONS_OBJECT_KIND, PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner,
+};
 pub use safety::SafetyGuard;
 
 /// The Forge Engine — agent orchestration + Mission planning.

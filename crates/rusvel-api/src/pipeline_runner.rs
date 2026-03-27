@@ -20,10 +20,7 @@ pub struct HarvestContentPipelineRunner {
 #[async_trait]
 impl forge_engine::pipeline::PipelineStepRunner for HarvestContentPipelineRunner {
     async fn scan(&self, session_id: &SessionId) -> Result<Value> {
-        let opps = self
-            .harvest
-            .scan(session_id, &MockSource::new())
-            .await?;
+        let opps = self.harvest.scan(session_id, &MockSource::new()).await?;
         let opportunity_ids: Vec<String> = opps.iter().map(|o| o.id.to_string()).collect();
         let titles: Vec<String> = opps.iter().map(|o| o.title.clone()).collect();
         Ok(json!({
@@ -49,9 +46,9 @@ impl forge_engine::pipeline::PipelineStepRunner for HarvestContentPipelineRunner
     }
 
     async fn propose(&self, session_id: &SessionId, ctx: &Value, profile: &str) -> Result<Value> {
-        let scan = ctx.get("scan").ok_or_else(|| {
-            RusvelError::Validation("pipeline: missing scan step output".into())
-        })?;
+        let scan = ctx
+            .get("scan")
+            .ok_or_else(|| RusvelError::Validation("pipeline: missing scan step output".into()))?;
         let first_id = scan
             .get("opportunity_ids")
             .and_then(|a| a.as_array())
