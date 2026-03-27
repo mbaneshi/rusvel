@@ -239,13 +239,23 @@
 
 	function handleApprove(jobId: string) {
 		approveJob(jobId)
-			.then(() => refreshPendingApprovalCount())
-			.catch(() => {});
+			.then(() => {
+				toast.success('Approved. The job will continue.');
+				return refreshPendingApprovalCount();
+			})
+			.catch((e) => {
+				toast.error(e instanceof Error ? e.message : 'Approve failed');
+			});
 	}
 	function handleReject(jobId: string) {
 		rejectJob(jobId)
-			.then(() => refreshPendingApprovalCount())
-			.catch(() => {});
+			.then(() => {
+				toast.success('Rejected. The job was cancelled.');
+				return refreshPendingApprovalCount();
+			})
+			.catch((e) => {
+				toast.error(e instanceof Error ? e.message : 'Reject failed');
+			});
 	}
 
 	function isApprovalResult(tc: ToolCallState): boolean {

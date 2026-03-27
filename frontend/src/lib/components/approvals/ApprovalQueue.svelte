@@ -5,6 +5,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import { toast } from 'svelte-sonner';
+	import {
+		humanizeJobKind,
+		payloadSummaryRows,
+		approvalPendingPreview,
+		formatIsoDate
+	} from '$lib/approvalContext';
 
 	let jobs: Job[] = $state([]);
 	let loading = $state(true);
@@ -38,7 +44,7 @@
 		}
 	}
 
-	function jobTitle(job: import('$lib/api').Job): string | null {
+	function jobTitle(job: Job): string | null {
 		const p = job.payload;
 		if (p && typeof p === 'object' && p !== null && 'title' in p) {
 			const t = (p as { title?: unknown }).title;
@@ -53,7 +59,7 @@
 			await approveJob(id);
 			jobs = jobs.filter((j) => j.id !== id);
 			await refreshPendingApprovalCount();
-			toast.success('Approved');
+			toast.success('Approved. The job will continue.');
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Approve failed');
 		} finally {
@@ -69,7 +75,7 @@
 			delete rejectNote[id];
 			jobs = jobs.filter((j) => j.id !== id);
 			await refreshPendingApprovalCount();
-			toast.success('Rejected');
+			toast.success('Rejected. The job was cancelled.');
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Reject failed');
 		} finally {
@@ -102,6 +108,10 @@
 		<ul class="space-y-3">
 			{#each jobs as job (job.id)}
 				{@const title = jobTitle(job)}
+				{@const kindLabel = humanizeJobKind(job.kind)}
+				{@const rows = payloadSummaryRows(job.payload)}
+				{@const preview = approvalPendingPreview(job.metadata)}
+				{@const scheduled = formatIsoDate(job.scheduled_at)}
 				<li
 					class="rounded-lg border border-border bg-card p-4 shadow-sm"
 				>
@@ -111,7 +121,7 @@
 								<span
 									class="rounded-md bg-warning-500/15 px-2 py-0.5 text-[11px] font-medium text-warning-400"
 								>
-									{typeof job.kind === 'string' ? job.kind : JSON.stringify(job.kind)}
+									{kindLabel}
 								</span>
 								<span class="font-mono text-[10px] text-muted-foreground">{job.id}</span>
 							</div>
@@ -122,7 +132,31 @@
 								Session <span class="font-mono">{job.session_id}</span>
 								<span class="mx-1">·</span>
 								{job.status}
+								{#if scheduled}
+									<span class="mx-1">·</span>
+									Scheduled {scheduled}
+								{/if}
 							</p>
+							{#if rows.length > 0}
+								<dl
+									class="mt-3 grid gap-x-4 gap-y-1 text-[11px] sm:grid-cols-[minmax(0,7rem)_1fr]"
+								>
+									{#each rows as r (r.label)}
+										<dt class="text-muted-foreground">{r.label}</dt>
+										<dd class="min-w-0 break-words font-mono text-foreground">{r.value}</dd>
+									{/each}
+								</dl>
+							{/if}
+							{#if preview}
+								<div class="mt-3 rounded-md border border-border bg-muted/30 p-3">
+									<p class="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+										{preview.headline}
+									</p>
+									<pre
+										class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-foreground"
+									>{preview.body}</pre>
+								</div>
+							{/if}
 						</div>
 						<div class="flex shrink-0 flex-col items-end gap-2">
 							<div class="flex gap-2">
@@ -159,9 +193,28 @@
 							rejectNote = { ...rejectNote, [job.id]: v };
 						}}
 					></textarea>
-					<pre
-						class="mt-3 max-h-40 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
-					>{formatPayload(job.payload)}</pre>
+					<details class="mt-3 group">
+						<summary
+							class="cursor-pointer list-none text-[11px] font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden"
+						>
+							<span class="underline underline-offset-2">Full payload and metadata</span>
+							<span class="ml-1 text-muted-foreground/70 group-open:hidden">(expand)</span>
+						</summary>
+						<div class="mt-2 space-y-2">
+							<div>
+								<p class="text-[10px] font-medium text-muted-foreground">Payload</p>
+								<pre
+									class="mt-1 max-h-40 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
+								>{formatPayload(job.payload)}</pre>
+							</div>
+							<div>
+								<p class="text-[10px] font-medium text-muted-foreground">Metadata</p>
+								<pre
+									class="mt-1 max-h-32 overflow-auto rounded-md bg-muted/40 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
+								>{formatPayload(job.metadata)}</pre>
+							</div>
+						</div>
+					</details>
 				</li>
 			{/each}
 		</ul>

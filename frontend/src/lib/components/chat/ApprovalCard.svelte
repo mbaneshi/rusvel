@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Button from '$lib/components/ui/Button.svelte';
+	import { payloadSummaryRows, toolNameToApprovalLabel } from '$lib/approvalContext';
+
 	let {
 		jobId,
 		jobKind,
@@ -16,6 +19,9 @@
 	let decided = $state(false);
 	let decision = $state<'approved' | 'rejected' | null>(null);
 
+	const label = $derived(toolNameToApprovalLabel(jobKind));
+	const rows = $derived(payloadSummaryRows(payload));
+
 	function approve() {
 		decided = true;
 		decision = 'approved';
@@ -29,30 +35,43 @@
 	}
 </script>
 
-<div class="border-l-2 border-yellow-500 bg-zinc-900/50 rounded-r-md px-3 py-2 my-2 font-mono text-sm">
-	<div class="flex items-center gap-2 text-yellow-400 text-xs mb-2">
-		<span>&#x23F3;</span>
-		<span>Awaiting approval: {jobKind}</span>
+<div
+	class="mt-2 rounded-md border border-warning-500/40 bg-warning-500/5 px-3 py-2.5 text-sm shadow-sm"
+>
+	<div class="flex items-center gap-2 text-xs font-medium text-warning-600 dark:text-warning-400">
+		<span aria-hidden="true">&#x23F3;</span>
+		<span>Awaiting approval · {label}</span>
 	</div>
-	<pre class="bg-zinc-950 p-2 rounded overflow-x-auto max-h-32 text-xs text-zinc-400 mb-2">{JSON.stringify(payload, null, 2)}</pre>
+	{#if rows.length > 0}
+		<dl class="mt-2 grid gap-x-3 gap-y-0.5 text-[11px] sm:grid-cols-[auto_1fr]">
+			{#each rows as r (r.label)}
+				<dt class="text-muted-foreground">{r.label}</dt>
+				<dd class="min-w-0 break-words text-foreground">{r.value}</dd>
+			{/each}
+		</dl>
+	{/if}
+	<details class="mt-2 group">
+		<summary
+			class="cursor-pointer list-none text-[10px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden"
+		>
+			<span class="underline underline-offset-2">Raw arguments</span>
+		</summary>
+		<pre
+			class="mt-1 max-h-28 overflow-auto rounded border border-border bg-muted/50 p-2 font-mono text-[10px] text-muted-foreground"
+		>{JSON.stringify(payload, null, 2)}</pre>
+	</details>
 	{#if decided}
-		<div class="text-xs {decision === 'approved' ? 'text-green-400' : 'text-red-400'}">
+		<p
+			class="mt-2 text-xs {decision === 'approved'
+				? 'text-emerald-600 dark:text-emerald-400'
+				: 'text-destructive'}"
+		>
 			{decision === 'approved' ? 'Approved' : 'Rejected'}
-		</div>
+		</p>
 	{:else}
-		<div class="flex gap-2">
-			<button
-				onclick={approve}
-				class="rounded px-3 py-1 text-xs font-medium bg-green-600 hover:bg-green-500 text-white transition-colors"
-			>
-				Approve
-			</button>
-			<button
-				onclick={reject}
-				class="rounded px-3 py-1 text-xs font-medium bg-red-600 hover:bg-red-500 text-white transition-colors"
-			>
-				Reject
-			</button>
+		<div class="mt-2 flex flex-wrap gap-2">
+			<Button variant="primary" size="sm" onclick={approve}>Approve</Button>
+			<Button variant="danger" size="sm" onclick={reject}>Reject</Button>
 		</div>
 	{/if}
 </div>

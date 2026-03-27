@@ -38,13 +38,20 @@
 		void refreshPendingApprovalCount();
 		const interval = setInterval(() => refreshPendingApprovalCount(), 45_000);
 		const onFocus = () => refreshPendingApprovalCount();
+		const onVisibility = () => {
+			if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+				void refreshPendingApprovalCount();
+			}
+		};
 		if (typeof window !== 'undefined') {
 			window.addEventListener('focus', onFocus);
+			document.addEventListener('visibilitychange', onVisibility);
 		}
 		return () => {
 			clearInterval(interval);
 			if (typeof window !== 'undefined') {
 				window.removeEventListener('focus', onFocus);
+				document.removeEventListener('visibilitychange', onVisibility);
 			}
 		};
 	});
