@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use rusvel_core::domain::{EventFilter, MetricFilter, ObjectFilter};
 use rusvel_core::id::SessionId;
+use rusvel_core::ports::MetricStore;
 use rusvel_llm::cost::{aggregate_spend, LLM_COST_METRIC_NAME};
 use uuid::Uuid;
 

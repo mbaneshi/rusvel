@@ -616,6 +616,87 @@ mod tests {
         assert_eq!(mock.sent_len(), 0);
     }
 
+    #[tokio::test]
+    async fn process_outreach_send_job_approval_sends_and_schedules_next_step() {
+        use crate::email::MockEmailAdapter;
+        use crate::outreach::OutreachSendDispatch;
+        use rusvel_core::domain::{Job, JobKind, JobResult, JobStatus};
+
+        let engine = make_engine();
+        let sid = SessionId::new();
+        let contact = make_contact(sid);
+        let cid = engine.crm().add_contact(sid, contact).await.unwrap();
+        let steps = vec![
+            SequenceStep {
+                delay_days: 0,
+                channel: "email".into(),
+                template: "intro".into(),
+            },
+            SequenceStep {
+                delay_days: 2,
+                channel: "email".into(),
+                template: "nudge".into(),
+            },
+        ];
+        let seq_id = engine
+            .outreach()
+            .create_sequence(sid, "drip".into(), steps)
+            .await
+            .unwrap();
+        engine.outreach().activate_sequence(&seq_id).await.unwrap();
+
+        let run_key = uuid::Uuid::now_v7().to_string();
+        let pending = JobResult {
+            output: serde_json::json!({
+                "sequence_id": seq_id.to_string(),
+                "contact_id": cid.to_string(),
+                "step_index": 0,
+                "to": "alice@example.com",
+                "subject": "drip — intro",
+                "body": "Hello approved",
+                "channel": "email",
+            }),
+            metadata: serde_json::json!({"engine": "gtm", "phase": "draft"}),
+        };
+
+        let job = Job {
+            id: JobId::new(),
+            session_id: sid,
+            kind: JobKind::OutreachSend,
+            payload: serde_json::json!({
+                "sequence_id": seq_id.to_string(),
+                "sequence_run_id": run_key,
+                "contact_id": cid.to_string(),
+                "step_index": 0,
+                "channel": "email",
+                "template": "intro",
+            }),
+            status: JobStatus::Queued,
+            scheduled_at: None,
+            started_at: None,
+            completed_at: None,
+            retries: 0,
+            max_retries: 2,
+            error: None,
+            metadata: serde_json::json!({
+                "approval_pending_result": serde_json::to_value(&pending).unwrap(),
+            }),
+        };
+
+        let mock = MockEmailAdapter::new();
+        let dispatch = engine.process_outreach_send_job(&job, &mock).await.unwrap();
+        match dispatch {
+            OutreachSendDispatch::Complete { result, next } => {
+                assert_eq!(result.output["status"], "sent");
+                let next = next.expect("second step should be scheduled");
+                assert_eq!(next.kind, JobKind::OutreachSend);
+                assert_eq!(next.payload["step_index"], serde_json::json!(1));
+            }
+            _ => panic!("expected Complete"),
+        }
+        assert_eq!(mock.sent_len(), 1);
+    }
+
     // ── Engine trait test ──────────────────────────────────────────
 
     #[tokio::test]
