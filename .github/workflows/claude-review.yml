@@ -1,0 +1,36 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            Review this PR for the RUSVEL project (Rust + SvelteKit hexagonal architecture).
+
+            Check for:
+            1. Architecture compliance — engines must not import adapters, must use AgentPort not LlmPort
+            2. Domain types must have `metadata: serde_json::Value` (ADR-007)
+            3. Event kinds must be String, not enum (ADR-005)
+            4. Crate size — each crate should be under 2000 lines
+            5. Code quality, potential bugs, edge cases
+            6. Security concerns (SQL injection, path traversal, XSS)
+            7. Test coverage for new functionality
+
+            Provide constructive feedback as PR comments.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
