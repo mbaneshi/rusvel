@@ -42,7 +42,7 @@ impl JobQueue {
             kind: new.kind,
             payload: new.payload,
             status: JobStatus::Queued,
-            scheduled_at: None,
+            scheduled_at: new.scheduled_at,
             started_at: None,
             completed_at: None,
             retries: 0,
@@ -296,6 +296,7 @@ mod tests {
             payload: serde_json::json!({"prompt": "hello"}),
             max_retries: 3,
             metadata: serde_json::json!({}),
+            scheduled_at: None,
         }
     }
 

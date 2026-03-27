@@ -52,6 +52,7 @@ async fn get_jobs_filters_by_session_and_kind() {
             }),
             max_retries: 3,
             metadata: json!({}),
+            scheduled_at: None,
         })
         .await
         .unwrap();

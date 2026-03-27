@@ -49,6 +49,7 @@ use code_engine::CodeEngine;
 use content_engine::ContentEngine;
 use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
+use gtm_engine::GtmEngine;
 use harvest_engine::HarvestEngine;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
@@ -65,6 +66,7 @@ pub struct AppState {
     pub code_engine: Option<Arc<CodeEngine>>,
     pub content_engine: Option<Arc<ContentEngine>>,
     pub harvest_engine: Option<Arc<HarvestEngine>>,
+    pub gtm_engine: Option<Arc<GtmEngine>>,
     pub flow_engine: Option<Arc<FlowEngine>>,
     pub sessions: Arc<dyn SessionPort>,
     pub events: Arc<dyn EventPort>,
@@ -253,6 +255,19 @@ pub fn build_router_with_frontend(
         .route(
             "/api/dept/gtm/deals/advance",
             post(engine_routes::gtm_deal_advance),
+        )
+        .route(
+            "/api/dept/gtm/outreach/execute",
+            post(engine_routes::gtm_outreach_execute),
+        )
+        .route(
+            "/api/dept/gtm/invoices",
+            get(engine_routes::gtm_invoices_list).post(engine_routes::gtm_invoices_create),
+        )
+        .route("/api/dept/gtm/invoices/{id}", get(engine_routes::gtm_invoice_get))
+        .route(
+            "/api/dept/gtm/invoices/{id}/status",
+            post(engine_routes::gtm_invoice_set_status),
         )
         // Flow Engine (DAG workflows)
         .route("/api/flows", get(flow_routes::list_flows).post(flow_routes::create_flow))

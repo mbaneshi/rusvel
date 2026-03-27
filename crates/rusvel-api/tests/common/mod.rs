@@ -228,6 +228,7 @@ pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> Test
         code_engine: Some(code_engine),
         content_engine: Some(content_engine),
         harvest_engine: None,
+        gtm_engine: None,
         flow_engine: None,
         sessions,
         events,

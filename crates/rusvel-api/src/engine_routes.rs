@@ -13,7 +13,7 @@ use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
 use gtm_engine::events as gtm_events;
-use gtm_engine::{DealId, DealStage};
+use gtm_engine::{DealId, DealStage, SequenceId};
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -26,6 +26,7 @@ use rusvel_core::domain::Contact;
 use rusvel_core::id::{ContactId, ContentId, EventId, SessionId};
 
 use gtm_engine::crm::CrmManager;
+use gtm_engine::{InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 
 use crate::AppState;
 
@@ -723,6 +724,250 @@ pub async fn gtm_deal_advance(
     let _ = state.events.emit(ev).await;
 
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+// ── GTM Invoices (S-038) ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct GtmInvoicesQuery {
+    pub session_id: String,
+    pub status: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct GtmInvoiceRow {
+    pub id: String,
+    pub contact_id: String,
+    pub contact_name: Option<String>,
+    pub items: Vec<LineItem>,
+    pub total: f64,
+    pub status: InvoiceStatus,
+    pub due_date: DateTime<Utc>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+/// GET /api/dept/gtm/invoices — list invoices for the session (optional `status` filter).
+pub async fn gtm_invoices_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<GtmInvoicesQuery>,
+) -> ApiResult<Vec<GtmInvoiceRow>> {
+    let sid = parse_session_id(&q.session_id)?;
+    let invm = InvoiceManager::new(state.storage.clone());
+    let crm = CrmManager::new(state.storage.clone());
+    let status_filter = q
+        .status
+        .as_deref()
+        .and_then(|s| serde_json::from_value::<InvoiceStatus>(serde_json::json!(s)).ok());
+    let invoices = invm
+        .list_invoices(sid, status_filter)
+        .await
+        .map_err(engine_err)?;
+    let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
+    let contact_map: HashMap<String, rusvel_core::domain::Contact> = contacts
+        .into_iter()
+        .map(|c| (c.id.to_string(), c))
+        .collect();
+
+    let mut rows = Vec::with_capacity(invoices.len());
+    for inv in invoices {
+        let contact_name = contact_map
+            .get(&inv.contact_id.to_string())
+            .map(|c| c.name.clone());
+        rows.push(GtmInvoiceRow {
+            id: inv.id.to_string(),
+            contact_id: inv.contact_id.to_string(),
+            contact_name,
+            items: inv.items,
+            total: inv.total,
+            status: inv.status,
+            due_date: inv.due_date,
+            paid_at: inv.paid_at,
+            metadata: inv.metadata,
+        });
+    }
+    Ok(Json(rows))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmInvoiceCreateBody {
+    pub session_id: String,
+    pub contact_id: String,
+    pub items: Vec<LineItem>,
+    pub due_date: String,
+}
+
+/// POST /api/dept/gtm/invoices — create invoice (starts as Draft).
+pub async fn gtm_invoices_create(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<GtmInvoiceCreateBody>,
+) -> ApiResult<serde_json::Value> {
+    let sid = parse_session_id(&body.session_id)?;
+    let cid = uuid::Uuid::parse_str(body.contact_id.trim())
+        .map(ContactId::from_uuid)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid contact_id (UUID)".into()))?;
+    let due = DateTime::parse_from_rfc3339(&body.due_date)
+        .map(|d| d.with_timezone(&Utc))
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid due_date (RFC3339)".into()))?;
+    if body.items.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "at least one line item is required".into(),
+        ));
+    }
+    let invm = InvoiceManager::new(state.storage.clone());
+    let id = invm
+        .create_invoice(sid, cid, body.items, due)
+        .await
+        .map_err(engine_err)?;
+
+    let ev = Event {
+        id: EventId::new(),
+        session_id: Some(sid),
+        run_id: None,
+        source: "gtm".into(),
+        kind: gtm_events::INVOICE_CREATED.into(),
+        payload: serde_json::json!({ "invoice_id": id.to_string() }),
+        created_at: Utc::now(),
+        metadata: serde_json::json!({}),
+    };
+    let _ = state.events.emit(ev).await;
+
+    Ok(Json(serde_json::json!({ "id": id.to_string() })))
+}
+
+#[derive(Serialize)]
+pub struct GtmInvoiceDetail {
+    pub id: String,
+    pub session_id: String,
+    pub contact_id: String,
+    pub contact_name: Option<String>,
+    pub items: Vec<LineItem>,
+    pub total: f64,
+    pub status: InvoiceStatus,
+    pub due_date: DateTime<Utc>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub metadata: serde_json::Value,
+}
+
+/// GET /api/dept/gtm/invoices/{id} — single invoice detail (`session_id` query).
+pub async fn gtm_invoice_get(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+    Query(q): Query<GtmSessionQuery>,
+) -> ApiResult<GtmInvoiceDetail> {
+    let sid = parse_session_id(&q.session_id)?;
+    let iid = InvoiceId::from_str(id.trim()).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid invoice id (UUID)".into(),
+        )
+    })?;
+    let invm = InvoiceManager::new(state.storage.clone());
+    let inv = invm.get_invoice(&iid).await.map_err(engine_err)?;
+    if inv.session_id != sid {
+        return Err((StatusCode::NOT_FOUND, "invoice not found for session".into()));
+    }
+    let crm = CrmManager::new(state.storage.clone());
+    let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
+    let contact_name = contacts
+        .into_iter()
+        .find(|c| c.id == inv.contact_id)
+        .map(|c| c.name);
+    Ok(Json(GtmInvoiceDetail {
+        id: inv.id.to_string(),
+        session_id: inv.session_id.to_string(),
+        contact_id: inv.contact_id.to_string(),
+        contact_name,
+        items: inv.items,
+        total: inv.total,
+        status: inv.status,
+        due_date: inv.due_date,
+        paid_at: inv.paid_at,
+        metadata: inv.metadata,
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmInvoiceStatusBody {
+    pub session_id: String,
+    pub status: InvoiceStatus,
+}
+
+/// POST /api/dept/gtm/invoices/{id}/status — update lifecycle status (Draft, Sent, Paid, Overdue, Cancelled).
+pub async fn gtm_invoice_set_status(
+    State(state): State<Arc<AppState>>,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<GtmInvoiceStatusBody>,
+) -> ApiResult<serde_json::Value> {
+    let sid = parse_session_id(&body.session_id)?;
+    let iid = InvoiceId::from_str(id.trim()).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid invoice id (UUID)".into(),
+        )
+    })?;
+    let invm = InvoiceManager::new(state.storage.clone());
+    let inv = invm.get_invoice(&iid).await.map_err(engine_err)?;
+    if inv.session_id != sid {
+        return Err((StatusCode::NOT_FOUND, "invoice not found for session".into()));
+    }
+    invm
+        .set_invoice_status(&iid, body.status.clone())
+        .await
+        .map_err(engine_err)?;
+    if body.status == InvoiceStatus::Paid {
+        let ev = Event {
+            id: EventId::new(),
+            session_id: Some(sid),
+            run_id: None,
+            source: "gtm".into(),
+            kind: gtm_events::INVOICE_PAID.into(),
+            payload: serde_json::json!({ "invoice_id": iid.to_string() }),
+            created_at: Utc::now(),
+            metadata: serde_json::json!({}),
+        };
+        let _ = state.events.emit(ev).await;
+    }
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GtmOutreachExecuteBody {
+    pub session_id: String,
+    pub sequence_id: String,
+    pub contact_id: String,
+}
+
+/// POST /api/dept/gtm/outreach/execute — enqueue staggered outreach send jobs (S-033).
+pub async fn gtm_outreach_execute(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<GtmOutreachExecuteBody>,
+) -> ApiResult<serde_json::Value> {
+    let engine = state
+        .gtm_engine
+        .as_ref()
+        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let sid = parse_session_id(&body.session_id)?;
+    let seq_id: SequenceId = body.sequence_id.parse().map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            "invalid sequence_id (UUID)".into(),
+        )
+    })?;
+    let cid = uuid::Uuid::parse_str(body.contact_id.trim())
+        .map(ContactId::from_uuid)
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid contact_id (UUID)".into()))?;
+    let job_id = engine
+        .outreach()
+        .execute_sequence(sid, seq_id, cid)
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::json!({
+        "job_id": job_id.to_string(),
+        "job_ids": [job_id.to_string()],
+        "count": 1,
+    })))
 }
 
 #[derive(Debug, Deserialize)]

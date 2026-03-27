@@ -290,6 +290,7 @@ async fn test_router() -> (
         code_engine: None,
         content_engine: None,
         harvest_engine: Some(harvest_engine),
+        gtm_engine: None,
         flow_engine: None,
         sessions,
         events,

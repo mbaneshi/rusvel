@@ -898,7 +898,13 @@ async fn main() -> Result<()> {
         Some(terminal_for_flow.clone()),
         Some(browser_port.clone()),
     ));
-    tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow");
+    let gtm_engine = Arc::new(gtm_engine::GtmEngine::new(
+        db.clone() as Arc<dyn StoragePort>,
+        events.clone(),
+        agent_runtime.clone(),
+        jobs.clone(),
+    ));
+    tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow, GTM");
 
     // 4c. Register engine tools into the tool registry
     rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
@@ -926,6 +932,26 @@ async fn main() -> Result<()> {
     let code_engine_worker = code_engine.clone();
     let content_engine_worker = content_engine.clone();
     let harvest_engine_worker = harvest_engine.clone();
+    let gtm_engine_worker = gtm_engine.clone();
+    let events_worker = events.clone();
+    let outreach_email: Arc<dyn gtm_engine::EmailAdapter> =
+        match gtm_engine::SmtpEmailAdapter::from_env() {
+            Some(Ok(s)) => Arc::new(s),
+            Some(Err(e)) => {
+                tracing::warn!(
+                    error = %e,
+                    "Invalid RUSVEL_SMTP_*; using mock email adapter for outreach"
+                );
+                Arc::new(gtm_engine::MockEmailAdapter::new())
+            }
+            None => {
+                tracing::info!(
+                    "RUSVEL_SMTP_HOST unset; outreach uses mock email adapter (no network send)"
+                );
+                Arc::new(gtm_engine::MockEmailAdapter::new())
+            }
+        };
+    let outreach_email_worker = outreach_email.clone();
     let _job_worker = tokio::spawn(async move {
         let job_port = jobs_for_worker;
         loop {
@@ -1068,12 +1094,46 @@ async fn main() -> Result<()> {
                             }
                         }
                         JobKind::OutreachSend => {
-                            // GTM engine not yet wired — keep as placeholder
-                            tracing::info!(job_id = %job_id, "OutreachSend: GTM engine not yet wired");
-                            Ok(Some(JobResult {
-                                output: serde_json::json!({"action": "outreach_send", "status": "engine_not_wired"}),
-                                metadata: serde_json::json!({}),
-                            }))
+                            match gtm_engine_worker
+                                .outreach()
+                                .process_outreach_send_job(
+                                    &job,
+                                    events_worker.as_ref(),
+                                    outreach_email_worker.as_ref(),
+                                )
+                                .await
+                            {
+                                Ok(gtm_engine::outreach::OutreachSendDispatch::HoldForApproval(
+                                    job_result,
+                                )) => match job_port.hold_for_approval(&job_id, job_result).await {
+                                    Ok(()) => Ok(None),
+                                    Err(e) => Err(e),
+                                },
+                                Ok(gtm_engine::outreach::OutreachSendDispatch::Complete {
+                                    result,
+                                    next,
+                                }) => {
+                                    if let Some(nj) = next {
+                                        match job_port.enqueue(nj).await {
+                                            Ok(_) => Ok(Some(result)),
+                                            Err(e) => {
+                                                tracing::error!(
+                                                    job_id = %job_id,
+                                                    error = %e,
+                                                    "Failed to enqueue next outreach step"
+                                                );
+                                                Err(e)
+                                            }
+                                        }
+                                    } else {
+                                        Ok(Some(result))
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!(job_id = %job_id, error = %e, "OutreachSend failed");
+                                    Err(e)
+                                }
+                            }
                         }
                         _ => {
                             tracing::warn!(job_id = %job_id, kind = ?job.kind, "Unknown job kind");
@@ -1285,6 +1345,7 @@ async fn main() -> Result<()> {
             code_engine: Some(code_engine.clone()),
             content_engine: Some(content_engine.clone()),
             harvest_engine: Some(harvest_engine.clone()),
+            gtm_engine: Some(gtm_engine.clone()),
             flow_engine: Some(flow_engine.clone()),
             sessions: sessions.clone(),
             events: events.clone(),
@@ -1391,6 +1452,7 @@ async fn main() -> Result<()> {
             code_engine: Some(code_engine.clone()),
             content_engine: Some(content_engine.clone()),
             harvest_engine: Some(harvest_engine.clone()),
+            gtm_engine: Some(gtm_engine.clone()),
             flow_engine: Some(flow_engine.clone()),
             sessions: sessions.clone(),
             events: events.clone(),

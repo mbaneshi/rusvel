@@ -35,6 +35,14 @@ impl std::fmt::Display for InvoiceId {
     }
 }
 
+impl std::str::FromStr for InvoiceId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InvoiceStatus {
     Draft,
@@ -111,6 +119,53 @@ impl InvoiceManager {
         Ok(id)
     }
 
+    pub async fn get_invoice(&self, id: &InvoiceId) -> Result<Invoice> {
+        let val = self
+            .storage
+            .objects()
+            .get(KIND_INVOICE, &id.to_string())
+            .await?;
+        match val {
+            Some(v) => Ok(serde_json::from_value(v)?),
+            None => Err(RusvelError::NotFound {
+                kind: KIND_INVOICE.into(),
+                id: id.to_string(),
+            }),
+        }
+    }
+
+    /// Updates lifecycle status. Sets `paid_at` when moving to [`InvoiceStatus::Paid`].
+    pub async fn set_invoice_status(&self, id: &InvoiceId, new_status: InvoiceStatus) -> Result<()> {
+        let val = self
+            .storage
+            .objects()
+            .get(KIND_INVOICE, &id.to_string())
+            .await?;
+        match val {
+            Some(v) => {
+                let mut inv: Invoice = serde_json::from_value(v)?;
+                inv.status = new_status.clone();
+                match new_status {
+                    InvoiceStatus::Paid => {
+                        if inv.paid_at.is_none() {
+                            inv.paid_at = Some(Utc::now());
+                        }
+                    }
+                    _ => {}
+                }
+                let json = serde_json::to_value(&inv)?;
+                self.storage
+                    .objects()
+                    .put(KIND_INVOICE, &id.to_string(), json)
+                    .await
+            }
+            None => Err(RusvelError::NotFound {
+                kind: KIND_INVOICE.into(),
+                id: id.to_string(),
+            }),
+        }
+    }
+
     pub async fn list_invoices(
         &self,
         session_id: SessionId,
@@ -132,27 +187,7 @@ impl InvoiceManager {
     }
 
     pub async fn mark_paid(&self, id: &InvoiceId) -> Result<()> {
-        let val = self
-            .storage
-            .objects()
-            .get(KIND_INVOICE, &id.to_string())
-            .await?;
-        match val {
-            Some(v) => {
-                let mut inv: Invoice = serde_json::from_value(v)?;
-                inv.status = InvoiceStatus::Paid;
-                inv.paid_at = Some(Utc::now());
-                let json = serde_json::to_value(&inv)?;
-                self.storage
-                    .objects()
-                    .put(KIND_INVOICE, &id.to_string(), json)
-                    .await
-            }
-            None => Err(RusvelError::NotFound {
-                kind: KIND_INVOICE.into(),
-                id: id.to_string(),
-            }),
-        }
+        self.set_invoice_status(id, InvoiceStatus::Paid).await
     }
 
     pub async fn total_revenue(&self, session_id: SessionId) -> Result<f64> {

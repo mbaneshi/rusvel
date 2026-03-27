@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use rusvel_core::domain::{Capability, Event, HealthStatus};
+use rusvel_core::domain::{Capability, Event, HealthStatus, Job};
 use rusvel_core::error::Result;
 use rusvel_core::id::EventId;
 use rusvel_core::ports::{AgentPort, EventPort, JobPort, StoragePort};
@@ -19,8 +19,8 @@ pub use email::{
 };
 pub use invoice::{Invoice, InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 pub use outreach::{
-    FollowUp, FollowUpId, OutreachManager, OutreachSequence, SequenceId, SequenceStatus,
-    SequenceStep,
+    FollowUp, FollowUpId, OutreachManager, OutreachSequence, OutreachSendDispatch, SequenceId,
+    SequenceStatus, SequenceStep,
 };
 
 pub mod events {
@@ -91,6 +91,17 @@ impl GtmEngine {
             metadata: serde_json::json!({}),
         };
         self.events.emit(event).await
+    }
+
+    /// Process one [`rusvel_core::domain::JobKind::OutreachSend`] dequeue (draft → approval → SMTP).
+    pub async fn process_outreach_send_job(
+        &self,
+        job: &Job,
+        email: &dyn EmailAdapter,
+    ) -> Result<OutreachSendDispatch> {
+        self.outreach
+            .process_outreach_send_job(job, self.events.as_ref(), email)
+            .await
     }
 }
 

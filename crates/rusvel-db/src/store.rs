@@ -1294,7 +1294,7 @@ fn job_from_new_job(new: NewJob) -> Job {
         kind: new.kind,
         payload: new.payload,
         status: JobStatus::Queued,
-        scheduled_at: None,
+        scheduled_at: new.scheduled_at,
         started_at: None,
         completed_at: None,
         retries: 0,

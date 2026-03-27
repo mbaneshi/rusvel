@@ -75,6 +75,7 @@ impl ContentCalendar {
             payload,
             max_retries: 3,
             metadata: serde_json::json!({}),
+            scheduled_at: None,
         };
         self.jobs.enqueue(new_job).await?;
         Ok(())
