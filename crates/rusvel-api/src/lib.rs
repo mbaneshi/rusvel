@@ -32,6 +32,7 @@ pub mod playbooks;
 pub mod routes;
 pub mod rules;
 pub mod skills;
+pub(crate) mod sse_helpers;
 pub mod system;
 pub mod terminal;
 pub mod visual_report;

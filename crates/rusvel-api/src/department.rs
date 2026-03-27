@@ -12,21 +12,18 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
 use chrono::Utc;
-use futures::stream::{self, Stream, StreamExt};
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
 
-use rusvel_agent::{
-    AgUiEvent, AgentEvent, ContextPack, ag_ui_json_with_conversation, agent_event_to_ag_ui,
-    to_prompt_section,
-};
+use rusvel_agent::{AgentEvent, ContextPack, to_prompt_section};
 use rusvel_core::config::{
     ContextPackFlags, LayeredConfig, ResolvedConfig, resolve_context_pack_flags,
 };
 use rusvel_core::domain::{
-    AgentConfig, Content, EventFilter, JobFilter, JobStatus, ModelProvider, ModelRef,
-    RUSVEL_META_DEPARTMENT_ID, RUSVEL_META_MODEL_TIER, UserProfile,
+    AgentConfig, Content, EventFilter, JobFilter, JobStatus, RUSVEL_META_DEPARTMENT_ID,
+    RUSVEL_META_MODEL_TIER, UserProfile,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{EventId, SessionId};
@@ -36,6 +33,7 @@ use uuid::Uuid;
 
 use crate::{AppState, CONTEXT_PACK_CACHE_TTL};
 use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
+use crate::sse_helpers;
 
 // ── Department Config (stored per-dept as LayeredConfig) ─────
 
@@ -551,7 +549,7 @@ pub async fn dept_chat(
     let _prompt = build_dept_prompt(&resolved.system_prompt, &history, &effective_message);
 
     // Build AgentConfig for the runtime
-    let model_ref = parse_model_ref(&resolved.model);
+    let model_ref = sse_helpers::parse_model_ref(&resolved.model);
     let mut meta = serde_json::Map::new();
     if let Some(t) = &body.model_tier {
         meta.insert(RUSVEL_META_MODEL_TIER.into(), serde_json::json!(t));
@@ -607,34 +605,13 @@ pub async fn dept_chat(
     let conv_id = conversation_id.clone();
     let ns = namespace.clone();
     let run_id_str = run_id.to_string();
-    let rid_for_start = run_id_str.clone();
-    let conv_for_start = conv_id.clone();
 
-    let prelude = stream::once(async move {
-        let ev = AgUiEvent::RunStarted {
-            run_id: rid_for_start,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        Ok::<Event, Infallible>(
-            Event::default()
-                .event(ev.sse_name())
-                .data(ag_ui_json_with_conversation(&ev, &conv_for_start)),
-        )
-    });
+    let prelude = sse_helpers::prelude_stream(run_id_str.clone(), conv_id.clone());
 
     let main = ReceiverStream::new(rx).map(move |event| {
         Ok::<Event, Infallible>(match event {
             AgentEvent::Done { output } => {
-                let full_text: String = output
-                    .content
-                    .parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("");
+                let full_text = sse_helpers::extract_done_text(&output);
                 let cost = output.cost_estimate;
 
                 let storage = storage.clone();
@@ -680,26 +657,9 @@ pub async fn dept_chat(
                     );
                 });
 
-                let ev = AgUiEvent::RunCompleted {
-                    run_id: run_id_str.clone(),
-                    output: full_text,
-                };
-                let mut v = serde_json::to_value(&ev).unwrap_or(serde_json::json!({}));
-                if let Some(obj) = v.as_object_mut() {
-                    obj.insert("cost_usd".into(), serde_json::json!(cost));
-                    obj.insert(
-                        "conversation_id".into(),
-                        serde_json::Value::String(conv_id.clone()),
-                    );
-                }
-                Event::default().event(ev.sse_name()).data(v.to_string())
+                sse_helpers::run_completed_sse(&run_id_str, full_text, cost, &conv_id)
             }
-            other => {
-                let ag = agent_event_to_ag_ui(&run_id_str, other);
-                Event::default()
-                    .event(ag.sse_name())
-                    .data(ag_ui_json_with_conversation(&ag, &conv_id))
-            }
+            other => sse_helpers::other_event_sse(&run_id_str, other, &conv_id),
         })
     });
 
@@ -839,29 +799,6 @@ async fn store_namespaced_message(
         .objects()
         .put(namespace, &msg.id, serde_json::to_value(msg)?)
         .await
-}
-
-/// Parse a model string (e.g. "sonnet", "opus", "ollama/llama3") into a ModelRef.
-fn parse_model_ref(model: &str) -> ModelRef {
-    if let Some((provider, name)) = model.split_once('/') {
-        let provider = match provider {
-            "ollama" => ModelProvider::Ollama,
-            "openai" => ModelProvider::OpenAI,
-            "claude" => ModelProvider::Claude,
-            "gemini" => ModelProvider::Gemini,
-            other => ModelProvider::Other(other.into()),
-        };
-        ModelRef {
-            provider,
-            model: name.into(),
-        }
-    } else {
-        // Bare model names default to Claude
-        ModelRef {
-            provider: ModelProvider::Claude,
-            model: model.into(),
-        }
-    }
 }
 
 /// Extract @agent-name from a message.

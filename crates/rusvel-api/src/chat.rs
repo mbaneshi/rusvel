@@ -12,21 +12,21 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, KeepAliveStream, Sse};
 use chrono::Utc;
-use futures::stream::{self, Stream, StreamExt};
+use futures::stream::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
-use rusvel_agent::{AgUiEvent, AgentEvent, ag_ui_json_with_conversation, agent_event_to_ag_ui};
+use rusvel_agent::AgentEvent;
 use rusvel_core::domain::{
-    AgentConfig, Content, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID,
-    RUSVEL_META_MODEL_TIER,
+    AgentConfig, Content, RUSVEL_META_DEPARTMENT_ID, RUSVEL_META_MODEL_TIER,
 };
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::{AgentPort, StoragePort};
 
 use crate::AppState;
 use crate::config::load_and_migrate_chat_config;
+use crate::sse_helpers;
 
 // ── Request / Response types ─────────────────────────────────
 
@@ -101,7 +101,7 @@ pub async fn chat_handler(
 
     // Build AgentConfig from chat config + profile
     let system_prompt = profile.to_system_prompt();
-    let model_ref = parse_model_ref(&chat_config.model);
+    let model_ref = sse_helpers::parse_model_ref(&chat_config.model);
     let tier = body
         .model_tier
         .as_deref()
@@ -159,34 +159,13 @@ pub async fn chat_handler(
     let storage = state.storage.clone();
     let conv_id = conversation_id.clone();
     let run_id_str = run_id.to_string();
-    let rid_for_start = run_id_str.clone();
-    let conv_for_start = conv_id.clone();
 
-    let prelude = stream::once(async move {
-        let ev = AgUiEvent::RunStarted {
-            run_id: rid_for_start,
-            timestamp: Utc::now().to_rfc3339(),
-        };
-        Ok::<Event, Infallible>(
-            Event::default()
-                .event(ev.sse_name())
-                .data(ag_ui_json_with_conversation(&ev, &conv_for_start)),
-        )
-    });
+    let prelude = sse_helpers::prelude_stream(run_id_str.clone(), conv_id.clone());
 
     let main = ReceiverStream::new(rx).map(move |event| {
         Ok::<Event, Infallible>(match event {
             AgentEvent::Done { output } => {
-                let full_text: String = output
-                    .content
-                    .parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        rusvel_core::domain::Part::Text(t) => Some(t.as_str()),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("");
+                let full_text = sse_helpers::extract_done_text(&output);
                 let cost = output.cost_estimate;
 
                 let storage = storage.clone();
@@ -203,26 +182,9 @@ pub async fn chat_handler(
                     let _ = store_message(&storage, &msg).await;
                 });
 
-                let ev = AgUiEvent::RunCompleted {
-                    run_id: run_id_str.clone(),
-                    output: full_text,
-                };
-                let mut v = serde_json::to_value(&ev).unwrap_or(serde_json::json!({}));
-                if let Some(obj) = v.as_object_mut() {
-                    obj.insert("cost_usd".into(), serde_json::json!(cost));
-                    obj.insert(
-                        "conversation_id".into(),
-                        serde_json::Value::String(conv_id.clone()),
-                    );
-                }
-                Event::default().event(ev.sse_name()).data(v.to_string())
+                sse_helpers::run_completed_sse(&run_id_str, full_text, cost, &conv_id)
             }
-            other => {
-                let ag = agent_event_to_ag_ui(&run_id_str, other);
-                Event::default()
-                    .event(ag.sse_name())
-                    .data(ag_ui_json_with_conversation(&ag, &conv_id))
-            }
+            other => sse_helpers::other_event_sse(&run_id_str, other, &conv_id),
         })
     });
 
@@ -230,28 +192,6 @@ pub async fn chat_handler(
         Box::pin(prelude.chain(main));
 
     Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
-}
-
-/// Parse a model string into a ModelRef.
-fn parse_model_ref(model: &str) -> ModelRef {
-    if let Some((provider, name)) = model.split_once('/') {
-        let provider = match provider {
-            "ollama" => ModelProvider::Ollama,
-            "openai" => ModelProvider::OpenAI,
-            "claude" => ModelProvider::Claude,
-            "gemini" => ModelProvider::Gemini,
-            other => ModelProvider::Other(other.into()),
-        };
-        ModelRef {
-            provider,
-            model: name.into(),
-        }
-    } else {
-        ModelRef {
-            provider: ModelProvider::Claude,
-            model: model.into(),
-        }
-    }
 }
 
 /// `GET /api/chat/conversations` — list all conversations.
