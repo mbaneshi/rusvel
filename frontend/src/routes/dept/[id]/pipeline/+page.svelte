@@ -10,6 +10,7 @@
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
 
 	const STAGES = ['Cold', 'Contacted', 'Qualified', 'ProposalSent', 'Won', 'Lost'] as const;
 
@@ -20,6 +21,8 @@
 	let loading = $state(true);
 	let busy = $state<string | null>(null);
 	let busyProposal = $state<string | null>(null);
+	/** Freelancer / voice string sent to `POST /api/dept/harvest/proposal` as `profile`. */
+	let proposalProfile = $state('default');
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
@@ -82,8 +85,9 @@
 	async function queueProposal(oppId: string) {
 		if (!sessionId) return;
 		busyProposal = oppId;
+		const profile = proposalProfile.trim() || 'default';
 		try {
-			const res = await postHarvestProposal(sessionId, oppId, 'default');
+			const res = await postHarvestProposal(sessionId, oppId, profile);
 			if (
 				res &&
 				typeof res === 'object' &&
@@ -93,7 +97,9 @@
 				typeof (res as { job_id: unknown }).job_id === 'string'
 			) {
 				const id = (res as { job_id: string }).job_id;
-				toast.success(`Proposal queued (job ${id}). Check Approvals when ready.`);
+				toast.success('Proposal queued', {
+					description: `Job ${id}. Keep this app running so the job worker can process the queue, then open Approvals.`
+				});
 			} else {
 				toast.success('Proposal request sent.');
 			}
@@ -111,6 +117,25 @@
 		<p class="text-xs text-muted-foreground">
 			Kanban by stage. Minimum score filter: use Harvest config; re-score in Engine tab.
 		</p>
+		{#if isHarvest && sessionId}
+			<div class="mt-3 max-w-md">
+				<Input
+					label="Proposal profile"
+					bind:value={proposalProfile}
+					size="sm"
+					placeholder="default"
+					hint="Voice or positioning for generated proposals (queue path)."
+				/>
+			</div>
+			<p class="mt-2 text-[11px] text-muted-foreground">
+				Queued proposals run in the background worker (same process as
+				<code class="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">cargo run</code>).
+				When the job finishes, it appears under
+				<a class="text-foreground underline underline-offset-2 hover:text-primary" href="/approvals"
+					>Approvals</a
+				>.
+			</p>
+		{/if}
 	</div>
 
 	{#if !isHarvest}
