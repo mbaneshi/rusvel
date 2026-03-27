@@ -7,6 +7,7 @@
 
 ```bash
 cargo build                    # Build all workspace members (50 crates)
+cargo bench -p rusvel-app --bench boot  # Criterion boot slice (SQLite + registry); optional local perf
 cargo test                     # Run full suite (~399 tests; see docs/status/current-state.md)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
@@ -57,6 +58,7 @@ crates/
 ├── rusvel-builtin-tools/ 10 built-in tools (9 + tool_search meta-tool)
 ├── rusvel-engine-tools/  12 engine tools (harvest 5, content 5, code 2)
 ├── rusvel-mcp-client/    MCP client for external MCP servers
+├── rusvel-channel/       ChannelPort + Telegram adapter (outbound notify)
 ├── rusvel-jobs/          Central job queue + approval
 ├── rusvel-auth/          In-memory credential storage (from env)
 ├── rusvel-config/        TOML config + per-session overrides
@@ -116,6 +118,10 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 - **Skills execution** — `resolve_skill()` with `{{input}}` interpolation
 - **Rules injection** — `load_rules_for_engine()` appended to system prompt
 - **Hook dispatch** — `tokio::spawn` on chat completion events
+- **Outbound notify** — `POST /api/system/notify` via `rusvel-channel` (`TelegramChannel` when `RUSVEL_TELEGRAM_BOT_TOKEN` is set)
+- **Webhook → forge pipeline** — Webhook registration `event_kind` `forge.pipeline.requested` + JSON body `session_id` enqueues `JobKind::Custom("forge.pipeline")` (worker runs `ForgeEngine::orchestrate_pipeline`)
+- **Flow node-type filter** — `parallel_evaluate` omitted from `GET /api/flows/node-types` unless `RUSVEL_FLOW_PARALLEL_EVALUATE=1`
+- **Harvest outcome vectors** — `HarvestEngine::configure_rag` embeds outcomes and adds similarity hints when embedding + vector store are wired
 - **Capability Engine** — AI-powered online discovery + JSON bundle install
 - **`!build` command** — Generate agents/skills/rules/mcp/hooks from natural language
 - **Frontend embedding** — rust-embed compiles `frontend/build/` into binary, ServeDir SPA fallback

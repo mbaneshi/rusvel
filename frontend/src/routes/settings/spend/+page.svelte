@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { Chart, Svg, Axis, Bars } from 'layerchart';
 	import { activeSession } from '$lib/stores';
 	import { getAnalyticsSpend, type AnalyticsSpendResponse } from '$lib/api';
 	import { toast } from 'svelte-sonner';
@@ -9,6 +10,20 @@
 
 	let spend: AnalyticsSpendResponse | null = $state(null);
 	let loading = $state(true);
+
+	let chartRows = $derived.by(() => {
+		if (!spend) return [] as { dept: string; usd: number }[];
+		return Object.entries(spend.by_department)
+			.sort((a, b) => b[1] - a[1])
+			.map(([dept, usd]) => ({ dept, usd }));
+	});
+
+	let maxY = $derived.by(() => {
+		const rows = chartRows;
+		if (rows.length === 0) return 1;
+		const m = Math.max(...rows.map((d: { dept: string; usd: number }) => d.usd));
+		return m > 0 ? m * 1.08 : 1;
+	});
 
 	async function load() {
 		loading = true;
@@ -76,6 +91,24 @@
 				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
 					By department
 				</h2>
+				{#if chartRows.length > 0}
+					<div class="mb-6 h-64 w-full min-w-0">
+						<Chart
+							data={chartRows}
+							x="dept"
+							y="usd"
+							yDomain={[0, maxY]}
+							padding={{ left: 56, bottom: 52, top: 8, right: 12 }}
+						>
+							<Svg>
+								<Axis placement="left" grid rule />
+								<Axis placement="bottom" rule />
+								<Bars radius={4} class="fill-primary/85" />
+							</Svg>
+						</Chart>
+					</div>
+				{/if}
+				<p class="sr-only">Department spend table (same data as chart)</p>
 				<ul class="space-y-2">
 					{#each Object.entries(spend.by_department).sort((a, b) => b[1] - a[1]) as [dept, usd]}
 						<li class="flex justify-between rounded-lg bg-secondary/40 px-3 py-2 text-sm">

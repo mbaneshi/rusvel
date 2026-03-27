@@ -1,5 +1,7 @@
 //! Bearer token authentication middleware.
 //!
+//! Session-scoped API keys (phase 2) are described in `docs/design/adr-auth-phase2.md` (stub).
+//!
 //! Opt-in: when `RUSVEL_API_TOKEN` is unset, all requests pass through.
 //! When set, every request (except exempt paths) must carry
 //! `Authorization: Bearer <token>`.

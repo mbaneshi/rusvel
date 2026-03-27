@@ -5,6 +5,7 @@
 		getGoals,
 		getEvents,
 		getAnalytics,
+		getAnalyticsDashboard,
 		getVisualReports,
 		getBriefLatest
 	} from '$lib/api';
@@ -12,6 +13,7 @@
 		Goal,
 		Event,
 		AnalyticsData,
+		AnalyticsSpendResponse,
 		DepartmentDef,
 		VisualReport,
 		ExecutiveBriefRow
@@ -22,6 +24,7 @@
 	let goals: Goal[] = $state([]);
 	let events: Event[] = $state([]);
 	let analytics: AnalyticsData | null = $state(null);
+	let dashboardSpend: AnalyticsSpendResponse | null = $state(null);
 	let visualReport: VisualReport | null = $state(null);
 	let latestBrief: ExecutiveBriefRow | null = $state(null);
 	let deptList: DepartmentDef[] = $state([]);
@@ -33,14 +36,27 @@
 	activeSession.subscribe((v) => {
 		currentSession = v;
 		if (v) loadData(v.id);
+		void loadAnalytics();
 	});
 
-	onMount(async () => {
+	async function loadAnalytics() {
 		try {
-			analytics = await getAnalytics();
+			if (currentSession) {
+				const dash = await getAnalyticsDashboard(currentSession.id);
+				analytics = dash;
+				dashboardSpend = dash.spend;
+			} else {
+				analytics = await getAnalytics();
+				dashboardSpend = null;
+			}
 		} catch {
-			/* analytics optional */
+			analytics = null;
+			dashboardSpend = null;
 		}
+	}
+
+	onMount(async () => {
+		await loadAnalytics();
 		try {
 			const reports = await getVisualReports();
 			if (reports.length > 0) visualReport = reports[reports.length - 1];
@@ -164,7 +180,7 @@
 
 		<!-- Analytics Overview (agency-wide) -->
 		{#if analytics}
-			<div class="mb-6 grid grid-cols-4 gap-3">
+			<div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
 				<div class="rounded-xl border border-border bg-card p-4">
 					<p class="text-xs font-medium text-muted-foreground">Agents</p>
 					<p class="mt-1 text-2xl font-bold text-chart-1">{analytics.agents}</p>
@@ -181,6 +197,17 @@
 					<p class="text-xs font-medium text-muted-foreground">Conversations</p>
 					<p class="mt-1 text-2xl font-bold text-chart-4">{analytics.conversations}</p>
 				</div>
+				{#if dashboardSpend}
+					<div class="rounded-xl border border-border bg-card p-4 sm:col-span-2 lg:col-span-1">
+						<p class="text-xs font-medium text-muted-foreground">LLM spend (session)</p>
+						<p class="mt-1 text-2xl font-bold text-primary">
+							${(dashboardSpend.session_total_usd ?? dashboardSpend.total_usd).toFixed(4)}
+						</p>
+						<p class="mt-1 text-[10px] text-muted-foreground">
+							<a href="/settings/spend" class="text-primary hover:underline">Details →</a>
+						</p>
+					</div>
+				{/if}
 			</div>
 		{/if}
 

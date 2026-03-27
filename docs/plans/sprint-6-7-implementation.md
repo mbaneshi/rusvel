@@ -36,7 +36,20 @@ Story → primary crate → route / surface → tests. Use as an execution check
 | Phase | Location | Behavior |
 |-------|----------|----------|
 | 1 | `rusvel-api/src/auth.rs` | `RUSVEL_API_TOKEN` set → `/api/*` require `Authorization: Bearer` except non-`/api/*` routes (SPA), `/api/health`, `POST /api/webhooks/{id}` receive |
-| 2 | TBD | Session-scoped API keys (out of band) |
+| 2 | `docs/design/adr-auth-phase2.md` | Session-scoped API keys (design + stub; not wired) |
+
+## Post–sprint 7 backlog (remaining roadmap)
+
+| Story | Crate / area | Route / surface | Tests / notes |
+|-------|----------------|-----------------|---------------|
+| S-052 Boot bench | `rusvel-app` | `cargo bench -p rusvel-app --bench boot` | Criterion; see `docs/testing/coverage-strategy.md` |
+| Sprint 8 notify | `rusvel-channel`, `rusvel-api`, `rusvel-app` | `POST /api/system/notify`; `TelegramChannel` + `RUSVEL_TELEGRAM_*` | Manual with token |
+| S-048b parallel flag | `rusvel-api` | `GET /api/flows/node-types` omits `parallel_evaluate` unless `RUSVEL_FLOW_PARALLEL_EVALUATE=1` | — |
+| Webhook → pipeline | `rusvel-webhook`, `rusvel-api`, worker | Webhook `event_kind` `forge.pipeline.requested` + body `session_id` → job `Custom("forge.pipeline")` | `POST /api/webhooks/{id}` + jobs list |
+| S-047b Home dashboard | `frontend` | `/` uses `getAnalyticsDashboard` when session active | `pnpm check` |
+| S-051b Spend chart | `frontend` | `/settings/spend` bar chart (`layerchart`) + table | `pnpm check` |
+| S-044b Vector outcomes | `harvest-engine` | `configure_rag` + outcome upsert + scorer hints | `cargo test -p harvest-engine` |
+| Auth phase 2 | `docs/design/adr-auth-phase2.md` | ADR only | — |
 
 ## Quick API index (this roadmap)
 
@@ -44,3 +57,4 @@ Story → primary crate → route / surface → tests. Use as an execution check
 - `GET /api/analytics/dashboard` — counts + spend (S-047).
 - `GET /api/forge/artifacts?session_id=` — Forge artifacts (S-049).
 - `GET /api/brief/latest` — latest persisted brief (S-043 UI).
+- `POST /api/system/notify` — outbound channel (Telegram when configured).
