@@ -118,9 +118,9 @@
 			}
 		}
 
-		const deptNav: Command[] = deptList.map((d) => ({
+		const deptNav: Command[] = deptList.map((d, i) => ({
 			id: `nav-${d.id}`,
-			label: d.title,
+			label: i < 9 ? `${d.title} (Alt+${i + 1})` : d.title,
 			group: 'Navigation',
 			icon: d.icon,
 			action: () => navigate(deptHref(d.id))
@@ -321,6 +321,9 @@
 					<span
 						><kbd class="rounded border border-[var(--border)] px-1">⌘J</kbd> context ·
 						<kbd class="rounded border border-[var(--border)] px-1">⌘`</kbd> bottom</span
+					>
+					<span
+						><kbd class="rounded border border-[var(--border)] px-1">⌥1–9</kbd> depts</span
 					>
 				</div>
 				<span><kbd class="rounded border border-[var(--border)] px-1">⌘K</kbd> toggle</span>
