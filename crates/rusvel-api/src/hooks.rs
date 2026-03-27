@@ -101,6 +101,26 @@ pub async fn create_hook(
     Ok((StatusCode::CREATED, Json(hook)))
 }
 
+pub async fn get_hook(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<HookDefinition>, (StatusCode, String)> {
+    let val = state
+        .storage
+        .objects()
+        .get(STORE_KIND, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    match val {
+        Some(v) => {
+            let hook: HookDefinition =
+                serde_json::from_value(v).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok(Json(hook))
+        }
+        None => Err((StatusCode::NOT_FOUND, format!("Hook {id} not found"))),
+    }
+}
+
 pub async fn update_hook(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

@@ -79,6 +79,26 @@ pub async fn create_mcp_server(
     Ok((StatusCode::CREATED, Json(server)))
 }
 
+pub async fn get_mcp_server(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<McpServerConfig>, (StatusCode, String)> {
+    let val = state
+        .storage
+        .objects()
+        .get(STORE_KIND, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    match val {
+        Some(v) => {
+            let server: McpServerConfig =
+                serde_json::from_value(v).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok(Json(server))
+        }
+        None => Err((StatusCode::NOT_FOUND, format!("MCP server {id} not found"))),
+    }
+}
+
 pub async fn update_mcp_server(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,

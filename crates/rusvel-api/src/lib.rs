@@ -259,7 +259,8 @@ pub fn build_router_with_frontend(
         )
         .route(
             "/api/mcp-servers/{id}",
-            axum::routing::put(mcp_servers::update_mcp_server)
+            get(mcp_servers::get_mcp_server)
+                .put(mcp_servers::update_mcp_server)
                 .delete(mcp_servers::delete_mcp_server),
         )
         // Workflows CRUD + execution
@@ -437,7 +438,9 @@ pub fn build_router_with_frontend(
         )
         .route(
             "/api/hooks/{id}",
-            axum::routing::put(hooks::update_hook).delete(hooks::delete_hook),
+            get(hooks::get_hook)
+                .put(hooks::update_hook)
+                .delete(hooks::delete_hook),
         )
         .route("/api/hooks/events", get(hooks::list_hook_events))
         // Knowledge (RAG)
