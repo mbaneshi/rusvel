@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Rust API Server",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": ["run"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "SvelteKit Frontend Dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 5173,
+      "cwd": "frontend"
+    }
+  ]
+}
