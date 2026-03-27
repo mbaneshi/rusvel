@@ -10,6 +10,7 @@ use rusvel_core::domain::*;
 use rusvel_core::error::Result;
 use rusvel_core::ports::{LlmPort, MetricStore};
 
+use crate::cost::LLM_COST_METRIC_NAME;
 use crate::tier_routing::apply_model_tier;
 
 /// Wraps an inner [`LlmPort`], applies [`apply_model_tier`], and records estimated USD per call to [`MetricStore`].
@@ -81,7 +82,7 @@ impl CostTrackingLlm {
             tags.push(format!("dept:{d}"));
         }
         let point = MetricPoint {
-            name: "llm.cost_usd".into(),
+            name: LLM_COST_METRIC_NAME.into(),
             value: usd,
             tags,
             recorded_at: Utc::now(),
@@ -91,7 +92,7 @@ impl CostTrackingLlm {
             }),
         };
         if let Err(e) = store.record(&point).await {
-            tracing::warn!(error = %e, "metric store record failed for llm.cost_usd");
+            tracing::warn!(error = %e, "metric store record failed for {}", LLM_COST_METRIC_NAME);
         }
     }
 }
@@ -316,7 +317,7 @@ mod tests {
         }
         let pts = metrics.points.lock().unwrap();
         assert_eq!(pts.len(), 1);
-        assert_eq!(pts[0].name, "llm.cost_usd");
+        assert_eq!(pts[0].name, LLM_COST_METRIC_NAME);
         assert!(pts[0].value > 0.0);
         assert!(pts[0].tags.iter().any(|t| t.contains("session:sess-test-1")));
         assert!(pts[0].tags.iter().any(|t| t.starts_with("tier:")));

@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use rusvel_core::domain::{EventFilter, MetricFilter, ObjectFilter};
 use rusvel_core::id::SessionId;
-use rusvel_core::ports::MetricStore;
+use rusvel_llm::cost::{aggregate_spend, LLM_COST_METRIC_NAME};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -103,7 +103,6 @@ pub async fn get_analytics(
 
 // ── Spend (S-035) ─────────────────────────────────────────────
 
-const SPEND_METRIC: &str = "llm.cost_usd";
 const BUDGET_WARN_RATIO: f64 = 0.8;
 
 #[derive(Debug, Deserialize)]
@@ -133,21 +132,13 @@ pub struct SpendResponse {
     pub budget_usage_ratio: Option<f64>,
 }
 
-fn dept_from_tags(tags: &[String]) -> Option<String> {
-    tags.iter().find_map(|t| t.strip_prefix("dept:").map(|s| s.to_string()))
-}
-
-fn session_from_tags(tags: &[String]) -> Option<String> {
-    tags.iter().find_map(|t| t.strip_prefix("session:").map(|s| s.to_string()))
-}
-
 /// `GET /api/analytics/spend` — LLM spend breakdown by department; optional session budget warning.
 pub async fn get_spend(
     State(state): State<Arc<AppState>>,
     Query(q): Query<SpendQuery>,
 ) -> Result<Json<SpendResponse>, (StatusCode, String)> {
     let filter = MetricFilter {
-        name: Some(SPEND_METRIC.into()),
+        name: Some(LLM_COST_METRIC_NAME.into()),
         limit: Some(50_000),
         ..Default::default()
     };
@@ -157,21 +148,14 @@ pub async fn get_spend(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut by_department: HashMap<String, f64> = HashMap::new();
-    let mut session_totals: HashMap<String, f64> = HashMap::new();
-
-    for p in &points {
-        let d = dept_from_tags(&p.tags).unwrap_or_else(|| "unknown".into());
-        *by_department.entry(d).or_insert(0.0) += p.value;
-        if let Some(sid) = session_from_tags(&p.tags) {
-            *session_totals.entry(sid).or_insert(0.0) += p.value;
-        }
-    }
+    let agg = aggregate_spend(&points);
+    let by_department = agg.by_department;
+    let session_totals = agg.by_session;
 
     let total_usd = if let Some(ref d) = q.dept {
         *by_department.get(d.as_str()).unwrap_or(&0.0)
     } else {
-        points.iter().map(|p| p.value).sum()
+        agg.total_usd
     };
 
     let mut session_id_out: Option<String> = None;
