@@ -66,7 +66,7 @@ export function tabsFromDepartment(d: DepartmentDef): string[] {
 }
 
 export function deptHref(deptId: string): string {
-	return `/dept/${encodeURIComponent(deptId)}`;
+	return `/dept/${encodeURIComponent(deptId)}/chat`;
 }
 
 /**

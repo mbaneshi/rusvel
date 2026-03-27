@@ -15,7 +15,7 @@
 	let dept = $derived(allDepts.find((d) => d.id === page.params.id));
 </script>
 
-<div class="flex h-full">
+<div class="flex h-full min-h-0">
 	{#if !dept}
 		<div class="flex flex-1 items-center justify-center">
 			<p class="text-sm text-[var(--muted-foreground)]">Department not found.</p>
@@ -35,7 +35,7 @@
 				tabs={[...tabsFromDepartment(dept), 'terminal']}
 			/>
 		{/key}
-		<div class="flex-1">
+		<div class="min-w-0 flex-1">
 			{#key dept.id}
 				<DepartmentChat dept={dept.id} title={dept.title} />
 			{/key}

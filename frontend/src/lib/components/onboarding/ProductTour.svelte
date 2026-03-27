@@ -34,7 +34,7 @@
 							title: 'Welcome to RUSVEL',
 							description:
 								'Your AI-powered virtual agency. Every department has its own AI agent ready to help.',
-							side: 'right',
+							side: 'bottom',
 							align: 'start'
 						}
 					},
@@ -44,7 +44,7 @@
 							title: 'Sessions',
 							description:
 								'Sessions are your workspaces. Create one for each project, lead, or campaign.',
-							side: 'right',
+							side: 'bottom',
 							align: 'start'
 						}
 					},
@@ -54,7 +54,7 @@
 							title: 'Forge Department',
 							description:
 								'Your mission control. Set goals, generate daily plans, and run reviews here.',
-							side: 'right',
+							side: 'bottom',
 							align: 'start'
 						}
 					},
@@ -63,7 +63,7 @@
 						popover: {
 							title: 'God Agent Chat',
 							description: 'Chat with the central AI that has authority over all departments.',
-							side: 'right',
+							side: 'bottom',
 							align: 'start'
 						}
 					},
@@ -72,7 +72,7 @@
 						popover: {
 							title: 'Settings',
 							description: 'Check system health, engine status, and configure your instance.',
-							side: 'right',
+							side: 'bottom',
 							align: 'start'
 						}
 					}

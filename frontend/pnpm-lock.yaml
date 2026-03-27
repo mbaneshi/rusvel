@@ -44,9 +44,6 @@ importers:
       lucide-svelte:
         specifier: ^0.577.0
         version: 0.577.0(svelte@5.55.0)
-      paneforge:
-        specifier: ^1.0.2
-        version: 1.0.2(svelte@5.55.0)
       svelte-confetti:
         specifier: ^2.3.2
         version: 2.3.2(svelte@5.55.0)
@@ -1455,11 +1452,6 @@ packages:
   package-manager-detector@1.6.0:
     resolution: {integrity: sha512-61A5ThoTiDG/C8s8UMZwSorAGwMJ0ERVGj2OjoW5pAalsNOg15+iQiPzrLJ4jhZ1HJzmC2PIHT2oEiH3R5fzNA==}
 
-  paneforge@1.0.2:
-    resolution: {integrity: sha512-KzmIXQH1wCfwZ4RsMohD/IUtEjVhteR+c+ulb/CHYJHX8SuDXoJmChtsc/Xs5Wl8NHS4L5Q7cxL8MG40gSU1bA==}
-    peerDependencies:
-      svelte: ^5.29.0
-
   path-data-parser@0.1.0:
     resolution: {integrity: sha512-NOnmBpt5Y2RWbuv0LMzsayp3lVylAHLPUTut412ZA3l+C4uw4ZVkQbjShYCQ8TCpUMdPapr4YjUqLYD6v68j+w==}
 
@@ -1618,18 +1610,8 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  runed@0.23.4:
-    resolution: {integrity: sha512-9q8oUiBYeXIDLWNK5DfCWlkL0EW3oGbk845VdKlPeia28l751VpfesaB/+7pI6rnbx1I6rqoZ2fZxptOJLxILA==}
-    peerDependencies:
-      svelte: ^5.7.0
-
   runed@0.28.0:
     resolution: {integrity: sha512-k2xx7RuO9hWcdd9f+8JoBeqWtYrm5CALfgpkg2YDB80ds/QE4w0qqu34A7fqiAwiBBSBQOid7TLxwxVC27ymWQ==}
-    peerDependencies:
-      svelte: ^5.7.0
-
-  runed@0.29.2:
-    resolution: {integrity: sha512-0cq6cA6sYGZwl/FvVqjx9YN+1xEBu9sDDyuWdDW1yWX7JF2wmvmVKfH+hVCZs+csW+P3ARH92MjI3H9QTagOQA==}
     peerDependencies:
       svelte: ^5.7.0
 
@@ -1717,12 +1699,6 @@ packages:
 
   svelte-toolbelt@0.10.6:
     resolution: {integrity: sha512-YWuX+RE+CnWYx09yseAe4ZVMM7e7GRFZM6OYWpBKOb++s+SQ8RBIMMe+Bs/CznBMc0QPLjr+vDBxTAkozXsFXQ==}
-    engines: {node: '>=18', pnpm: '>=8.7.0'}
-    peerDependencies:
-      svelte: ^5.30.2
-
-  svelte-toolbelt@0.9.3:
-    resolution: {integrity: sha512-HCSWxCtVmv+c6g1ACb8LTwHVbDqLKJvHpo6J8TaqwUme2hj9ATJCpjCPNISR1OCq2Q4U1KT41if9ON0isINQZw==}
     engines: {node: '>=18', pnpm: '>=8.7.0'}
     peerDependencies:
       svelte: ^5.30.2
@@ -3245,12 +3221,6 @@ snapshots:
 
   package-manager-detector@1.6.0: {}
 
-  paneforge@1.0.2(svelte@5.55.0):
-    dependencies:
-      runed: 0.23.4(svelte@5.55.0)
-      svelte: 5.55.0
-      svelte-toolbelt: 0.9.3(svelte@5.55.0)
-
   path-data-parser@0.1.0: {}
 
   path-parse@1.0.7: {}
@@ -3413,17 +3383,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  runed@0.23.4(svelte@5.55.0):
-    dependencies:
-      esm-env: 1.2.2
-      svelte: 5.55.0
-
   runed@0.28.0(svelte@5.55.0):
-    dependencies:
-      esm-env: 1.2.2
-      svelte: 5.55.0
-
-  runed@0.29.2(svelte@5.55.0):
     dependencies:
       esm-env: 1.2.2
       svelte: 5.55.0
@@ -3537,13 +3497,6 @@ snapshots:
       svelte: 5.55.0
     transitivePeerDependencies:
       - '@sveltejs/kit'
-
-  svelte-toolbelt@0.9.3(svelte@5.55.0):
-    dependencies:
-      clsx: 2.1.1
-      runed: 0.29.2(svelte@5.55.0)
-      style-to-object: 1.0.14
-      svelte: 5.55.0
 
   svelte@5.55.0:
     dependencies:
