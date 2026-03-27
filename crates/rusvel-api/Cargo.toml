@@ -21,6 +21,7 @@ flow-engine = { workspace = true }
 gtm-engine = { workspace = true }
 rusvel-cdp = { workspace = true }
 rusvel-webhook = { workspace = true }
+rusvel-cron = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }

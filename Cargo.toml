@@ -22,6 +22,7 @@ members = [
     "crates/rusvel-terminal",
     "crates/rusvel-cdp",
     "crates/rusvel-webhook",
+    "crates/rusvel-cron",
 
     # ─── Domain Engines ───
     "crates/forge-engine",
@@ -165,6 +166,7 @@ rusvel-vector = { path = "crates/rusvel-vector" }
 rusvel-terminal = { path = "crates/rusvel-terminal" }
 rusvel-cdp = { path = "crates/rusvel-cdp" }
 rusvel-webhook = { path = "crates/rusvel-webhook" }
+rusvel-cron = { path = "crates/rusvel-cron" }
 forge-engine = { path = "crates/forge-engine" }
 code-engine = { path = "crates/code-engine" }
 harvest-engine = { path = "crates/harvest-engine" }

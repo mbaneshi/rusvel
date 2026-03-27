@@ -15,6 +15,7 @@ pub mod build_cmd;
 pub mod capability;
 pub mod chat;
 pub mod config;
+pub mod cron;
 pub mod db_routes;
 pub mod department;
 pub mod engine_routes;
@@ -59,6 +60,7 @@ use rusvel_core::ports::{
 };
 use rusvel_core::registry::DepartmentRegistry;
 use rusvel_agent::AgentRuntime;
+use rusvel_cron::CronScheduler;
 use rusvel_db::Database;
 use rusvel_webhook::WebhookReceiver;
 
@@ -93,6 +95,8 @@ pub struct AppState {
     pub auth: auth::AuthConfig,
     /// Incoming webhooks (HMAC + object-store registrations).
     pub webhook_receiver: Arc<WebhookReceiver>,
+    /// Cron schedules; tick enqueues [`rusvel_core::domain::JobKind::ScheduledCron`] jobs.
+    pub cron_scheduler: Arc<CronScheduler>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -117,6 +121,17 @@ pub fn build_router_with_frontend(
             get(webhooks::list_webhooks).post(webhooks::create_webhook),
         )
         .route("/api/webhooks/{id}", post(webhooks::receive_webhook))
+        .route(
+            "/api/cron",
+            get(cron::list_schedules).post(cron::create_schedule),
+        )
+        .route("/api/cron/tick", post(cron::tick_now))
+        .route(
+            "/api/cron/{id}",
+            get(cron::get_schedule)
+                .put(cron::update_schedule)
+                .delete(cron::delete_schedule),
+        )
         .route("/api/brief", get(engine_routes::brief_get))
         .route("/api/brief/generate", post(engine_routes::brief_generate))
         .route("/api/sessions", get(routes::list_sessions))

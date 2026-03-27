@@ -287,6 +287,10 @@ async fn test_router() -> (
         storage.clone(),
         events.clone(),
     ));
+    let cron_scheduler = Arc::new(rusvel_cron::CronScheduler::new(
+        storage.clone(),
+        jobs.clone(),
+    ));
 
     let state = AppState {
         forge,
@@ -314,6 +318,7 @@ async fn test_router() -> (
         cdp: None,
         auth: rusvel_api::auth::AuthConfig::from_env(),
         webhook_receiver,
+        cron_scheduler,
     };
 
     (

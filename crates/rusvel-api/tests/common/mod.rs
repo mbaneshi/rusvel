@@ -259,6 +259,10 @@ async fn build_harness_with_auth_and_gtm(
         storage.clone(),
         events.clone(),
     ));
+    let cron_scheduler = Arc::new(rusvel_cron::CronScheduler::new(
+        storage.clone(),
+        jobs.clone(),
+    ));
 
     let state = AppState {
         forge,
@@ -286,6 +290,7 @@ async fn build_harness_with_auth_and_gtm(
         cdp: None,
         auth,
         webhook_receiver,
+        cron_scheduler,
     };
 
     let router = build_router(state);
