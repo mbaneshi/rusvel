@@ -1,5 +1,9 @@
 //! Outbound messaging [`ChannelPort`] — implemented by Telegram/Discord adapters (Sprint 8).
 
+mod telegram;
+
+pub use telegram::TelegramChannel;
+
 use async_trait::async_trait;
 use rusvel_core::error::Result;
 use rusvel_core::id::SessionId;

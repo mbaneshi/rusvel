@@ -7,7 +7,9 @@ use std::sync::Arc;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use serde::Serialize;
+use rusvel_core::id::SessionId;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::process::Command;
 
 use crate::AppState;
@@ -53,6 +55,30 @@ pub async fn run_tests(
         test,
         frontend_check,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NotifyBody {
+    pub session_id: SessionId,
+    pub text: String,
+}
+
+/// `POST /api/system/notify` — send text via configured outbound channel (e.g. Telegram).
+pub async fn notify(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<NotifyBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let Some(ref ch) = state.channel else {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "notify channel not configured".into(),
+        ));
+    };
+    let payload = json!({ "text": body.text });
+    ch.send_message(&body.session_id, payload)
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/system/build` — rebuild backend + frontend

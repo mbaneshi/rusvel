@@ -1165,6 +1165,37 @@ async fn main() -> Result<()> {
                                 }
                             }
                         }
+                        JobKind::Custom(ref s) if s == "forge.pipeline" => {
+                            use forge_engine::pipeline::PipelineOrchestrationDef;
+                            use rusvel_api::pipeline_runner::HarvestContentPipelineRunner;
+                            let sid = job.session_id;
+                            let def: PipelineOrchestrationDef = match job.payload.get("def") {
+                                None => PipelineOrchestrationDef::default(),
+                                Some(v) if v.is_null() => PipelineOrchestrationDef::default(),
+                                Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+                            };
+                            let runner = HarvestContentPipelineRunner {
+                                harvest: harvest_engine_worker.clone(),
+                                content: content_engine_worker.clone(),
+                            };
+                            match forge_worker
+                                .orchestrate_pipeline(sid, def, &runner)
+                                .await
+                            {
+                                Ok(exec) => Ok(Some(JobResult {
+                                    output: serde_json::to_value(&exec).unwrap_or_default(),
+                                    metadata: serde_json::json!({"engine": "forge", "source": "webhook"}),
+                                })),
+                                Err(e) => {
+                                    tracing::error!(
+                                        job_id = %job_id,
+                                        error = %e,
+                                        "Forge pipeline job failed"
+                                    );
+                                    Err(e)
+                                }
+                            }
+                        }
                         JobKind::OutreachSend => {
                             match gtm_engine_worker
                                 .outreach()
@@ -1436,6 +1467,12 @@ async fn main() -> Result<()> {
             }
         };
 
+        let outbound_channel: Option<Arc<dyn rusvel_channel::ChannelPort>> =
+            rusvel_channel::TelegramChannel::from_env()
+                .map(|c| c as Arc<dyn rusvel_channel::ChannelPort>);
+
+        harvest_engine.configure_rag(embedding.clone(), vector_store.clone());
+
         let state = AppState {
             forge: forge.clone(),
             code_engine: Some(code_engine.clone()),
@@ -1462,6 +1499,7 @@ async fn main() -> Result<()> {
             webhook_receiver: webhook_receiver.clone(),
             cron_scheduler: cron_scheduler.clone(),
             context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
+            channel: outbound_channel,
         };
 
         let frontend_dir = [
@@ -1550,6 +1588,12 @@ async fn main() -> Result<()> {
             vector_store.clone(),
         );
 
+        let outbound_channel: Option<Arc<dyn rusvel_channel::ChannelPort>> =
+            rusvel_channel::TelegramChannel::from_env()
+                .map(|c| c as Arc<dyn rusvel_channel::ChannelPort>);
+
+        harvest_engine.configure_rag(embedding.clone(), vector_store.clone());
+
         let state = AppState {
             forge: forge.clone(),
             code_engine: Some(code_engine.clone()),
@@ -1576,6 +1620,7 @@ async fn main() -> Result<()> {
             webhook_receiver: webhook_receiver.clone(),
             cron_scheduler: cron_scheduler.clone(),
             context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
+            channel: outbound_channel,
         };
 
         // Look for frontend build in known locations (filesystem first)

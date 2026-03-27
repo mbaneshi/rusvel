@@ -9,6 +9,7 @@ description = "Outbound messaging channel port (Sprint 8) — Telegram/Discord a
 
 [dependencies]
 async-trait = { workspace = true }
+reqwest = { workspace = true }
 rusvel-core = { workspace = true }
 serde_json = { workspace = true }
 

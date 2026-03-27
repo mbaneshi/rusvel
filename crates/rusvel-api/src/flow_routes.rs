@@ -224,5 +224,12 @@ pub async fn get_checkpoint(
 
 pub async fn list_node_types(State(state): State<Arc<AppState>>) -> ApiResult<Vec<String>> {
     let engine = flow_engine(&state)?;
-    Ok(Json(engine.node_types()))
+    let parallel_on = std::env::var("RUSVEL_FLOW_PARALLEL_EVALUATE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let mut types = engine.node_types();
+    if !parallel_on {
+        types.retain(|t| t != "parallel_evaluate");
+    }
+    Ok(Json(types))
 }

@@ -50,6 +50,15 @@ pub struct WebhookSummary {
     pub created_at: DateTime<Utc>,
 }
 
+/// Result of a verified webhook receive: event persisted plus routing metadata for side effects.
+#[derive(Debug, Clone)]
+pub struct WebhookReceiveOutcome {
+    pub event_id: EventId,
+    pub event_kind: String,
+    /// Parsed JSON body from the HTTP request (or string/null if not JSON).
+    pub body: Value,
+}
+
 /// Maps webhook HTTP receives to event emissions (ADR-005: `Event.kind` is caller-defined).
 #[derive(Clone)]
 pub struct WebhookReceiver {
@@ -136,7 +145,7 @@ impl WebhookReceiver {
         webhook_id: &str,
         body: &[u8],
         signature_header: Option<&str>,
-    ) -> Result<EventId> {
+    ) -> Result<WebhookReceiveOutcome> {
         let Some(header) = signature_header else {
             return Err(RusvelError::Validation(
                 "missing X-Rusvel-Signature header (expected sha256=<hex>)".into(),
@@ -164,6 +173,7 @@ impl WebhookReceiver {
                 .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(body).into_owned()))
         };
 
+        let event_kind = record.event_kind.clone();
         let event = Event {
             id: EventId::new(),
             session_id: None,
@@ -172,13 +182,18 @@ impl WebhookReceiver {
             kind: record.event_kind,
             payload: json!({
                 "webhook_id": webhook_id,
-                "body": body_value,
+                "body": body_value.clone(),
             }),
             created_at: Utc::now(),
             metadata: json!({ "webhook_id": webhook_id }),
         };
 
-        self.events.emit(event).await
+        let event_id = self.events.emit(event).await?;
+        Ok(WebhookReceiveOutcome {
+            event_id,
+            event_kind,
+            body: body_value,
+        })
     }
 }
 

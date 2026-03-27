@@ -64,6 +64,7 @@ use rusvel_core::ports::{
     TerminalPort, ToolPort, VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
+use rusvel_channel::ChannelPort;
 use rusvel_cron::CronScheduler;
 use rusvel_db::Database;
 use rusvel_webhook::WebhookReceiver;
@@ -111,6 +112,8 @@ pub struct AppState {
     /// Cron schedules; tick enqueues [`rusvel_core::domain::JobKind::ScheduledCron`] jobs.
     pub cron_scheduler: Arc<CronScheduler>,
     pub context_pack_cache: Arc<ContextPackCache>,
+    /// Outbound notifications (e.g. Telegram); `None` when not configured.
+    pub channel: Option<Arc<dyn ChannelPort>>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -453,6 +456,7 @@ pub fn build_router_with_frontend(
         .route("/api/system/test", post(system::run_tests))
         .route("/api/system/build", post(system::run_build))
         .route("/api/system/status", get(system::get_status))
+        .route("/api/system/notify", post(system::notify))
         .route("/api/system/fix", post(system::self_fix))
         .route("/api/system/ingest-docs", post(system::ingest_docs))
         // Visual regression testing

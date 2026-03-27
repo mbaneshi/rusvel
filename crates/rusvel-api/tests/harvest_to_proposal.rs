@@ -320,6 +320,7 @@ async fn test_router() -> (
         webhook_receiver,
         cron_scheduler,
         context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
+        channel: None,
     };
 
     (

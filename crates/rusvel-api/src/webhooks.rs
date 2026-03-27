@@ -6,13 +6,18 @@ use axum::Json;
 use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
+use rusvel_core::domain::{JobKind, NewJob};
 use rusvel_core::error::RusvelError;
+use rusvel_core::id::SessionId;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::AppState;
 
 const SIGNATURE_HEADER: &str = "x-rusvel-signature";
+
+/// Register a webhook with this `event_kind` to enqueue a forge pipeline job (body: `session_id`, optional `def`).
+pub const FORGE_PIPELINE_WEBHOOK_KIND: &str = "forge.pipeline.requested";
 
 #[derive(Debug, Deserialize)]
 pub struct CreateWebhookBody {
@@ -63,7 +68,7 @@ pub async fn receive_webhook(
     body: Bytes,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let sig = signature_from_headers(&headers);
-    let event_id = state
+    let outcome = state
         .webhook_receiver
         .receive(&id, body.as_ref(), sig)
         .await
@@ -75,8 +80,42 @@ pub async fn receive_webhook(
             _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
         })?;
 
+    if outcome.event_kind == FORGE_PIPELINE_WEBHOOK_KIND {
+        let sid = outcome
+            .body
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    "body must include session_id (string)".into(),
+                )
+            })
+            .and_then(|s| {
+                uuid::Uuid::parse_str(s.trim())
+                    .map(SessionId::from_uuid)
+                    .map_err(|_| (StatusCode::BAD_REQUEST, "invalid session_id".into()))
+            })?;
+        let def = outcome.body.get("def").cloned().unwrap_or(Value::Null);
+        state
+            .jobs
+            .enqueue(NewJob {
+                session_id: sid,
+                kind: JobKind::Custom("forge.pipeline".into()),
+                payload: json!({ "def": def }),
+                max_retries: 2,
+                metadata: json!({
+                    "source": "webhook",
+                    "event_id": outcome.event_id.to_string(),
+                }),
+                scheduled_at: None,
+            })
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     Ok(Json(json!({
         "ok": true,
-        "event_id": event_id.to_string(),
+        "event_id": outcome.event_id.to_string(),
     })))
 }
