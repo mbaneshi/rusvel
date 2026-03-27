@@ -1,0 +1,16 @@
+[package]
+name = "rusvel-channel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Outbound messaging channel port (Sprint 8) — Telegram/Discord adapters implement this trait"
+
+[dependencies]
+async-trait = { workspace = true }
+rusvel-core = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

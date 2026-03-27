@@ -311,6 +311,7 @@ async fn build_harness_with_auth_and_gtm(
         auth,
         webhook_receiver,
         cron_scheduler,
+        context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
     };
 
     let router = build_router(state);

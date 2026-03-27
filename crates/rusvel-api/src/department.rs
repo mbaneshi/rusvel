@@ -21,10 +21,12 @@ use rusvel_agent::{
     AgUiEvent, AgentEvent, ContextPack, ag_ui_json_with_conversation, agent_event_to_ag_ui,
     to_prompt_section,
 };
-use rusvel_core::config::{LayeredConfig, ResolvedConfig};
+use rusvel_core::config::{
+    ContextPackFlags, LayeredConfig, ResolvedConfig, resolve_context_pack_flags,
+};
 use rusvel_core::domain::{
-    AgentConfig, Content, EventFilter, ModelProvider, ModelRef, RUSVEL_META_DEPARTMENT_ID,
-    RUSVEL_META_MODEL_TIER, UserProfile,
+    AgentConfig, Content, EventFilter, JobFilter, JobStatus, ModelProvider, ModelRef,
+    RUSVEL_META_DEPARTMENT_ID, RUSVEL_META_MODEL_TIER, UserProfile,
 };
 use rusvel_core::error::RusvelError;
 use rusvel_core::id::{EventId, SessionId};
@@ -32,7 +34,7 @@ use rusvel_core::ports::{AgentPort, StoragePort};
 use rusvel_core::registry::DepartmentDef;
 use uuid::Uuid;
 
-use crate::AppState;
+use crate::{AppState, CONTEXT_PACK_CACHE_TTL};
 use crate::chat::{ChatMessage, ChatRequest, ConversationSummary};
 
 // ── Department Config (stored per-dept as LayeredConfig) ─────
@@ -77,37 +79,110 @@ fn resolve_dept_config(
     merged.resolve()
 }
 
-async fn assemble_context_pack(
-    state: &Arc<AppState>,
-    sid: &SessionId,
-) -> Result<ContextPack, RusvelError> {
-    let session = state.sessions.load(sid).await?;
-    let goals = state.forge.list_goals(sid).await.unwrap_or_default();
-    let goal_titles: Vec<String> = goals.iter().map(|g| g.title.clone()).collect();
-    let evs = state
-        .events
-        .query(EventFilter {
+async fn quick_context_metrics(state: &Arc<AppState>, sid: &SessionId) -> String {
+    let jobs = state
+        .jobs
+        .list(JobFilter {
             session_id: Some(*sid),
-            limit: Some(16),
+            statuses: vec![
+                JobStatus::Queued,
+                JobStatus::Running,
+                JobStatus::AwaitingApproval,
+            ],
+            limit: Some(64),
             ..Default::default()
         })
         .await
         .unwrap_or_default();
-    let recent_event_summaries: Vec<String> = evs
-        .into_iter()
-        .rev()
-        .take(10)
-        .map(|e| {
-            let pl = e.payload.to_string();
-            let short = pl.chars().take(120).collect::<String>();
-            format!("{}: {short}", e.kind)
-        })
-        .collect();
+    let mut parts = vec![format!("jobs_in_flight: {}", jobs.len())];
+    if let Some(h) = state.harvest_engine.as_ref() {
+        if let Ok(stats) = h.pipeline(sid).await {
+            parts.push(format!("harvest_opportunities: {}", stats.total));
+        }
+    }
+    parts.join("; ")
+}
+
+async fn assemble_context_pack(
+    state: &Arc<AppState>,
+    sid: &SessionId,
+    flags: rusvel_core::config::ResolvedContextPackFlags,
+) -> Result<ContextPack, RusvelError> {
+    let session = state.sessions.load(sid).await?;
+    let session_name = if flags.session_name {
+        session.name
+    } else {
+        String::new()
+    };
+    let goal_titles = if flags.goals {
+        state
+            .forge
+            .list_goals(sid)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|g| g.title)
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let recent_event_summaries = if flags.events {
+        let evs = state
+            .events
+            .query(EventFilter {
+                session_id: Some(*sid),
+                limit: Some(16),
+                ..Default::default()
+            })
+            .await
+            .unwrap_or_default();
+        evs.into_iter()
+            .rev()
+            .take(10)
+            .map(|e| {
+                let pl = e.payload.to_string();
+                let short = pl.chars().take(120).collect::<String>();
+                format!("{}: {short}", e.kind)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let metrics_summary = if flags.metrics {
+        Some(quick_context_metrics(state, sid).await)
+    } else {
+        None
+    };
     Ok(ContextPack {
-        session_name: session.name,
+        session_name,
         goal_titles,
         recent_event_summaries,
+        metrics_summary,
     })
+}
+
+async fn context_pack_for_chat(
+    state: &Arc<AppState>,
+    dept: &str,
+    sid: &SessionId,
+    stored: &LayeredConfig,
+) -> Result<ContextPack, RusvelError> {
+    let flags = resolve_context_pack_flags(stored);
+    let key = (*sid, dept.to_string());
+    {
+        let guard = state.context_pack_cache.inner.lock().unwrap();
+        if let Some((t, pack)) = guard.get(&key) {
+            if t.elapsed() < CONTEXT_PACK_CACHE_TTL {
+                return Ok(pack.clone());
+            }
+        }
+    }
+    let pack = assemble_context_pack(state, sid, flags).await?;
+    {
+        let mut guard = state.context_pack_cache.inner.lock().unwrap();
+        guard.insert(key, (std::time::Instant::now(), pack.clone()));
+    }
+    Ok(pack)
 }
 
 // ── Legacy DepartmentConfig (for backward-compatible JSON responses) ──
@@ -124,6 +199,8 @@ pub struct DepartmentConfig {
     pub system_prompt: String,
     pub add_dirs: Vec<String>,
     pub max_turns: Option<u32>,
+    #[serde(default)]
+    pub context_pack: Option<ContextPackFlags>,
 }
 
 impl From<(&str, ResolvedConfig)> for DepartmentConfig {
@@ -139,6 +216,7 @@ impl From<(&str, ResolvedConfig)> for DepartmentConfig {
             system_prompt: r.system_prompt,
             add_dirs: r.add_dirs,
             max_turns: r.max_turns,
+            context_pack: None,
         }
     }
 }
@@ -156,6 +234,7 @@ impl DepartmentConfig {
             system_prompt: Some(self.system_prompt.clone()),
             add_dirs: Some(self.add_dirs.clone()),
             max_turns: self.max_turns,
+            context_pack: self.context_pack.clone(),
         }
     }
 }
@@ -218,7 +297,9 @@ pub async fn dept_config_get(
     let dept_def = validate_dept(&state, &dept)?;
     let stored = load_dept_config(&dept, &state).await;
     let resolved = resolve_dept_config(dept_def, &stored, state.profile.as_ref());
-    Ok(Json(DepartmentConfig::from((dept.as_str(), resolved))))
+    let mut cfg = DepartmentConfig::from((dept.as_str(), resolved));
+    cfg.context_pack = stored.context_pack.clone();
+    Ok(Json(cfg))
 }
 
 pub async fn dept_config_update(
@@ -369,7 +450,7 @@ pub async fn dept_chat(
         && let Ok(u) = Uuid::parse_str(sid_str)
     {
         let sid = SessionId::from_uuid(u);
-        if let Ok(pack) = assemble_context_pack(&state, &sid).await {
+        if let Ok(pack) = context_pack_for_chat(&state, &dept, &sid, &stored).await {
             resolved.system_prompt.push_str(&to_prompt_section(&pack));
         }
     }
@@ -412,7 +493,7 @@ pub async fn dept_chat(
                  - Scan sources: POST /api/dept/harvest/scan {session_id, sources: [mock|upwork|freelancer|cdp], query}\n\
                  - CDP scan: use source \"cdp\" and query = listing page URL (Chrome remote debugging; RUSVEL_CDP_ENDPOINT)\n\
                  - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id} → score + reasoning\n\
-                 - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage}\n\
+                 - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage} — Won/Lost also records outcome for learning (S-044)\n\
                  - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile} — default queues ProposalDraft for worker + approval; add \"sync\": true for immediate JSON response\n\
                  - Pipeline stats: GET /api/dept/harvest/pipeline?session_id=<id>\n\
                  - List opportunities: GET /api/dept/harvest/list?session_id=<id>&stage=<filter>\n\
@@ -435,7 +516,7 @@ pub async fn dept_chat(
                  - List contacts: GET /api/dept/gtm/contacts?session_id=<id>\n\
                  - Create contact: POST /api/dept/gtm/contacts {session_id, name, email, company?, role?, tags?, links?}\n\
                  - List deals (with contact names for UI): GET /api/dept/gtm/deals?session_id=<id>&stage=<optional>\n\
-                 - Advance deal stage: POST /api/dept/gtm/deals/advance {session_id, deal_id, stage} — stages: Lead, Qualified, Proposal, Negotiation, Won, Lost\n\
+                 - Advance deal stage: POST /api/dept/gtm/deals/advance {session_id, deal_id, stage, opportunity_id?} — Won/Lost + opportunity_id (or deal.metadata.harvest_opportunity_id) records Harvest outcome (S-044)\n\
                  - List outreach sequences: GET /api/dept/gtm/outreach/sequences?session_id=<id>\n\
                  - Create sequence (draft): POST /api/dept/gtm/outreach/sequences {session_id, name, steps[{delay_days, channel, template}]}\n\
                  - Activate sequence: POST /api/dept/gtm/outreach/sequences/{id}/activate {session_id}\n\

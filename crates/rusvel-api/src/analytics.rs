@@ -34,10 +34,9 @@ pub struct AnalyticsResponse {
     pub departments: usize,
 }
 
-/// `GET /api/analytics` — return aggregate counts.
-pub async fn get_analytics(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<AnalyticsResponse>, (StatusCode, String)> {
+async fn collect_analytics_counts(
+    state: &Arc<AppState>,
+) -> Result<AnalyticsResponse, (StatusCode, String)> {
     let objects = state.storage.objects();
     let filter = ObjectFilter::default();
 
@@ -71,7 +70,6 @@ pub async fn get_analytics(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .len();
 
-    // Count unique conversations from chat_message entries
     let chat_messages = objects
         .list("chat_message", filter.clone())
         .await
@@ -82,7 +80,6 @@ pub async fn get_analytics(
         .collect::<HashSet<_>>()
         .len();
 
-    // Count events via EventPort
     let events = state
         .events
         .query(EventFilter::default())
@@ -90,7 +87,9 @@ pub async fn get_analytics(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .len();
 
-    Ok(Json(AnalyticsResponse {
+    let departments = state.registry.list().len();
+
+    Ok(AnalyticsResponse {
         agents,
         skills,
         rules,
@@ -98,8 +97,34 @@ pub async fn get_analytics(
         hooks,
         conversations,
         events,
-        departments: 5, // Code, Content, Harvest, GTM, Forge
-    }))
+        departments,
+    })
+}
+
+/// `GET /api/analytics` — return aggregate counts.
+pub async fn get_analytics(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<AnalyticsResponse>, (StatusCode, String)> {
+    let counts = collect_analytics_counts(&state).await?;
+    Ok(Json(counts))
+}
+
+/// Unified snapshot for the home dashboard (S-047): object counts + spend in one round trip.
+#[derive(Debug, Serialize)]
+pub struct DashboardResponse {
+    #[serde(flatten)]
+    pub counts: AnalyticsResponse,
+    pub spend: SpendResponse,
+}
+
+/// `GET /api/analytics/dashboard` — [`AnalyticsResponse`] + [`SpendResponse`] (same query params as spend).
+pub async fn get_dashboard(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<SpendQuery>,
+) -> Result<Json<DashboardResponse>, (StatusCode, String)> {
+    let counts = collect_analytics_counts(&state).await?;
+    let spend = collect_spend(&state, &q).await?;
+    Ok(Json(DashboardResponse { counts, spend }))
 }
 
 // ── Spend (S-035) ─────────────────────────────────────────────
@@ -133,11 +158,10 @@ pub struct SpendResponse {
     pub budget_usage_ratio: Option<f64>,
 }
 
-/// `GET /api/analytics/spend` — LLM spend breakdown by department; optional session budget warning.
-pub async fn get_spend(
-    State(state): State<Arc<AppState>>,
-    Query(q): Query<SpendQuery>,
-) -> Result<Json<SpendResponse>, (StatusCode, String)> {
+async fn collect_spend(
+    state: &Arc<AppState>,
+    q: &SpendQuery,
+) -> Result<SpendResponse, (StatusCode, String)> {
     let filter = MetricFilter {
         name: Some(LLM_COST_METRIC_NAME.into()),
         limit: Some(50_000),
@@ -187,7 +211,7 @@ pub async fn get_spend(
         }
     }
 
-    Ok(Json(SpendResponse {
+    Ok(SpendResponse {
         total_usd,
         by_department,
         session_id: session_id_out,
@@ -195,5 +219,14 @@ pub async fn get_spend(
         session_budget_limit_usd,
         budget_warning,
         budget_usage_ratio,
-    }))
+    })
+}
+
+/// `GET /api/analytics/spend` — LLM spend breakdown by department; optional session budget warning.
+pub async fn get_spend(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<SpendQuery>,
+) -> Result<Json<SpendResponse>, (StatusCode, String)> {
+    let spend = collect_spend(&state, &q).await?;
+    Ok(Json(spend))
 }

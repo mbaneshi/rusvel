@@ -77,6 +77,10 @@
 <div class="p-6">
 	<h1 class="mb-6 text-2xl font-bold text-gray-100">Settings</h1>
 
+	<p class="mb-4 text-sm text-gray-400">
+		<a href="/settings/spend" class="text-primary hover:underline">LLM spend dashboard</a>
+	</p>
+
 	<div class="max-w-2xl space-y-6">
 		<!-- Approvals Section -->
 		<div class="rounded-xl border border-amber-800/50 bg-gray-900 p-5">

@@ -8,11 +8,15 @@ pub struct ContextPack {
     pub session_name: String,
     pub goal_titles: Vec<String>,
     pub recent_event_summaries: Vec<String>,
+    pub metrics_summary: Option<String>,
 }
 
 /// Markdown-style block appended after rules and before department actions.
 pub fn to_prompt_section(p: &ContextPack) -> String {
-    if p.session_name.is_empty() && p.goal_titles.is_empty() && p.recent_event_summaries.is_empty()
+    if p.session_name.is_empty()
+        && p.goal_titles.is_empty()
+        && p.recent_event_summaries.is_empty()
+        && p.metrics_summary.as_ref().map_or(true, |m| m.is_empty())
     {
         return String::new();
     }
@@ -34,6 +38,11 @@ pub fn to_prompt_section(p: &ContextPack) -> String {
             s.push_str(&format!("- {e}\n"));
         }
     }
+    if let Some(ref m) = p.metrics_summary {
+        if !m.is_empty() {
+            s.push_str(&format!("Quick metrics: {m}\n"));
+        }
+    }
     s
 }
 
@@ -47,6 +56,7 @@ mod tests {
             session_name: "alpha".into(),
             goal_titles: vec!["ship v1".into()],
             recent_event_summaries: vec!["harvest.scan.completed: ok".into()],
+            metrics_summary: None,
         };
         let t = to_prompt_section(&p);
         assert!(t.contains("alpha"));

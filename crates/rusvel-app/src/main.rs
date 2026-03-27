@@ -912,7 +912,9 @@ async fn main() -> Result<()> {
     rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
     rusvel_engine_tools::register_content_tools(&tool_registry, content_engine.clone()).await;
     rusvel_engine_tools::register_code_tools(&tool_registry, code_engine.clone()).await;
-    tracing::info!("Engine tools registered: harvest(5), content(5), code(2)");
+    rusvel_builtin_tools::register_artifact_tools(&tool_registry, db.clone() as Arc<dyn rusvel_core::ports::StoragePort>)
+        .await;
+    tracing::info!("Engine tools registered: harvest(5), content(5), code(2), forge_save_artifact");
 
     // 5. Seed default data (agents, skills, rules) on first run
     let storage_ref: Arc<dyn StoragePort> = db.clone() as Arc<dyn StoragePort>;
@@ -1370,8 +1372,19 @@ async fn main() -> Result<()> {
             .map(rusvel_tui::TuiTerminalPane::from_pane)
             .collect();
 
+        let latest_brief_summary = forge
+            .latest_brief(&session_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|b| {
+                let s: String = b.summary.chars().take(96).collect();
+                format!("{} — {s}", b.date)
+            });
+
         let tui_data = rusvel_tui::TuiData {
             session_name,
+            latest_brief_summary,
             goals,
             tasks,
             opportunities,
@@ -1448,6 +1461,7 @@ async fn main() -> Result<()> {
             auth: rusvel_api::auth::AuthConfig::from_env(),
             webhook_receiver: webhook_receiver.clone(),
             cron_scheduler: cron_scheduler.clone(),
+            context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
         };
 
         let frontend_dir = [
@@ -1561,6 +1575,7 @@ async fn main() -> Result<()> {
             auth: rusvel_api::auth::AuthConfig::from_env(),
             webhook_receiver: webhook_receiver.clone(),
             cron_scheduler: cron_scheduler.clone(),
+            context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
         };
 
         // Look for frontend build in known locations (filesystem first)

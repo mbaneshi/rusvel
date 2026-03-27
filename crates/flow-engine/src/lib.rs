@@ -45,10 +45,13 @@ impl FlowEngine {
         let mut registry = NodeRegistry::new();
         registry.register(Arc::new(nodes::code::CodeNode));
         registry.register(Arc::new(nodes::condition::ConditionNode));
-        registry.register(Arc::new(nodes::agent::AgentNode::new(agent)));
+        registry.register(Arc::new(nodes::agent::AgentNode::new(agent.clone())));
         registry.register(Arc::new(nodes::browser::BrowserTriggerNode));
         registry.register(Arc::new(nodes::browser::BrowserActionNode::new(
             browser.clone(),
+        )));
+        registry.register(Arc::new(nodes::parallel::ParallelEvaluateNode::new(
+            agent.clone(),
         )));
 
         Self {

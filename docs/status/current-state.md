@@ -119,13 +119,17 @@ These features are wired from the binary entry [`crates/rusvel-app/src/main.rs`]
 
 **Seed data** — Default agents, skills, rules on first run.
 
+### Sprint 6 — shipped vs partial
+
+Aligned with [`openclaw-sprint-plan.md`](../plans/openclaw-sprint-plan.md) Sprint 6: **S-040** (webhooks), **S-041** (cron), **S-046** (tests) shipped; **S-042** core (`POST /api/forge/pipeline`, `ForgeEngine::orchestrate_pipeline`); **S-043** (`forge.daily_briefing` → `generate_brief`); **S-044** partial (`record_outcome`, scorer hints); **S-045** partial (`ContextPack` + dept chat assembly). Matrix: [`sprint-6-7-implementation.md`](../plans/sprint-6-7-implementation.md).
+
 ---
 
 ## 4. Built but Needs More Work
 
-**Extended GTM / CRM depth** — **OutreachSend** jobs: worker explicitly **not wired** to GTM engine ([`main.rs`](../../crates/rusvel-app/src/main.rs) `JobKind::OutreachSend` → `engine_not_wired`).
+**Extended GTM / CRM depth** — **OutreachSend** is wired: `JobKind::OutreachSend` in [`main.rs`](../../crates/rusvel-app/src/main.rs) runs `gtm-engine` outreach (approval-gated send, SMTP/mock). Remaining depth: more CRM surfaces, templates, and provider-specific polish.
 
-**Authentication/authorization** — `rusvel-auth` is not full API middleware; env/in-memory style credentials for many paths.
+**Authentication/authorization** — `rusvel-auth` is in-memory from env; optional bearer env; phased API middleware (see sprint implementation doc).
 
 **Eight “business” engines** — Finance, Product, Growth, Distro, Legal, Support, Infra (and GTM beyond chat) are thinner than Forge/Code/Content/Harvest; chat works via `DepartmentApp` + registry.
 
@@ -143,7 +147,7 @@ Some surface crates (`rusvel-app`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`, …
 
 ## 6. Next steps (from gaps + sprint intent)
 
-1. Wire **GTM** / **OutreachSend** through the job pipeline with real engine logic and approvals.
+1. Deepen **GTM** / CRM (beyond OutreachSend worker path) and channel adapters per roadmap.
 2. Add **auth middleware** and a clear model for API keys/sessions if exposing beyond localhost.
 3. Continue **Sprint** themes in [`../plans/sprints.md`](../plans/sprints.md) (reference only).
 4. Re-run **§ How to re-verify** monthly or after large merges; append rows to [`verification-log-2026-03-27.md`](verification-log-2026-03-27.md) or a new dated log.

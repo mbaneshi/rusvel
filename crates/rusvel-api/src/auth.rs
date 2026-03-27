@@ -15,7 +15,8 @@ use serde_json::json;
 
 use crate::AppState;
 
-/// Paths that bypass auth even when a token is configured.
+/// Paths under `/api/*` that bypass bearer auth. Non-`/api/*` routes (embedded SPA) always bypass.
+/// Webhook receive: [`webhook_receive_exempt`].
 const EXEMPT_PATHS: &[&str] = &["/api/health"];
 
 fn webhook_receive_exempt(path: &str, method: &Method) -> bool {
@@ -50,6 +51,10 @@ async fn bearer_check(config: &AuthConfig, req: Request<Body>, next: Next) -> Re
     };
 
     let path = req.uri().path();
+    // Non-API routes (embedded SPA, static assets) do not require a bearer token.
+    if !path.starts_with("/api/") {
+        return next.run(req).await;
+    }
     if EXEMPT_PATHS.contains(&path) || webhook_receive_exempt(path, req.method()) {
         return next.run(req).await;
     }

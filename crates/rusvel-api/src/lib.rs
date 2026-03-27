@@ -38,8 +38,10 @@ pub mod visual_report;
 pub mod webhooks;
 pub mod workflows;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::Router;
 use axum::response::IntoResponse;
@@ -54,8 +56,9 @@ use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
 use gtm_engine::GtmEngine;
 use harvest_engine::HarvestEngine;
-use rusvel_agent::AgentRuntime;
+use rusvel_agent::{AgentRuntime, ContextPack};
 use rusvel_core::domain::UserProfile;
+use rusvel_core::id::SessionId;
 use rusvel_core::ports::{
     DeployPort, EmbeddingPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort,
     TerminalPort, ToolPort, VectorStorePort,
@@ -64,6 +67,15 @@ use rusvel_core::registry::DepartmentRegistry;
 use rusvel_cron::CronScheduler;
 use rusvel_db::Database;
 use rusvel_webhook::WebhookReceiver;
+
+/// In-memory TTL cache for [`ContextPack`] assembly (S-045); keyed by session + department id.
+#[derive(Default)]
+pub struct ContextPackCache {
+    pub(crate) inner: std::sync::Mutex<HashMap<(SessionId, String), (Instant, ContextPack)>>,
+}
+
+pub(crate) const CONTEXT_PACK_CACHE_TTL: std::time::Duration =
+    std::time::Duration::from_secs(45);
 
 /// Shared application state injected into all handlers.
 pub struct AppState {
@@ -98,6 +110,7 @@ pub struct AppState {
     pub webhook_receiver: Arc<WebhookReceiver>,
     /// Cron schedules; tick enqueues [`rusvel_core::domain::JobKind::ScheduledCron`] jobs.
     pub cron_scheduler: Arc<CronScheduler>,
+    pub context_pack_cache: Arc<ContextPackCache>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.
@@ -139,6 +152,10 @@ pub fn build_router_with_frontend(
         .route(
             "/api/forge/pipeline",
             post(engine_routes::forge_pipeline_orchestrate),
+        )
+        .route(
+            "/api/forge/artifacts",
+            get(engine_routes::forge_artifacts_list),
         )
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
@@ -398,6 +415,7 @@ pub fn build_router_with_frontend(
         .route("/api/capability/build", post(capability::build_capability))
         // Analytics
         .route("/api/analytics", get(analytics::get_analytics))
+        .route("/api/analytics/dashboard", get(analytics::get_dashboard))
         .route("/api/analytics/spend", get(analytics::get_spend))
         // Help (AI-powered)
         .route("/api/help", post(help::help_handler))

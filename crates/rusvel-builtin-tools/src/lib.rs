@@ -3,6 +3,7 @@
 //! Registers file operations, shell execution, web fetching, and git tools
 //! into a [`ToolRegistry`](rusvel_tool::ToolRegistry).
 
+pub mod artifacts;
 pub mod browser;
 pub mod delegate;
 mod file_ops;
@@ -62,4 +63,9 @@ pub async fn register_flow_tools(
 /// Register `browser_observe`, `browser_search`, and `browser_act` (CDP / [`BrowserPort`]).
 pub async fn register_browser_tools(registry: &ToolRegistry, browser_port: Arc<dyn BrowserPort>) {
     browser::register(registry, browser_port).await;
+}
+
+/// Register `forge_save_artifact` (S-049).
+pub async fn register_artifact_tools(registry: &ToolRegistry, storage: Arc<dyn StoragePort>) {
+    let _ = artifacts::register(registry, storage).await;
 }

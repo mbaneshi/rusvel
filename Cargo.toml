@@ -23,6 +23,8 @@ members = [
     "crates/rusvel-cdp",
     "crates/rusvel-webhook",
     "crates/rusvel-cron",
+    "crates/rusvel-channel",
+    "crates/dept-messaging",
 
     # ─── Domain Engines ───
     "crates/forge-engine",

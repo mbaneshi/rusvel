@@ -10,9 +10,13 @@ use rusvel_core::domain::{
 };
 
 use crate::TuiTerminalPane;
+use crate::tabs::{PANEL_EVENTS, PANEL_GOALS, PANEL_PIPELINE, PANEL_TASKS};
 
-pub fn header_widget(session_name: &str) -> Paragraph<'_> {
-    Paragraph::new(Line::from(vec![
+pub fn header_widget<'a>(
+    session_name: &'a str,
+    latest_brief: Option<&'a str>,
+) -> Paragraph<'a> {
+    let mut lines = vec![Line::from(vec![
         Span::styled(
             " RUSVEL ",
             Style::default()
@@ -21,12 +25,24 @@ pub fn header_widget(session_name: &str) -> Paragraph<'_> {
         ),
         Span::raw("— "),
         Span::styled(session_name, Style::default().fg(Color::Yellow)),
-    ]))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan)),
-    )
+    ])];
+    if let Some(b) = latest_brief {
+        let t = if b.chars().count() > 96 {
+            format!("{}…", b.chars().take(96).collect::<String>())
+        } else {
+            b.to_string()
+        };
+        lines.push(Line::from(vec![
+            Span::styled(" brief ", Style::default().fg(Color::Magenta)),
+            Span::raw(t),
+        ]));
+    }
+    Paragraph::new(lines)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        )
 }
 
 pub fn tasks_widget(tasks: &[Task]) -> List<'_> {
@@ -51,7 +67,11 @@ pub fn tasks_widget(tasks: &[Task]) -> List<'_> {
         })
         .collect();
 
-    List::new(items).block(Block::default().title(" Tasks ").borders(Borders::ALL))
+    List::new(items).block(
+        Block::default()
+            .title(format!(" {PANEL_TASKS} "))
+            .borders(Borders::ALL),
+    )
 }
 
 pub fn goals_widget(goals: &[Goal]) -> Table<'_> {
@@ -92,7 +112,11 @@ pub fn goals_widget(goals: &[Goal]) -> Table<'_> {
                 .fg(Color::Cyan),
         ),
     )
-    .block(Block::default().title(" Goals ").borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(format!(" {PANEL_GOALS} "))
+                .borders(Borders::ALL),
+        )
 }
 
 pub fn pipeline_widget(stats: &HashMap<String, usize>) -> BarChart<'_> {
@@ -118,7 +142,11 @@ pub fn pipeline_widget(stats: &HashMap<String, usize>) -> BarChart<'_> {
         .bar_gap(1)
         .bar_style(Style::default().fg(Color::Cyan))
         .value_style(Style::default().fg(Color::White))
-        .block(Block::default().title(" Pipeline ").borders(Borders::ALL))
+        .block(
+            Block::default()
+                .title(format!(" {PANEL_PIPELINE} "))
+                .borders(Borders::ALL),
+        )
 }
 
 pub fn events_widget(events: &[Event]) -> List<'_> {
@@ -134,7 +162,11 @@ pub fn events_widget(events: &[Event]) -> List<'_> {
         })
         .collect();
 
-    List::new(items).block(Block::default().title(" Events ").borders(Borders::ALL))
+    List::new(items).block(
+        Block::default()
+            .title(format!(" {PANEL_EVENTS} "))
+            .borders(Borders::ALL),
+    )
 }
 
 pub fn terminal_pane_list_widget(

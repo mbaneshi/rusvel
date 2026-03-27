@@ -151,8 +151,8 @@ rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 
 ## Not Yet Wired
 
-- **OutreachSend jobs** — GTM engine not yet wired, job handler is placeholder
-- **Authentication/authorization** — rusvel-auth is in-memory from env vars; no middleware on API routes
+- **OutreachSend jobs** — Wired: `gtm-engine` outreach + `JobKind::OutreachSend` in `rusvel-app` job worker (approval → send → next step). SMTP/mock email via `RUSVEL_SMTP_*`; see `gtm-engine/src/outreach.rs`.
+- **Authentication/authorization** — rusvel-auth is in-memory from env vars; optional bearer token env; API route middleware is phased (see `docs/plans/sprint-6-7-implementation.md`).
 
 ## Design Docs
 

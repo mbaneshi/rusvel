@@ -162,6 +162,28 @@ export async function getEvents(sessionId: string): Promise<Event[]> {
 	return request(`/api/sessions/${sessionId}/events`);
 }
 
+/** Last persisted executive brief (`GET /api/brief/latest`); null if none. */
+export interface ExecutiveBriefRow {
+	id: string;
+	date: string;
+	summary: string;
+	action_items: string[];
+	created_at: string;
+	sections: unknown[];
+}
+
+export async function getBriefLatest(sessionId: string): Promise<ExecutiveBriefRow | null> {
+	const res = await fetch(
+		`${BASE}/api/brief/latest?session_id=${encodeURIComponent(sessionId)}`
+	);
+	if (res.status === 404) return null;
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(`API error ${res.status}: ${text}`);
+	}
+	return res.json() as Promise<ExecutiveBriefRow>;
+}
+
 // ── Config (M02, M03, M04) ───────────────────────────────────
 
 export interface ChatConfig {
@@ -207,6 +229,13 @@ export async function getTools(): Promise<ToolOption[]> {
 
 // ── Department API (shared pattern for Code/Content/Harvest/GTM) ──
 
+export interface ContextPackFlags {
+	session_name?: boolean | null;
+	goals?: boolean | null;
+	events?: boolean | null;
+	metrics?: boolean | null;
+}
+
 export interface DepartmentConfig {
 	engine: string;
 	model: string;
@@ -218,6 +247,8 @@ export interface DepartmentConfig {
 	system_prompt: string;
 	add_dirs: string[];
 	max_turns: number | null;
+	/** S-045: optional section toggles for session context pack */
+	context_pack?: ContextPackFlags | null;
 }
 
 export async function getDeptConfig(dept: string): Promise<DepartmentConfig> {
@@ -835,6 +866,39 @@ export async function getHarvestPipeline(sessionId: string): Promise<unknown> {
 	return request(`/api/dept/harvest/pipeline?${sp}`);
 }
 
+/** `POST /api/forge/pipeline` — cross-engine harvest → content pipeline (S-042). */
+export interface ForgePipelineDef {
+	steps?: ('scan' | 'score' | 'propose' | 'draft_content')[];
+	proposal_profile?: string;
+	draft_topic?: string;
+	draft_kind?: string;
+}
+
+export interface FlowExecutionResponse {
+	id: string;
+	flow_id: string;
+	status: string;
+	trigger_data: Record<string, unknown>;
+	node_results: Record<string, unknown>;
+	started_at: string;
+	finished_at: string | null;
+	error: string | null;
+	metadata: Record<string, unknown>;
+}
+
+export async function postForgePipeline(
+	sessionId: string,
+	def?: ForgePipelineDef
+): Promise<FlowExecutionResponse> {
+	return request<FlowExecutionResponse>('/api/forge/pipeline', {
+		method: 'POST',
+		body: JSON.stringify({
+			session_id: sessionId,
+			...(def && Object.keys(def).length > 0 ? { def } : {})
+		})
+	});
+}
+
 /** CRM contact from `GET /api/dept/gtm/contacts` (S-036). */
 export interface GtmContactRow {
 	id: string;
@@ -1410,4 +1474,20 @@ export async function getAnalytics(): Promise<AnalyticsData> {
 	const res = await fetch(`${BASE}/api/analytics`);
 	if (!res.ok) throw new Error('Failed to load analytics');
 	return res.json();
+}
+
+/** S-047: aggregate counts + spend (same query params as spend). */
+export interface AnalyticsDashboardResponse extends AnalyticsData {
+	spend: AnalyticsSpendResponse;
+}
+
+export async function getAnalyticsDashboard(
+	sessionId?: string | null,
+	dept?: string
+): Promise<AnalyticsDashboardResponse> {
+	const sp = new URLSearchParams();
+	if (sessionId) sp.set('session_id', sessionId);
+	if (dept) sp.set('dept', dept);
+	const q = sp.toString();
+	return request<AnalyticsDashboardResponse>(`/api/analytics/dashboard${q ? `?${q}` : ''}`);
 }

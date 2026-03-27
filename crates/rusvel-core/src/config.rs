@@ -6,6 +6,68 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Per-department toggles for which sections appear in the session context pack (S-045).
+/// Each field is optional; unset inherits from the parent layer in [`LayeredConfig::overlay`].
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextPackFlags {
+    #[serde(default)]
+    pub session_name: Option<bool>,
+    #[serde(default)]
+    pub goals: Option<bool>,
+    #[serde(default)]
+    pub events: Option<bool>,
+    #[serde(default)]
+    pub metrics: Option<bool>,
+}
+
+impl ContextPackFlags {
+    pub fn overlay(&self, parent: &ContextPackFlags) -> ContextPackFlags {
+        ContextPackFlags {
+            session_name: self.session_name.or(parent.session_name),
+            goals: self.goals.or(parent.goals),
+            events: self.events.or(parent.events),
+            metrics: self.metrics.or(parent.metrics),
+        }
+    }
+
+    pub fn resolved(&self) -> ResolvedContextPackFlags {
+        ResolvedContextPackFlags {
+            session_name: self.session_name.unwrap_or(true),
+            goals: self.goals.unwrap_or(true),
+            events: self.events.unwrap_or(true),
+            metrics: self.metrics.unwrap_or(false),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ResolvedContextPackFlags {
+    pub session_name: bool,
+    pub goals: bool,
+    pub events: bool,
+    pub metrics: bool,
+}
+
+impl Default for ResolvedContextPackFlags {
+    fn default() -> Self {
+        Self {
+            session_name: true,
+            goals: true,
+            events: true,
+            metrics: false,
+        }
+    }
+}
+
+/// Effective context-pack section flags from a stored [`LayeredConfig`] (S-045).
+pub fn resolve_context_pack_flags(layered: &LayeredConfig) -> ResolvedContextPackFlags {
+    layered
+        .context_pack
+        .as_ref()
+        .map(ContextPackFlags::resolved)
+        .unwrap_or_default()
+}
+
 /// Config layer — any field set to None inherits from the parent layer.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LayeredConfig {
@@ -18,6 +80,8 @@ pub struct LayeredConfig {
     pub system_prompt: Option<String>,
     pub add_dirs: Option<Vec<String>>,
     pub max_turns: Option<u32>,
+    #[serde(default)]
+    pub context_pack: Option<ContextPackFlags>,
 }
 
 /// Fully resolved config — all fields present, ready to use.
@@ -53,6 +117,12 @@ impl LayeredConfig {
             system_prompt: self.system_prompt.clone().or(parent.system_prompt.clone()),
             add_dirs: self.add_dirs.clone().or(parent.add_dirs.clone()),
             max_turns: self.max_turns.or(parent.max_turns),
+            context_pack: match (&self.context_pack, &parent.context_pack) {
+                (Some(a), Some(b)) => Some(a.overlay(b)),
+                (Some(a), None) => Some(a.clone()),
+                (None, Some(b)) => Some(b.clone()),
+                (None, None) => None,
+            },
         }
     }
 

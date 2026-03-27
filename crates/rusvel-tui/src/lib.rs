@@ -1,4 +1,5 @@
 pub mod layout;
+pub mod tabs;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -86,6 +87,8 @@ fn format_pane_status(s: &PaneStatus) -> String {
 #[derive(Debug, Clone)]
 pub struct TuiData {
     pub session_name: String,
+    /// One-line preview from last persisted Forge executive brief (S-043).
+    pub latest_brief_summary: Option<String>,
     pub goals: Vec<Goal>,
     pub tasks: Vec<Task>,
     pub opportunities: Vec<Opportunity>,
@@ -96,6 +99,7 @@ pub struct TuiData {
 /// Main TUI application state.
 pub struct TuiApp {
     session_name: String,
+    latest_brief_summary: Option<String>,
     goals: Vec<Goal>,
     tasks: Vec<Task>,
     pipeline: HashMap<String, usize>,
@@ -112,6 +116,7 @@ impl TuiApp {
         let n = data.terminal_panes.len();
         Self {
             session_name: data.session_name,
+            latest_brief_summary: data.latest_brief_summary,
             goals: data.goals,
             tasks: data.tasks,
             pipeline,
@@ -133,7 +138,10 @@ impl TuiApp {
             terminal.draw(|frame| {
                 let (header_area, grid, term_area) = dashboard_layout(frame.area());
 
-                frame.render_widget(header_widget(&self.session_name), header_area);
+                frame.render_widget(
+                    header_widget(&self.session_name, self.latest_brief_summary.as_deref()),
+                    header_area,
+                );
                 frame.render_widget(tasks_widget(&self.tasks), grid[0]);
                 frame.render_widget(goals_widget(&self.goals), grid[1]);
                 frame.render_widget(pipeline_widget(&self.pipeline), grid[2]);

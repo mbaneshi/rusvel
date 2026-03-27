@@ -6,6 +6,7 @@ pub mod agent;
 pub mod browser;
 pub mod code;
 pub mod condition;
+pub mod parallel;
 
 use std::collections::HashMap;
 use std::sync::Arc;

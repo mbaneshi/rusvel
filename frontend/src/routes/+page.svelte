@@ -1,8 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { activeSession, onboarding, departments } from '$lib/stores';
-	import { getGoals, getEvents, getAnalytics, getVisualReports } from '$lib/api';
-	import type { Goal, Event, AnalyticsData, DepartmentDef, VisualReport } from '$lib/api';
+	import {
+		getGoals,
+		getEvents,
+		getAnalytics,
+		getVisualReports,
+		getBriefLatest
+	} from '$lib/api';
+	import type {
+		Goal,
+		Event,
+		AnalyticsData,
+		DepartmentDef,
+		VisualReport,
+		ExecutiveBriefRow
+	} from '$lib/api';
 	import { deptHref, resolveDeptId } from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
@@ -10,6 +23,7 @@
 	let events: Event[] = $state([]);
 	let analytics: AnalyticsData | null = $state(null);
 	let visualReport: VisualReport | null = $state(null);
+	let latestBrief: ExecutiveBriefRow | null = $state(null);
 	let deptList: DepartmentDef[] = $state([]);
 	let loading = $state(false);
 	let error = $state('');
@@ -39,12 +53,14 @@
 		loading = true;
 		error = '';
 		try {
-			const [goalsResult, eventsResult] = await Promise.allSettled([
+			const [goalsResult, eventsResult, briefResult] = await Promise.allSettled([
 				getGoals(sessionId),
-				getEvents(sessionId)
+				getEvents(sessionId),
+				getBriefLatest(sessionId)
 			]);
 			goals = goalsResult.status === 'fulfilled' ? goalsResult.value : [];
 			events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+			latestBrief = briefResult.status === 'fulfilled' ? briefResult.value : null;
 			if (goals.length > 0) onboarding.complete('goalAdded');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
@@ -128,6 +144,23 @@
 			</span>
 			<h2 class="text-lg font-semibold text-foreground">{currentSession.name}</h2>
 		</div>
+
+		{#if latestBrief}
+			<div class="mb-6 rounded-xl border border-border bg-card p-4">
+				<div class="flex items-start justify-between gap-3">
+					<div>
+						<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+							Latest executive brief
+						</p>
+						<p class="mt-1 text-sm text-foreground line-clamp-3">{latestBrief.summary}</p>
+						<p class="mt-2 text-[10px] text-muted-foreground">
+							{latestBrief.date} &middot;
+							<a href={planDeptHref} class="text-primary hover:text-primary/80">Forge</a>
+						</p>
+					</div>
+				</div>
+			</div>
+		{/if}
 
 		<!-- Analytics Overview (agency-wide) -->
 		{#if analytics}

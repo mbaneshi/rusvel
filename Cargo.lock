@@ -2337,6 +2337,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dept-messaging"
+version = "0.1.0"
+dependencies = [
+ "rusvel-channel",
+ "rusvel-core",
+]
+
+[[package]]
 name = "dept-product"
 version = "0.1.0"
 dependencies = [
@@ -2790,6 +2798,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "futures",
  "petgraph 0.7.1",
  "rusvel-core",
  "serde",
@@ -6361,6 +6370,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "flow-engine",
+ "forge-engine",
  "futures",
  "glob",
  "reqwest",
@@ -6388,6 +6398,15 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.24.0",
  "tracing",
+]
+
+[[package]]
+name = "rusvel-channel"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "rusvel-core",
+ "serde_json",
 ]
 
 [[package]]

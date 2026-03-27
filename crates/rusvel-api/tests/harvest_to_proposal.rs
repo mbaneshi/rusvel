@@ -319,6 +319,7 @@ async fn test_router() -> (
         auth: rusvel_api::auth::AuthConfig::from_env(),
         webhook_receiver,
         cron_scheduler,
+        context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
     };
 
     (

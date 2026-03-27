@@ -131,6 +131,29 @@ pub async fn forge_pipeline_orchestrate(
     Ok(Json(exec))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ForgeArtifactsQuery {
+    pub session_id: String,
+    #[serde(default = "default_forge_artifacts_limit")]
+    pub limit: u32,
+}
+
+fn default_forge_artifacts_limit() -> u32 {
+    50
+}
+
+/// GET /api/forge/artifacts?session_id=&limit= — list persisted Forge doc artifacts (S-049).
+pub async fn forge_artifacts_list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ForgeArtifactsQuery>,
+) -> ApiResult<serde_json::Value> {
+    let sid = parse_session_id(&q.session_id)?;
+    let items = forge_engine::list_artifacts(&state.storage, &sid, q.limit.min(200))
+        .await
+        .map_err(engine_err)?;
+    Ok(Json(serde_json::to_value(items).map_err(engine_err)?))
+}
+
 // ── Code Engine ──────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -481,13 +504,26 @@ pub async fn harvest_advance(
         StatusCode::SERVICE_UNAVAILABLE,
         "Harvest engine not available".into(),
     ))?;
-    let _sid = parse_session_id(&body.session_id)?;
+    let sid = parse_session_id(&body.session_id)?;
     let stage: OpportunityStage = serde_json::from_value(serde_json::json!(&body.stage))
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid opportunity stage".into()))?;
     engine
-        .advance_opportunity(&body.opportunity_id, stage)
+        .advance_opportunity(&body.opportunity_id, stage.clone())
         .await
         .map_err(engine_err)?;
+    if matches!(
+        stage,
+        OpportunityStage::Won | OpportunityStage::Lost
+    ) {
+        let result = match stage {
+            OpportunityStage::Won => harvest_engine::HarvestDealOutcome::Won,
+            OpportunityStage::Lost => harvest_engine::HarvestDealOutcome::Lost,
+            _ => unreachable!(),
+        };
+        let _ = engine
+            .record_opportunity_outcome(&sid, &body.opportunity_id, result, String::new())
+            .await;
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
@@ -799,6 +835,9 @@ pub struct GtmDealAdvanceBody {
     pub session_id: String,
     pub deal_id: String,
     pub stage: String,
+    /// When set and stage is Won/Lost, records a Harvest outcome for this opportunity id (S-044).
+    #[serde(default)]
+    pub opportunity_id: Option<String>,
 }
 
 /// POST /api/dept/gtm/deals/advance — move a deal to a new stage (drag-and-drop from the UI).
@@ -823,13 +862,41 @@ pub async fn gtm_deal_advance(
 
     let crm = CrmManager::new(state.storage.clone());
     let deals = crm.list_deals(sid, None).await.map_err(engine_err)?;
-    if !deals.iter().any(|d| d.id == deal_id) {
-        return Err((StatusCode::NOT_FOUND, "deal not found for session".into()));
-    }
+    let deal = deals
+        .iter()
+        .find(|d| d.id == deal_id)
+        .cloned()
+        .ok_or((StatusCode::NOT_FOUND, "deal not found for session".into()))?;
 
+    let outcome_stage = new_stage.clone();
     crm.advance_deal(&deal_id, new_stage)
         .await
         .map_err(engine_err)?;
+
+    if matches!(outcome_stage, DealStage::Won | DealStage::Lost) {
+        let oid = body.opportunity_id.clone().or_else(|| {
+            deal
+                .metadata
+                .get("harvest_opportunity_id")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        });
+        if let (Some(opp), Some(he)) = (oid, state.harvest_engine.as_ref()) {
+            let result = match outcome_stage {
+                DealStage::Won => harvest_engine::HarvestDealOutcome::Won,
+                DealStage::Lost => harvest_engine::HarvestDealOutcome::Lost,
+                _ => unreachable!(),
+            };
+            let _ = he
+                .record_opportunity_outcome(
+                    &sid,
+                    &opp,
+                    result,
+                    format!("gtm deal {}", deal_id),
+                )
+                .await;
+        }
+    }
 
     let ev = Event {
         id: EventId::new(),

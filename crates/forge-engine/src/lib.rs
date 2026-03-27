@@ -5,6 +5,7 @@
 //!
 //! Depends **only** on [`rusvel_core`] port traits (ADR-010).
 
+pub mod artifacts;
 pub mod events;
 pub mod mission;
 pub mod personas;
@@ -24,6 +25,7 @@ pub use mission::{
     mission_tool_contributions_for_manifest,
 };
 pub use personas::{PersonaManager, persona_contributions_for_manifest};
+pub use artifacts::{ArtifactRecord, ARTIFACT_KIND, list_artifacts, save_artifact};
 pub use pipeline::{
     FLOW_EXECUTIONS_OBJECT_KIND, PipelineOrchestrationDef, PipelineStepKind, PipelineStepRunner,
 };

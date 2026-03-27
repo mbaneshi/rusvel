@@ -5,7 +5,8 @@
 		getContentList,
 		getHarvestPipeline,
 		postCodeAnalyze,
-		postContentDraft
+		postContentDraft,
+		postForgePipeline
 	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
@@ -21,6 +22,7 @@
 	let codeLimit = $state(20);
 	let contentTopic = $state('');
 	let contentKind = $state('Blog');
+	let forgeDraftTopic = $state('');
 
 	function showJson(data: unknown) {
 		output = JSON.stringify(data, null, 2);
@@ -105,6 +107,28 @@
 		output = '';
 		try {
 			const r = await getHarvestPipeline(currentSession.id);
+			showJson(r);
+		} catch (e) {
+			output = e instanceof Error ? e.message : String(e);
+			toast.error(output);
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function runForgePipeline() {
+		if (!currentSession) {
+			toast.error('Select a session first');
+			return;
+		}
+		busy = true;
+		output = '';
+		try {
+			const topic = forgeDraftTopic.trim();
+			const r = await postForgePipeline(
+				currentSession.id,
+				topic ? { draft_topic: topic } : undefined
+			);
 			showJson(r);
 		} catch (e) {
 			output = e instanceof Error ? e.message : String(e);
@@ -208,6 +232,36 @@
 			>
 				List content
 			</button>
+		</div>
+	{:else if dept === 'forge'}
+		<div class="space-y-2">
+			<p class="font-medium text-foreground" style="color: hsl({deptHsl})">Forge — opportunity pipeline</p>
+			{#if !currentSession}
+				<p class="text-muted-foreground">Select a session in the header.</p>
+			{:else}
+				<p class="text-muted-foreground">Session: {currentSession.name}</p>
+			{/if}
+			<label class="block space-y-0.5">
+				<span class="text-muted-foreground">Optional draft topic (overrides harvest title)</span>
+				<input
+					bind:value={forgeDraftTopic}
+					placeholder="Leave empty to use first scanned opportunity title"
+					class="w-full rounded border border-border bg-background px-2 py-1"
+				/>
+			</label>
+			<button
+				type="button"
+				disabled={busy || !currentSession}
+				onclick={runForgePipeline}
+				class="w-full rounded-md py-1.5 text-xs font-medium text-white disabled:opacity-50"
+				style="background: hsl({deptHsl})"
+			>
+				Run opportunity pipeline
+			</button>
+			<p class="text-muted-foreground leading-relaxed">
+				<code class="rounded bg-muted px-0.5">POST /api/forge/pipeline</code> — Harvest scan → score → propose →
+				content draft.
+			</p>
 		</div>
 	{:else if dept === 'harvest'}
 		<div class="space-y-2">

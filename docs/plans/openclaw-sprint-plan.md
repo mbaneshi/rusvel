@@ -902,6 +902,20 @@ Files: tests/webhook_cron_e2e.rs (new)
 Dependencies: S-040, S-041
 ```
 
+**Sprint 6 implementation status (2026-03, canonical pointers):**
+
+| Story | Status | Location / notes |
+|-------|--------|------------------|
+| S-040 | Shipped | [`crates/rusvel-webhook`](crates/rusvel-webhook/src/lib.rs), `GET/POST /api/webhooks`, HMAC receive |
+| S-041 | Shipped | [`crates/rusvel-cron`](crates/rusvel-cron/src/lib.rs), `GET/POST/PUT/DELETE /api/cron*`, `POST /api/cron/tick`, kind `cron_schedule` |
+| S-042 | Core shipped | [`crates/forge-engine/src/pipeline.rs`](crates/forge-engine/src/pipeline.rs), `POST /api/forge/pipeline` ([`engine_routes.rs`](crates/rusvel-api/src/engine_routes.rs)), [`pipeline_runner.rs`](crates/rusvel-api/src/pipeline_runner.rs); UI/demo polish optional |
+| S-043 | Shipped | Cron `event_kind` `forge.daily_briefing` → worker → [`generate_brief`](crates/forge-engine/src/mission.rs); [`DAILY_BRIEFING_CRON_KIND`](crates/forge-engine/src/events.rs) |
+| S-044 | Partial | [`harvest-engine/src/outcomes.rs`](crates/harvest-engine/src/outcomes.rs), scorer hints; vector similarity optional |
+| S-045 | Partial | [`rusvel-agent/context_pack.rs`](crates/rusvel-agent/src/context_pack.rs), [`department.rs`](crates/rusvel-api/src/department.rs); TTL + per-dept config optional |
+| S-046 | Shipped | [`crates/rusvel-api/tests/webhook_cron_e2e.rs`](crates/rusvel-api/tests/webhook_cron_e2e.rs), `cron_api*.rs` |
+
+Full story→route→test matrix: [`docs/plans/sprint-6-7-implementation.md`](sprint-6-7-implementation.md).
+
 **Sprint Acceptance Criteria:**
 - Webhook endpoints receive external payloads and emit events
 - Cron scheduler runs recurring jobs
