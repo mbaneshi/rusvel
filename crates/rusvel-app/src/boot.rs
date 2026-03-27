@@ -171,3 +171,170 @@ pub async fn boot_departments(
 
     Ok(artifacts)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use rusvel_agent::AgentRuntime;
+    use rusvel_auth::InMemoryAuthAdapter;
+    use rusvel_config::TomlConfig;
+    use rusvel_core::domain::{
+        Content, FinishReason, LlmRequest, LlmResponse, LlmUsage, ModelRef, Session, SessionSummary,
+        ToolDefinition, ToolResult,
+    };
+    use rusvel_core::error::Result;
+    use rusvel_core::id::SessionId;
+    use rusvel_core::ports::{
+        AuthPort, ConfigPort, EventPort, JobPort, LlmPort, MemoryPort, SessionPort, StoragePort,
+        ToolPort,
+    };
+    use rusvel_db::Database;
+    use rusvel_event::EventBus;
+    use rusvel_memory::MemoryStore;
+    use serde_json::json;
+
+    use super::*;
+
+    struct SessionAdapter(pub Arc<dyn StoragePort>);
+
+    #[async_trait]
+    impl SessionPort for SessionAdapter {
+        async fn create(&self, session: rusvel_core::domain::Session) -> rusvel_core::error::Result<SessionId> {
+            let id = session.id;
+            self.0.sessions().put_session(&session).await?;
+            Ok(id)
+        }
+        async fn load(&self, id: &SessionId) -> rusvel_core::error::Result<Session> {
+            self.0.sessions().get_session(id).await?.ok_or_else(|| {
+                rusvel_core::error::RusvelError::NotFound {
+                    kind: "session".into(),
+                    id: id.to_string(),
+                }
+            })
+        }
+        async fn save(&self, session: &Session) -> rusvel_core::error::Result<()> {
+            self.0.sessions().put_session(session).await
+        }
+        async fn list(&self) -> rusvel_core::error::Result<Vec<SessionSummary>> {
+            self.0.sessions().list_sessions().await
+        }
+    }
+
+    struct StubLlm;
+
+    #[async_trait]
+    impl LlmPort for StubLlm {
+        async fn generate(&self, _: LlmRequest) -> Result<LlmResponse> {
+            Ok(LlmResponse {
+                content: Content::text("stub"),
+                finish_reason: FinishReason::Stop,
+                usage: LlmUsage::default(),
+                metadata: json!({}),
+            })
+        }
+        async fn embed(&self, _: &ModelRef, _: &str) -> Result<Vec<f32>> {
+            Ok(vec![])
+        }
+        async fn list_models(&self) -> Result<Vec<ModelRef>> {
+            Ok(vec![])
+        }
+    }
+
+    struct StubTool;
+
+    #[async_trait]
+    impl ToolPort for StubTool {
+        async fn register(&self, _: ToolDefinition) -> Result<()> {
+            Ok(())
+        }
+        async fn call(&self, _: &str, _: serde_json::Value) -> Result<ToolResult> {
+            Ok(ToolResult {
+                success: true,
+                output: Content::text("ok"),
+                metadata: json!({}),
+            })
+        }
+        fn list(&self) -> Vec<ToolDefinition> {
+            vec![]
+        }
+        fn search(&self, _: &str, _: usize) -> Vec<ToolDefinition> {
+            vec![]
+        }
+        fn schema(&self, _: &str) -> Option<serde_json::Value> {
+            None
+        }
+    }
+
+    #[tokio::test]
+    async fn boot_registers_many_department_tools_without_name_collisions() {
+        let base = std::env::temp_dir().join(format!("rusvel-boot-test-{}", uuid::Uuid::now_v7()));
+        std::fs::create_dir_all(&base).expect("temp dir");
+        let db_path = base.join("rusvel.db");
+        let db: Arc<Database> = Arc::new(Database::open(&db_path).expect("db"));
+        let storage: Arc<dyn StoragePort> = db.clone();
+        let config: Arc<dyn ConfigPort> = Arc::new(
+            TomlConfig::load(base.join("config.toml")).expect("config"),
+        );
+        let events: Arc<dyn EventPort> = Arc::new(EventBus::new(
+            db.clone() as Arc<dyn rusvel_core::ports::EventStore>,
+        ));
+        let memory: Arc<dyn MemoryPort> = Arc::new(
+            MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
+        );
+        let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
+        let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
+        let tools: Arc<dyn ToolPort> = Arc::new(StubTool);
+        let agent_runtime = Arc::new(AgentRuntime::new(
+            Arc::new(StubLlm),
+            tools.clone(),
+            memory.clone(),
+        ));
+        let auth: Arc<dyn AuthPort> = Arc::new(InMemoryAuthAdapter::new());
+
+        let departments = installed_departments();
+        let artifacts = boot_departments(
+            &departments,
+            agent_runtime.clone(),
+            events,
+            storage,
+            jobs,
+            memory,
+            sessions,
+            config,
+            auth,
+            None,
+            None,
+        )
+        .await
+        .expect("boot");
+
+        let n = artifacts.tools.len();
+        assert!(
+            n >= 45,
+            "expected at least 45 department-registered tools (Sprint 2 target), got {n}"
+        );
+
+        let mut seen = HashMap::new();
+        for t in &artifacts.tools {
+            assert!(
+                seen.insert(t.name.clone(), ()).is_none(),
+                "duplicate tool name: {}",
+                t.name
+            );
+        }
+
+        let mut by_dept: HashMap<String, usize> = HashMap::new();
+        for t in &artifacts.tools {
+            *by_dept.entry(t.department_id.clone()).or_insert(0) += 1;
+        }
+        for (dept, c) in &by_dept {
+            assert!(
+                *c >= 2,
+                "department {dept} should have at least 2 tools, got {c}"
+            );
+        }
+    }
+}

@@ -5,6 +5,7 @@
 //! and lifecycle.
 
 mod manifest;
+mod tools;
 
 use std::sync::{Arc, OnceLock};
 
@@ -54,7 +55,9 @@ impl DepartmentApp for FlowDepartment {
             None,
             None,
         ));
-        let _ = self.engine.set(engine);
+        let _ = self.engine.set(engine.clone());
+
+        tools::register(&engine, ctx);
 
         tracing::info!("Flow department registered");
         Ok(())

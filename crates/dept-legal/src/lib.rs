@@ -4,6 +4,7 @@
 //! ADR-014 department contract.
 
 mod manifest;
+mod tools;
 
 use std::sync::{Arc, OnceLock};
 
@@ -48,7 +49,9 @@ impl DepartmentApp for LegalDepartment {
             ctx.agent.clone(),
             ctx.jobs.clone(),
         ));
-        let _ = self.engine.set(engine);
+        let _ = self.engine.set(engine.clone());
+
+        tools::register(&engine, ctx);
 
         tracing::info!("Legal department registered");
         Ok(())
