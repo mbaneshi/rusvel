@@ -42,6 +42,14 @@ RUSVEL is a **hexagonal** Rust monorepo plus a **SvelteKit** UI. A single worksp
 
 HTML output: `target/llvm-cov/html/index.html`.
 
+### Boot benchmarks (Criterion, not coverage)
+
+Cold-ish startup slice (SQLite WAL open + migrations; department registry load fallback). No CI gate.
+
+```bash
+cargo bench -p rusvel-app --bench boot
+```
+
 ## CI
 
 See `.github/workflows/ci.yml`: **llvm-tools-preview**, **cargo-llvm-cov**, same **protoc** install as build, then tests run under coverage with the floor above.

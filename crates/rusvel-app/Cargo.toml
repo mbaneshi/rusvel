@@ -18,6 +18,7 @@ rusvel-llm    = { workspace = true }
 rusvel-agent  = { workspace = true }
 rusvel-event  = { workspace = true }
 rusvel-webhook = { workspace = true }
+rusvel-channel = { workspace = true }
 rusvel-cron = { workspace = true }
 rusvel-memory = { workspace = true }
 rusvel-tool   = { workspace = true }
@@ -88,6 +89,16 @@ uuid               = { workspace = true }
 reqwest            = { workspace = true }
 chrono             = { workspace = true }
 rust-embed         = { workspace = true }
+
+[[bench]]
+name = "boot"
+harness = false
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = { workspace = true }
+rusvel-core = { workspace = true }
+rusvel-db = { workspace = true }
 
 [lints]
 workspace = true

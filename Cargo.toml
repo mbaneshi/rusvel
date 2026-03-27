@@ -144,6 +144,10 @@ arrow-schema = "53"
 # DAG workflows
 petgraph = "0.7"
 
+# Benchmarking / tests
+criterion = "0.5"
+tempfile = "3"
+
 # Embed frontend
 rust-embed = { version = "8", features = ["compression"] }
 
@@ -169,6 +173,7 @@ rusvel-terminal = { path = "crates/rusvel-terminal" }
 rusvel-cdp = { path = "crates/rusvel-cdp" }
 rusvel-webhook = { path = "crates/rusvel-webhook" }
 rusvel-cron = { path = "crates/rusvel-cron" }
+rusvel-channel = { path = "crates/rusvel-channel" }
 forge-engine = { path = "crates/forge-engine" }
 code-engine = { path = "crates/code-engine" }
 harvest-engine = { path = "crates/harvest-engine" }
