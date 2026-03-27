@@ -22,6 +22,7 @@ pub mod flow_routes;
 pub mod help;
 pub mod hook_dispatch;
 pub mod hooks;
+pub mod jobs;
 pub mod kits;
 pub mod knowledge;
 pub mod mcp_servers;
@@ -287,6 +288,8 @@ pub fn build_router_with_frontend(
         .route("/api/analytics", get(analytics::get_analytics))
         // Help (AI-powered)
         .route("/api/help", post(help::help_handler))
+        // Job queue (ADR-003)
+        .route("/api/jobs", get(jobs::list_jobs))
         // Approvals (human-in-the-loop, ADR-008)
         .route("/api/approvals", get(approvals::list_pending))
         .route("/api/approvals/{id}/approve", post(approvals::approve_job))

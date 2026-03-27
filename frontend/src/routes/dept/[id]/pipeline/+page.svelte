@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { activeSession } from '$lib/stores';
 	import {
 		getHarvestOpportunities,
+		getJobs,
 		postHarvestAdvance,
 		postHarvestProposal,
 		type OpportunityRow
@@ -23,6 +23,7 @@
 	let busyProposal = $state<string | null>(null);
 	/** Freelancer / voice string sent to `POST /api/dept/harvest/proposal` as `profile`. */
 	let proposalProfile = $state('default');
+	let proposalJobs = $state<Record<string, unknown>[]>([]);
 
 	let deptId = $derived(page.params.id);
 	let isHarvest = $derived(deptId === 'harvest');
@@ -47,6 +48,30 @@
 		return rows.filter((r) => stageOf(r) === stage);
 	}
 
+	/** Serde JSON for Rust unit enums: `{ "Queued": null }`. */
+	function jobStatusLabel(raw: unknown): string {
+		if (typeof raw === 'string') return raw;
+		if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+			const keys = Object.keys(raw as object);
+			if (keys.length === 1) return keys[0];
+		}
+		return '';
+	}
+
+	async function loadProposalJobs() {
+		if (!sessionId || !isHarvest) return;
+		try {
+			const rows = await getJobs(sessionId, {
+				kinds: ['ProposalDraft'],
+				statuses: ['Queued', 'Running', 'AwaitingApproval'],
+				limit: 24
+			});
+			proposalJobs = Array.isArray(rows) ? (rows as Record<string, unknown>[]) : [];
+		} catch {
+			proposalJobs = [];
+		}
+	}
+
 	async function load() {
 		if (!sessionId || !isHarvest) return;
 		loading = true;
@@ -60,12 +85,12 @@
 		}
 	}
 
-	onMount(() => {
-		void load();
-	});
-
 	$effect(() => {
-		if (sessionId && isHarvest) void load();
+		if (!sessionId || !isHarvest) return;
+		void load();
+		void loadProposalJobs();
+		const t = setInterval(() => void loadProposalJobs(), 8000);
+		return () => clearInterval(t);
 	});
 
 	async function moveTo(oppId: string, stage: string) {
@@ -103,6 +128,7 @@
 			} else {
 				toast.success('Proposal request sent.');
 			}
+			await loadProposalJobs();
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Proposal queue failed');
 		} finally {
@@ -137,6 +163,23 @@
 			</p>
 		{/if}
 	</div>
+
+	{#if isHarvest && sessionId && proposalJobs.length > 0}
+		<div class="border-b border-border bg-muted/30 px-4 py-2">
+			<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+				Proposal jobs (queue)
+			</p>
+			<ul class="mt-1.5 flex flex-wrap gap-2">
+				{#each proposalJobs as j}
+					<li
+						class="rounded border border-border bg-background px-2 py-1 font-mono text-[10px] text-foreground"
+					>
+						{String(j.id ?? '').slice(0, 8)}… · {jobStatusLabel(j.status)}
+					</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
 
 	{#if !isHarvest}
 		<div class="flex flex-1 items-center justify-center p-6">

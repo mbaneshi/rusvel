@@ -131,6 +131,7 @@ pub struct TestHarness {
     pub router: Router,
     pub session_id: SessionId,
     pub mock_twitter: Arc<MockPlatformAdapter>,
+    pub jobs: Arc<dyn JobPort>,
 }
 
 #[allow(dead_code)]
@@ -178,6 +179,7 @@ pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> Test
         MemoryStore::open(base.join("memory.db").to_str().unwrap()).expect("memory"),
     );
     let jobs: Arc<dyn JobPort> = db.clone() as Arc<dyn JobPort>;
+    let jobs_for_harness = jobs.clone();
     let sessions: Arc<dyn SessionPort> = Arc::new(SessionAdapter(storage.clone()));
     let agent: Arc<dyn AgentPort> = Arc::new(StaticDraftAgent);
     let tools: Arc<dyn ToolPort> = Arc::new(StubTool);
@@ -250,5 +252,6 @@ pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> Test
         router,
         session_id,
         mock_twitter: mock_tw,
+        jobs: jobs_for_harness,
     }
 }

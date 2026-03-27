@@ -853,6 +853,28 @@ export async function postHarvestProposal(
 	});
 }
 
+/** GET /api/jobs — central queue; `status` / `kinds` are comma-separated on the wire. */
+export async function getJobs(
+	sessionId: string,
+	opts?: {
+		statuses?: string[];
+		kinds?: string[];
+		limit?: number;
+	}
+): Promise<unknown[]> {
+	const sp = new URLSearchParams({ session_id: sessionId });
+	if (opts?.statuses?.length) {
+		sp.set('status', opts.statuses.join(','));
+	}
+	if (opts?.kinds?.length) {
+		sp.set('kinds', opts.kinds.join(','));
+	}
+	if (opts?.limit != null) {
+		sp.set('limit', String(opts.limit));
+	}
+	return request<unknown[]>(`/api/jobs?${sp}`);
+}
+
 export interface ScheduledPostRow {
 	content_id: string;
 	platform: string | Record<string, unknown>;
