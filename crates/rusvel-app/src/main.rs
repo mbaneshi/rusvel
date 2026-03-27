@@ -1093,6 +1093,47 @@ async fn main() -> Result<()> {
                                 ))
                             }
                         }
+                        JobKind::ScheduledCron => {
+                            let event_kind = job
+                                .payload
+                                .get("event_kind")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("cron.fired")
+                                .to_string();
+                            let payload = job
+                                .payload
+                                .get("payload")
+                                .cloned()
+                                .unwrap_or_else(|| serde_json::json!({}));
+                            let schedule_id = job
+                                .payload
+                                .get("schedule_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            let event = Event {
+                                id: EventId::new(),
+                                session_id: Some(job.session_id),
+                                run_id: None,
+                                source: "cron".into(),
+                                kind: event_kind,
+                                payload: serde_json::json!({
+                                    "schedule_id": schedule_id,
+                                    "payload": payload,
+                                }),
+                                created_at: Utc::now(),
+                                metadata: serde_json::json!({ "schedule_id": schedule_id }),
+                            };
+                            match events_worker.emit(event).await {
+                                Ok(_) => Ok(Some(JobResult {
+                                    output: serde_json::json!({
+                                        "ok": true,
+                                        "schedule_id": schedule_id,
+                                    }),
+                                    metadata: serde_json::json!({ "source": "cron" }),
+                                })),
+                                Err(e) => Err(e),
+                            }
+                        }
                         JobKind::OutreachSend => {
                             match gtm_engine_worker
                                 .outreach()
