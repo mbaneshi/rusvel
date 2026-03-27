@@ -53,13 +53,13 @@ use flow_engine::FlowEngine;
 use forge_engine::ForgeEngine;
 use gtm_engine::GtmEngine;
 use harvest_engine::HarvestEngine;
+use rusvel_agent::AgentRuntime;
 use rusvel_core::domain::UserProfile;
 use rusvel_core::ports::{
     DeployPort, EmbeddingPort, EventPort, JobPort, MemoryPort, SessionPort, StoragePort,
     TerminalPort, ToolPort, VectorStorePort,
 };
 use rusvel_core::registry::DepartmentRegistry;
-use rusvel_agent::AgentRuntime;
 use rusvel_cron::CronScheduler;
 use rusvel_db::Database;
 use rusvel_webhook::WebhookReceiver;
@@ -133,6 +133,7 @@ pub fn build_router_with_frontend(
                 .delete(cron::delete_schedule),
         )
         .route("/api/brief", get(engine_routes::brief_get))
+        .route("/api/brief/latest", get(engine_routes::brief_latest_get))
         .route("/api/brief/generate", post(engine_routes::brief_generate))
         .route("/api/sessions", get(routes::list_sessions))
         .route("/api/sessions", post(routes::create_session))
@@ -249,7 +250,10 @@ pub fn build_router_with_frontend(
         // Engine-specific routes (Code, Content, Harvest)
         .route("/api/dept/code/analyze", post(engine_routes::code_analyze))
         .route("/api/dept/code/search", get(engine_routes::code_search))
-        .route("/api/dept/content/draft", post(engine_routes::content_draft))
+        .route(
+            "/api/dept/content/draft",
+            post(engine_routes::content_draft),
+        )
         .route(
             "/api/dept/content/from-code",
             post(engine_routes::content_from_code),
@@ -258,19 +262,37 @@ pub fn build_router_with_frontend(
             "/api/dept/content/{id}/approve",
             axum::routing::patch(engine_routes::content_approve),
         )
-        .route("/api/dept/content/publish", post(engine_routes::content_publish))
-        .route("/api/dept/content/schedule", post(engine_routes::content_schedule))
+        .route(
+            "/api/dept/content/publish",
+            post(engine_routes::content_publish),
+        )
+        .route(
+            "/api/dept/content/schedule",
+            post(engine_routes::content_schedule),
+        )
         .route("/api/dept/content/list", get(engine_routes::content_list))
         .route(
             "/api/dept/content/scheduled",
             get(engine_routes::content_scheduled),
         )
-        .route("/api/dept/harvest/score", post(engine_routes::harvest_score))
+        .route(
+            "/api/dept/harvest/score",
+            post(engine_routes::harvest_score),
+        )
         .route("/api/dept/harvest/scan", post(engine_routes::harvest_scan))
-        .route("/api/dept/harvest/proposal", post(engine_routes::harvest_proposal))
-        .route("/api/dept/harvest/pipeline", get(engine_routes::harvest_pipeline))
+        .route(
+            "/api/dept/harvest/proposal",
+            post(engine_routes::harvest_proposal),
+        )
+        .route(
+            "/api/dept/harvest/pipeline",
+            get(engine_routes::harvest_pipeline),
+        )
         .route("/api/dept/harvest/list", get(engine_routes::harvest_list))
-        .route("/api/dept/harvest/advance", post(engine_routes::harvest_advance))
+        .route(
+            "/api/dept/harvest/advance",
+            post(engine_routes::harvest_advance),
+        )
         .route(
             "/api/dept/gtm/contacts",
             get(engine_routes::gtm_contacts_list).post(engine_routes::gtm_contacts_create),
@@ -297,13 +319,23 @@ pub fn build_router_with_frontend(
             "/api/dept/gtm/invoices",
             get(engine_routes::gtm_invoices_list).post(engine_routes::gtm_invoices_create),
         )
-        .route("/api/dept/gtm/invoices/{id}", get(engine_routes::gtm_invoice_get))
+        .route(
+            "/api/dept/gtm/invoices/{id}",
+            get(engine_routes::gtm_invoice_get),
+        )
         .route(
             "/api/dept/gtm/invoices/{id}/status",
             post(engine_routes::gtm_invoice_set_status),
         )
         // Flow Engine (DAG workflows)
-        .route("/api/flows", get(flow_routes::list_flows).post(flow_routes::create_flow))
+        .route(
+            "/api/flows",
+            get(flow_routes::list_flows).post(flow_routes::create_flow),
+        )
+        .route(
+            "/api/flows/templates/cross-engine-handoff",
+            get(flow_routes::get_cross_engine_handoff_template),
+        )
         .route(
             "/api/flows/{id}",
             get(flow_routes::get_flow)
@@ -311,12 +343,18 @@ pub fn build_router_with_frontend(
                 .delete(flow_routes::delete_flow),
         )
         .route("/api/flows/{id}/run", post(flow_routes::run_flow))
-        .route("/api/flows/{id}/executions", get(flow_routes::list_executions))
+        .route(
+            "/api/flows/{id}/executions",
+            get(flow_routes::list_executions),
+        )
         .route(
             "/api/flows/{id}/executions/{exec_id}/panes",
             get(flow_routes::list_flow_execution_panes),
         )
-        .route("/api/flows/executions/{id}", get(flow_routes::get_execution))
+        .route(
+            "/api/flows/executions/{id}",
+            get(flow_routes::get_execution),
+        )
         .route(
             "/api/flows/executions/{id}/resume",
             post(flow_routes::resume_flow),
@@ -333,7 +371,10 @@ pub fn build_router_with_frontend(
         // Playbooks (multi-step pipelines)
         .route("/api/playbooks/runs", get(playbooks::list_runs))
         .route("/api/playbooks/runs/{run_id}", get(playbooks::get_run))
-        .route("/api/playbooks", get(playbooks::list_playbooks).post(playbooks::create_playbook))
+        .route(
+            "/api/playbooks",
+            get(playbooks::list_playbooks).post(playbooks::create_playbook),
+        )
         .route("/api/playbooks/{id}", get(playbooks::get_playbook))
         .route("/api/playbooks/{id}/run", post(playbooks::run_playbook))
         // Starter kits
@@ -397,12 +438,21 @@ pub fn build_router_with_frontend(
             post(visual_report::run_visual_tests),
         )
         // Terminal: dept pane + WebSocket + run-scoped panes (delegation visibility)
-        .route("/api/terminal/dept/{dept_id}", get(terminal::terminal_dept_pane))
-        .route("/api/terminal/runs/{run_id}/panes", get(terminal::terminal_run_panes))
+        .route(
+            "/api/terminal/dept/{dept_id}",
+            get(terminal::terminal_dept_pane),
+        )
+        .route(
+            "/api/terminal/runs/{run_id}/panes",
+            get(terminal::terminal_run_panes),
+        )
         .route("/api/terminal/ws", get(terminal::terminal_ws))
         // Browser (CDP)
         .route("/api/browser/status", get(browser::browser_status))
-        .route("/api/browser/connect", axum::routing::post(browser::browser_connect))
+        .route(
+            "/api/browser/connect",
+            axum::routing::post(browser::browser_connect),
+        )
         .route("/api/browser/tabs", get(browser::browser_tabs))
         .route(
             "/api/browser/observe/{tab}",
@@ -413,7 +463,10 @@ pub fn build_router_with_frontend(
             "/api/browser/captures/stream",
             get(browser::browser_captures_stream),
         )
-        .route("/api/browser/act", axum::routing::post(browser::browser_act))
+        .route(
+            "/api/browser/act",
+            axum::routing::post(browser::browser_act),
+        )
         .with_state(shared.clone());
 
     // Serve frontend SPA if build directory exists.
@@ -441,7 +494,7 @@ pub fn build_router_with_frontend(
         api
     };
 
-    app    .layer(
+    app.layer(
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)

@@ -3,8 +3,8 @@
 //! All persistence goes through [`StoragePort`] (`ObjectStore`) and all
 //! AI work goes through [`AgentPort`] — never concrete adapters (ADR-010).
 
-use crate::{ForgeEngine, events};
 use crate::safety::CircuitState;
+use crate::{ForgeEngine, events};
 use chrono::{NaiveDate, Utc};
 use rusvel_core::department::{RouteContribution, ToolContribution};
 use rusvel_core::domain::*;
@@ -36,6 +36,11 @@ pub fn forge_route_contributions_for_manifest() -> Vec<RouteContribution> {
             description: "Query events for the session (includes forge mission and safety events)"
                 .into(),
         },
+        RouteContribution {
+            method: "GET".into(),
+            path: "/api/brief/latest".into(),
+            description: "Return the most recently persisted executive brief for a session".into(),
+        },
     ]
 }
 
@@ -44,8 +49,9 @@ pub fn mission_tool_contributions_for_manifest() -> Vec<ToolContribution> {
     vec![
         ToolContribution {
             name: "forge.mission.today".into(),
-            description: "Generate today's prioritized mission plan from active goals and recent activity"
-                .into(),
+            description:
+                "Generate today's prioritized mission plan from active goals and recent activity"
+                    .into(),
             parameters_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -81,7 +87,8 @@ pub fn mission_tool_contributions_for_manifest() -> Vec<ToolContribution> {
         },
         ToolContribution {
             name: "forge.mission.review".into(),
-            description: "Generate a periodic review (accomplishments, blockers, next actions)".into(),
+            description: "Generate a periodic review (accomplishments, blockers, next actions)"
+                .into(),
             parameters_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -93,8 +100,8 @@ pub fn mission_tool_contributions_for_manifest() -> Vec<ToolContribution> {
         },
         ToolContribution {
             name: "forge.persona.hire".into(),
-            description: "Build an AgentConfig from a named Forge persona (for spawning a sub-agent)"
-                .into(),
+            description:
+                "Build an AgentConfig from a named Forge persona (for spawning a sub-agent)".into(),
             parameters_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -451,8 +458,7 @@ impl ForgeEngine {
             sections.push(section);
         }
 
-        let sections_json =
-            serde_json::to_string(&sections).unwrap_or_else(|_| "[]".to_string());
+        let sections_json = serde_json::to_string(&sections).unwrap_or_else(|_| "[]".to_string());
         let strategist_prompt = format!(
             "You are an executive strategist. Here are department brief sections (JSON):\n{sections_json}\n\n\
              Write a 2–3 sentence executive summary and list the top 3–5 cross-cutting action items.\n\
@@ -472,19 +478,87 @@ impl ForgeEngine {
 
         let raw = extract_text(&output.content);
         let text = strip_code_fences(&raw);
-        let parsed: StrategistBriefResponse = serde_json::from_str(text).unwrap_or(StrategistBriefResponse {
-            summary: "Review department sections below for details.".into(),
-            action_items: vec!["Align on priorities across departments".into()],
-        });
+        let parsed: StrategistBriefResponse =
+            serde_json::from_str(text).unwrap_or(StrategistBriefResponse {
+                summary: "Review department sections below for details.".into(),
+                action_items: vec!["Align on priorities across departments".into()],
+            });
 
-        Ok(ExecutiveBrief {
+        let brief = ExecutiveBrief {
             id: uuid::Uuid::now_v7().to_string(),
             date: today,
             sections,
             summary: parsed.summary,
             action_items: parsed.action_items,
             created_at: Utc::now(),
-        })
+        };
+
+        self.persist_executive_brief(session_id, &brief).await;
+
+        Ok(brief)
+    }
+
+    /// Most recently generated brief for this session (object store), if any.
+    pub async fn latest_brief(&self, session_id: &SessionId) -> Result<Option<ExecutiveBrief>> {
+        const KIND: &str = "executive_brief";
+        let rows = self
+            .storage
+            .objects()
+            .list(
+                KIND,
+                ObjectFilter {
+                    session_id: Some(*session_id),
+                    limit: Some(64),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        let mut parsed: Vec<ExecutiveBrief> = rows
+            .into_iter()
+            .filter_map(|v| {
+                let stored: ExecutiveBriefStored = serde_json::from_value(v).ok()?;
+                Some(stored.brief)
+            })
+            .collect();
+        parsed.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(parsed.into_iter().next())
+    }
+
+    async fn persist_executive_brief(&self, session_id: &SessionId, brief: &ExecutiveBrief) {
+        const KIND: &str = "executive_brief";
+        let stored = ExecutiveBriefStored {
+            session_id: *session_id,
+            brief: brief.clone(),
+        };
+        let value = match serde_json::to_value(&stored) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(error = %e, "executive brief serialization failed");
+                return;
+            }
+        };
+        if let Err(e) = self.storage.objects().put(KIND, &brief.id, value).await {
+            tracing::warn!(error = %e, "failed to persist executive brief");
+            return;
+        }
+
+        let _ = self
+            .events
+            .emit(Event {
+                id: EventId::new(),
+                session_id: Some(*session_id),
+                run_id: None,
+                source: "forge".into(),
+                kind: events::BRIEF_GENERATED.into(),
+                payload: serde_json::json!({
+                    "brief_id": brief.id,
+                    "date": brief.date,
+                }),
+                created_at: Utc::now(),
+                metadata: serde_json::json!({}),
+            })
+            .await;
     }
 
     async fn dept_brief_section(
@@ -565,6 +639,13 @@ fn truncate_highlight(s: &str) -> String {
         out.push('…');
     }
     out
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ExecutiveBriefStored {
+    session_id: SessionId,
+    #[serde(flatten)]
+    brief: ExecutiveBrief,
 }
 
 #[derive(Deserialize)]

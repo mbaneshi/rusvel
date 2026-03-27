@@ -7,6 +7,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use serde::Deserialize;
 
+use flow_engine::cross_engine_handoff_template;
 use rusvel_core::domain::FlowDef;
 use rusvel_core::id::{FlowExecutionId, FlowId};
 use rusvel_core::terminal::Pane;
@@ -20,11 +21,15 @@ fn engine_err(e: impl std::fmt::Display) -> (StatusCode, String) {
 }
 
 fn flow_engine(state: &Arc<AppState>) -> Result<&flow_engine::FlowEngine, (StatusCode, String)> {
-    state
-        .flow_engine
-        .as_ref()
-        .map(|e| e.as_ref())
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Flow engine not available".into()))
+    state.flow_engine.as_ref().map(|e| e.as_ref()).ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Flow engine not available".into(),
+    ))
+}
+
+/// GET /api/flows/templates/cross-engine-handoff — S-042 demo DAG (save with POST /api/flows).
+pub async fn get_cross_engine_handoff_template() -> ApiResult<FlowDef> {
+    Ok(Json(cross_engine_handoff_template()))
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────
@@ -38,12 +43,13 @@ pub async fn create_flow(
         flow.id = FlowId::new();
     }
     let id = engine.save_flow(&flow).await.map_err(engine_err)?;
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "id": id.to_string() }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "id": id.to_string() })),
+    ))
 }
 
-pub async fn list_flows(
-    State(state): State<Arc<AppState>>,
-) -> ApiResult<Vec<FlowDef>> {
+pub async fn list_flows(State(state): State<Arc<AppState>>) -> ApiResult<Vec<FlowDef>> {
     let engine = flow_engine(&state)?;
     let flows = engine.list_flows().await.map_err(engine_err)?;
     Ok(Json(flows))
@@ -153,13 +159,10 @@ pub async fn list_flow_execution_panes(
     State(state): State<Arc<AppState>>,
     Path((flow_id, exec_id)): Path<(String, String)>,
 ) -> ApiResult<Vec<Pane>> {
-    let terminal = state
-        .terminal
-        .as_ref()
-        .ok_or((
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Terminal not configured".into(),
-        ))?;
+    let terminal = state.terminal.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Terminal not configured".into(),
+    ))?;
     let engine = flow_engine(&state)?;
     let flow_uuid = flow_id
         .parse::<uuid::Uuid>()
@@ -210,15 +213,16 @@ pub async fn get_checkpoint(
     let ck = engine.get_checkpoint(&id).await.map_err(engine_err)?;
     match ck {
         Some(c) => Ok(Json(serde_json::to_value(c).map_err(engine_err)?)),
-        None => Err((StatusCode::NOT_FOUND, "no checkpoint for this execution".into())),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            "no checkpoint for this execution".into(),
+        )),
     }
 }
 
 // ── Node Types ───────────────────────────────────────────────────
 
-pub async fn list_node_types(
-    State(state): State<Arc<AppState>>,
-) -> ApiResult<Vec<String>> {
+pub async fn list_node_types(State(state): State<Arc<AppState>>) -> ApiResult<Vec<String>> {
     let engine = flow_engine(&state)?;
     Ok(Json(engine.node_types()))
 }

@@ -17,12 +17,12 @@ use gtm_engine::{DealId, DealStage, OutreachSequence, SequenceId, SequenceStep};
 use serde::Deserialize;
 use serde::Serialize;
 
+use rusvel_core::domain::Contact;
 use rusvel_core::domain::{
     CodeAnalysisSummary, ContentItem, ContentKind, Event, ExecutiveBrief, JobKind, NewJob,
     Opportunity, OpportunityStage, Platform,
 };
 use rusvel_core::error::RusvelError;
-use rusvel_core::domain::Contact;
 use rusvel_core::id::{ContactId, ContentId, EventId, SessionId};
 
 use gtm_engine::crm::CrmManager;
@@ -61,12 +61,23 @@ pub async fn brief_get(
     Query(q): Query<BriefSessionQuery>,
 ) -> ApiResult<ExecutiveBrief> {
     let sid = parse_session_id(&q.session_id)?;
-    let brief = state
-        .forge
-        .generate_brief(&sid)
-        .await
-        .map_err(engine_err)?;
+    let brief = state.forge.generate_brief(&sid).await.map_err(engine_err)?;
     Ok(Json(brief))
+}
+
+/// GET /api/brief/latest?session_id= — last persisted brief (no LLM); 404 if none.
+pub async fn brief_latest_get(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<BriefSessionQuery>,
+) -> Result<Json<ExecutiveBrief>, (StatusCode, String)> {
+    let sid = parse_session_id(&q.session_id)?;
+    match state.forge.latest_brief(&sid).await.map_err(engine_err)? {
+        Some(b) => Ok(Json(b)),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            "no persisted executive brief for this session".into(),
+        )),
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,11 +91,7 @@ pub async fn brief_generate(
     Json(body): Json<BriefGenerateBody>,
 ) -> ApiResult<ExecutiveBrief> {
     let sid = parse_session_id(&body.session_id)?;
-    let brief = state
-        .forge
-        .generate_brief(&sid)
-        .await
-        .map_err(engine_err)?;
+    let brief = state.forge.generate_brief(&sid).await.map_err(engine_err)?;
     Ok(Json(brief))
 }
 
@@ -99,10 +106,10 @@ pub async fn code_analyze(
     State(state): State<Arc<AppState>>,
     Json(body): Json<AnalyzeRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .code_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Code engine not available".into()))?;
+    let engine = state.code_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Code engine not available".into(),
+    ))?;
     let analysis = engine
         .analyze(std::path::Path::new(&body.path))
         .await
@@ -120,10 +127,10 @@ pub async fn code_search(
     State(state): State<Arc<AppState>>,
     Query(params): Query<SearchQuery>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .code_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Code engine not available".into()))?;
+    let engine = state.code_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Code engine not available".into(),
+    ))?;
     let results = engine
         .search(&params.q, params.limit.unwrap_or(20))
         .map_err(engine_err)?;
@@ -143,10 +150,10 @@ pub async fn content_draft(
     State(state): State<Arc<AppState>>,
     Json(body): Json<DraftRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let kind: rusvel_core::domain::ContentKind = body
         .kind
@@ -172,14 +179,14 @@ pub async fn content_from_code(
     State(state): State<Arc<AppState>>,
     Json(body): Json<FromCodeRequest>,
 ) -> ApiResult<Vec<ContentItem>> {
-    let code_engine = state
-        .code_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Code engine not available".into()))?;
-    let content_engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let code_engine = state.code_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Code engine not available".into(),
+    ))?;
+    let content_engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let analysis = code_engine
         .analyze(Path::new(&body.path))
@@ -210,10 +217,10 @@ pub async fn content_approve(
     State(state): State<Arc<AppState>>,
     AxumPath(id): AxumPath<String>,
 ) -> ApiResult<ContentItem> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let cid = parse_content_id(&id)?;
     let item = engine.approve_content(cid).await.map_err(|e| match e {
         RusvelError::NotFound { .. } => (StatusCode::NOT_FOUND, e.to_string()),
@@ -233,10 +240,10 @@ pub async fn content_publish(
     State(state): State<Arc<AppState>>,
     Json(body): Json<PublishRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let cid = parse_content_id(&body.content_id)?;
     let platform: rusvel_core::domain::Platform =
@@ -259,10 +266,10 @@ pub async fn content_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ContentListQuery>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&params.session_id)?;
     let status_filter: Option<rusvel_core::domain::ContentStatus> = params
         .status
@@ -289,10 +296,10 @@ pub async fn content_schedule(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ContentScheduleRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let cid = parse_content_id(&body.content_id)?;
     let platform: Platform = serde_json::from_value(serde_json::json!(body.platform))
@@ -335,10 +342,10 @@ pub async fn harvest_scan(
     State(state): State<Arc<AppState>>,
     Json(body): Json<HarvestScanRequest>,
 ) -> ApiResult<Vec<Opportunity>> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let skills: Vec<String> = engine.harvest_skills().iter().cloned().collect();
     let mut all = Vec::new();
@@ -363,7 +370,12 @@ pub async fn harvest_scan(
                 let endpoint = std::env::var("RUSVEL_CDP_ENDPOINT")
                     .unwrap_or_else(|_| "http://127.0.0.1:9222".into());
                 let mut src = harvest_engine::CdpSource::new(browser, endpoint, body.query.clone());
-                if let Some(js) = body.cdp_extract_js.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                if let Some(js) = body
+                    .cdp_extract_js
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
                     src = src.with_extract_js(js.to_string());
                 }
                 let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
@@ -402,10 +414,10 @@ pub async fn harvest_score(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ScoreRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     let update = engine
         .score_opportunity(&sid, &body.opportunity_id)
@@ -429,10 +441,10 @@ pub async fn harvest_advance(
     State(state): State<Arc<AppState>>,
     Json(body): Json<HarvestAdvanceRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let _sid = parse_session_id(&body.session_id)?;
     let stage: OpportunityStage = serde_json::from_value(serde_json::json!(&body.stage))
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid opportunity stage".into()))?;
@@ -459,10 +471,10 @@ pub async fn harvest_proposal(
     State(state): State<Arc<AppState>>,
     Json(body): Json<ProposalRequest>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     if body.sync {
         let proposal = engine
@@ -504,10 +516,10 @@ pub async fn harvest_pipeline(
     State(state): State<Arc<AppState>>,
     Query(params): Query<PipelineQuery>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let sid = parse_session_id(&params.session_id)?;
     let stats = engine.pipeline(&sid).await.map_err(engine_err)?;
     Ok(Json(serde_json::to_value(stats).map_err(engine_err)?))
@@ -523,10 +535,10 @@ pub async fn harvest_list(
     State(state): State<Arc<AppState>>,
     Query(params): Query<OpportunityListQuery>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .harvest_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Harvest engine not available".into()))?;
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
     let sid = parse_session_id(&params.session_id)?;
     let stage: Option<rusvel_core::domain::OpportunityStage> = params
         .stage
@@ -640,7 +652,10 @@ pub async fn gtm_deals_list(
         .stage
         .as_deref()
         .and_then(|s| serde_json::from_value::<DealStage>(serde_json::json!(s)).ok());
-    let deals = crm.list_deals(sid, stage_filter).await.map_err(engine_err)?;
+    let deals = crm
+        .list_deals(sid, stage_filter)
+        .await
+        .map_err(engine_err)?;
     let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
     let contact_map: HashMap<String, rusvel_core::domain::Contact> = contacts
         .into_iter()
@@ -691,12 +706,13 @@ pub async fn gtm_deal_advance(
             "invalid deal_id (expected UUID)".into(),
         )
     })?;
-    let new_stage: DealStage = serde_json::from_value(serde_json::json!(&body.stage)).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "invalid stage (use Lead, Qualified, Proposal, Negotiation, Won, Lost)".into(),
-        )
-    })?;
+    let new_stage: DealStage =
+        serde_json::from_value(serde_json::json!(&body.stage)).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid stage (use Lead, Qualified, Proposal, Negotiation, Won, Lost)".into(),
+            )
+        })?;
 
     let crm = CrmManager::new(state.storage.clone());
     let deals = crm.list_deals(sid, None).await.map_err(engine_err)?;
@@ -857,16 +873,15 @@ pub async fn gtm_invoice_get(
     Query(q): Query<GtmSessionQuery>,
 ) -> ApiResult<GtmInvoiceDetail> {
     let sid = parse_session_id(&q.session_id)?;
-    let iid = InvoiceId::from_str(id.trim()).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "invalid invoice id (UUID)".into(),
-        )
-    })?;
+    let iid = InvoiceId::from_str(id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid invoice id (UUID)".into()))?;
     let invm = InvoiceManager::new(state.storage.clone());
     let inv = invm.get_invoice(&iid).await.map_err(engine_err)?;
     if inv.session_id != sid {
-        return Err((StatusCode::NOT_FOUND, "invoice not found for session".into()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "invoice not found for session".into(),
+        ));
     }
     let crm = CrmManager::new(state.storage.clone());
     let contacts = crm.list_contacts(sid).await.map_err(engine_err)?;
@@ -901,19 +916,17 @@ pub async fn gtm_invoice_set_status(
     Json(body): Json<GtmInvoiceStatusBody>,
 ) -> ApiResult<serde_json::Value> {
     let sid = parse_session_id(&body.session_id)?;
-    let iid = InvoiceId::from_str(id.trim()).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "invalid invoice id (UUID)".into(),
-        )
-    })?;
+    let iid = InvoiceId::from_str(id.trim())
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid invoice id (UUID)".into()))?;
     let invm = InvoiceManager::new(state.storage.clone());
     let inv = invm.get_invoice(&iid).await.map_err(engine_err)?;
     if inv.session_id != sid {
-        return Err((StatusCode::NOT_FOUND, "invoice not found for session".into()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "invoice not found for session".into(),
+        ));
     }
-    invm
-        .set_invoice_status(&iid, body.status.clone())
+    invm.set_invoice_status(&iid, body.status.clone())
         .await
         .map_err(engine_err)?;
     if body.status == InvoiceStatus::Paid {
@@ -944,17 +957,15 @@ pub async fn gtm_outreach_execute(
     State(state): State<Arc<AppState>>,
     Json(body): Json<GtmOutreachExecuteBody>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .gtm_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let engine = state.gtm_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "GTM engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
-    let seq_id: SequenceId = body.sequence_id.parse().map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "invalid sequence_id (UUID)".into(),
-        )
-    })?;
+    let seq_id: SequenceId = body
+        .sequence_id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid sequence_id (UUID)".into()))?;
     let cid = uuid::Uuid::parse_str(body.contact_id.trim())
         .map(ContactId::from_uuid)
         .map_err(|_| (StatusCode::BAD_REQUEST, "invalid contact_id (UUID)".into()))?;
@@ -980,10 +991,10 @@ pub async fn gtm_outreach_sequences_list(
     State(state): State<Arc<AppState>>,
     Query(q): Query<GtmOutreachSequencesQuery>,
 ) -> ApiResult<Vec<OutreachSequence>> {
-    let engine = state
-        .gtm_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let engine = state.gtm_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "GTM engine not available".into(),
+    ))?;
     let sid = parse_session_id(&q.session_id)?;
     let rows = engine
         .outreach()
@@ -1005,10 +1016,10 @@ pub async fn gtm_outreach_sequences_create(
     State(state): State<Arc<AppState>>,
     Json(body): Json<GtmOutreachSequenceCreateBody>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .gtm_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let engine = state.gtm_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "GTM engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
     if body.name.trim().is_empty() {
         return Err((StatusCode::BAD_REQUEST, "name is required".into()));
@@ -1032,24 +1043,24 @@ pub async fn gtm_outreach_sequences_activate(
     AxumPath(id): AxumPath<String>,
     Json(body): Json<GtmOutreachSequenceActivateBody>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .gtm_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "GTM engine not available".into()))?;
+    let engine = state.gtm_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "GTM engine not available".into(),
+    ))?;
     let sid = parse_session_id(&body.session_id)?;
-    let seq_id: SequenceId = id.parse().map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            "invalid sequence id (UUID)".into(),
-        )
-    })?;
+    let seq_id: SequenceId = id
+        .parse()
+        .map_err(|_| (StatusCode::BAD_REQUEST, "invalid sequence id (UUID)".into()))?;
     let seq = engine
         .outreach()
         .get_sequence(&seq_id)
         .await
         .map_err(engine_err)?;
     if seq.session_id != sid {
-        return Err((StatusCode::NOT_FOUND, "sequence not found for session".into()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "sequence not found for session".into(),
+        ));
     }
     engine
         .outreach()
@@ -1071,16 +1082,21 @@ pub async fn content_scheduled(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ContentScheduledQuery>,
 ) -> ApiResult<serde_json::Value> {
-    let engine = state
-        .content_engine
-        .as_ref()
-        .ok_or((StatusCode::SERVICE_UNAVAILABLE, "Content engine not available".into()))?;
+    let engine = state.content_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Content engine not available".into(),
+    ))?;
     let sid = parse_session_id(&params.session_id)?;
     let items = match (&params.from, &params.to) {
         (Some(fs), Some(ts)) => {
             let from = DateTime::parse_from_rfc3339(fs)
                 .map(|d| d.with_timezone(&Utc))
-                .map_err(|_| (StatusCode::BAD_REQUEST, "invalid `from` (use RFC3339)".into()))?;
+                .map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        "invalid `from` (use RFC3339)".into(),
+                    )
+                })?;
             let to = DateTime::parse_from_rfc3339(ts)
                 .map(|d| d.with_timezone(&Utc))
                 .map_err(|_| (StatusCode::BAD_REQUEST, "invalid `to` (use RFC3339)".into()))?;

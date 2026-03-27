@@ -14,8 +14,11 @@ use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort, Termina
 pub mod executor;
 pub mod expression;
 pub mod nodes;
+pub mod templates;
 
 use nodes::NodeRegistry;
+
+pub use templates::cross_engine_handoff_template;
 
 /// The flow engine: creates, stores, and executes DAG workflows.
 pub struct FlowEngine {
@@ -44,7 +47,9 @@ impl FlowEngine {
         registry.register(Arc::new(nodes::condition::ConditionNode));
         registry.register(Arc::new(nodes::agent::AgentNode::new(agent)));
         registry.register(Arc::new(nodes::browser::BrowserTriggerNode));
-        registry.register(Arc::new(nodes::browser::BrowserActionNode::new(browser.clone())));
+        registry.register(Arc::new(nodes::browser::BrowserActionNode::new(
+            browser.clone(),
+        )));
 
         Self {
             storage,
@@ -71,10 +76,7 @@ impl FlowEngine {
     }
 
     /// Get a flow definition by ID.
-    pub async fn get_flow(
-        &self,
-        id: &rusvel_core::id::FlowId,
-    ) -> Result<Option<FlowDef>> {
+    pub async fn get_flow(&self, id: &rusvel_core::id::FlowId) -> Result<Option<FlowDef>> {
         let value = self
             .storage
             .objects()
@@ -114,13 +116,13 @@ impl FlowEngine {
         id: &rusvel_core::id::FlowId,
         trigger_data: serde_json::Value,
     ) -> Result<FlowExecution> {
-        let flow = self
-            .get_flow(id)
-            .await?
-            .ok_or_else(|| rusvel_core::error::RusvelError::NotFound {
-                kind: "flow".into(),
-                id: id.to_string(),
-            })?;
+        let flow =
+            self.get_flow(id)
+                .await?
+                .ok_or_else(|| rusvel_core::error::RusvelError::NotFound {
+                    kind: "flow".into(),
+                    id: id.to_string(),
+                })?;
 
         let execution_id = FlowExecutionId::new();
         let started_at = chrono::Utc::now();
@@ -182,9 +184,8 @@ impl FlowEngine {
 
     /// Resume a flow from a persisted checkpoint (same `execution_id`).
     pub async fn resume_flow(&self, execution_id: &str) -> Result<FlowExecution> {
-        let exec_uuid = uuid::Uuid::parse_str(execution_id).map_err(|_| {
-            RusvelError::Validation("invalid execution id".into())
-        })?;
+        let exec_uuid = uuid::Uuid::parse_str(execution_id)
+            .map_err(|_| RusvelError::Validation("invalid execution id".into()))?;
         let exec_id = FlowExecutionId::from_uuid(exec_uuid);
 
         let raw = self
@@ -272,11 +273,7 @@ impl FlowEngine {
     }
 
     /// Re-run a single node using upstream outputs from the checkpoint.
-    pub async fn retry_node(
-        &self,
-        execution_id: &str,
-        node_id: &str,
-    ) -> Result<FlowNodeResult> {
+    pub async fn retry_node(&self, execution_id: &str, node_id: &str) -> Result<FlowNodeResult> {
         let raw = self
             .storage
             .objects()
@@ -300,9 +297,8 @@ impl FlowEngine {
                 id: ck.flow_id.clone(),
             })?;
 
-        let node_uuid = uuid::Uuid::parse_str(node_id).map_err(|_| {
-            RusvelError::Validation("invalid node id".into())
-        })?;
+        let node_uuid = uuid::Uuid::parse_str(node_id)
+            .map_err(|_| RusvelError::Validation("invalid node id".into()))?;
         let node_fid = FlowNodeId::from_uuid(node_uuid);
         if !flow.nodes.iter().any(|n| n.id == node_fid) {
             return Err(RusvelError::Validation("node not in flow".into()));
@@ -351,10 +347,7 @@ impl FlowEngine {
     }
 
     /// Load the current checkpoint for an execution (if any).
-    pub async fn get_checkpoint(
-        &self,
-        execution_id: &str,
-    ) -> Result<Option<FlowCheckpoint>> {
+    pub async fn get_checkpoint(&self, execution_id: &str) -> Result<Option<FlowCheckpoint>> {
         let raw = self
             .storage
             .objects()
