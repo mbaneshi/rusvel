@@ -4,7 +4,7 @@
 **Scope:** Repository tree under `/Users/bm/rusvel` (Rust workspace + referenced surfaces).  
 **Method:** Read critical modules (`rusvel-core`, `rusvel-app`, `rusvel-api`, `rusvel-agent`, `dept-*` boot path), count metrics via `find` / `rg` / `cargo metadata`, cross-check with `docs/design/architecture-v2.md`.
 
-> **Note:** `cargo check -p rusvel-app` was attempted; sandboxed runs failed on `aws-lc-sys` file copy. An unrestricted build was started but not waited to completion here—run `cargo check` / `cargo test` locally for authoritative build health.
+> **Note:** Sandboxed `cargo check` failed on `aws-lc-sys` (permission denied copying includes). **Unrestricted `cargo check -p rusvel-app` completed successfully** on the host after this report was first drafted (`Finished … dev` profile). Run `cargo test` locally for full regression signal.
 
 ---
 
