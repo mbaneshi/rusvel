@@ -11,6 +11,7 @@ use chrono::Utc;
 use code_engine::CodeEngine;
 use content_engine::{ContentEngine, MockPlatformAdapter};
 use forge_engine::ForgeEngine;
+use gtm_engine::GtmEngine;
 use rusvel_api::{AppState, build_router};
 use rusvel_agent::AgentRuntime;
 use rusvel_config::TomlConfig;
@@ -132,6 +133,8 @@ pub struct TestHarness {
     pub session_id: SessionId,
     pub mock_twitter: Arc<MockPlatformAdapter>,
     pub jobs: Arc<dyn JobPort>,
+    /// Same engine instance as [`AppState::gtm_engine`] when the harness was built with GTM.
+    pub gtm_engine: Option<Arc<GtmEngine>>,
 }
 
 #[allow(dead_code)]
@@ -163,7 +166,20 @@ pub async fn build_harness() -> TestHarness {
     build_harness_with_auth(rusvel_api::auth::AuthConfig::from_env()).await
 }
 
+/// API harness with [`GtmEngine`] wired (same storage/jobs as the router).
+#[allow(dead_code)]
+pub async fn build_harness_with_gtm() -> TestHarness {
+    build_harness_with_auth_and_gtm(rusvel_api::auth::AuthConfig::from_env(), true).await
+}
+
 pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> TestHarness {
+    build_harness_with_auth_and_gtm(auth, false).await
+}
+
+async fn build_harness_with_auth_and_gtm(
+    auth: rusvel_api::auth::AuthConfig,
+    include_gtm: bool,
+) -> TestHarness {
     let base = std::env::temp_dir().join(format!("rusvel-api-ict-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&base).expect("temp dir");
     let db_path = base.join("rusvel.db");
@@ -223,12 +239,23 @@ pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> Test
     };
     sessions.create(session).await.expect("session");
 
+    let gtm_engine: Option<Arc<GtmEngine>> = if include_gtm {
+        Some(Arc::new(GtmEngine::new(
+            storage.clone(),
+            events.clone(),
+            agent_runtime.clone(),
+            jobs.clone(),
+        )))
+    } else {
+        None
+    };
+
     let state = AppState {
         forge,
         code_engine: Some(code_engine),
         content_engine: Some(content_engine),
         harvest_engine: None,
-        gtm_engine: None,
+        gtm_engine: gtm_engine.clone(),
         flow_engine: None,
         sessions,
         events,
@@ -254,5 +281,6 @@ pub async fn build_harness_with_auth(auth: rusvel_api::auth::AuthConfig) -> Test
         session_id,
         mock_twitter: mock_tw,
         jobs: jobs_for_harness,
+        gtm_engine,
     }
 }

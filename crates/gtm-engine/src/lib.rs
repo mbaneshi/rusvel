@@ -526,6 +526,96 @@ mod tests {
         assert_eq!(seqs[0].steps.len(), 2);
     }
 
+    #[tokio::test]
+    async fn outreach_execute_sequence_fails_until_activated() {
+        let engine = make_engine();
+        let sid = SessionId::new();
+        let contact = make_contact(sid);
+        let cid = engine.crm().add_contact(sid, contact).await.unwrap();
+        let steps = vec![SequenceStep {
+            delay_days: 0,
+            channel: "email".into(),
+            template: "a".into(),
+        }];
+        let seq_id = engine
+            .outreach()
+            .create_sequence(sid, "seq".into(), steps)
+            .await
+            .unwrap();
+        let err = engine
+            .outreach()
+            .execute_sequence(sid, seq_id, cid)
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Active") || msg.contains("active"),
+            "unexpected error: {msg}"
+        );
+
+        engine.outreach().activate_sequence(&seq_id).await.unwrap();
+        let job_id = engine
+            .outreach()
+            .execute_sequence(sid, seq_id, cid)
+            .await
+            .unwrap();
+        assert!(!job_id.to_string().is_empty());
+    }
+
+    #[tokio::test]
+    async fn process_outreach_send_job_draft_holds_without_sending() {
+        use crate::email::MockEmailAdapter;
+        use crate::outreach::OutreachSendDispatch;
+        use rusvel_core::domain::{Job, JobKind, JobStatus};
+
+        let engine = make_engine();
+        let sid = SessionId::new();
+        let contact = make_contact(sid);
+        let cid = engine.crm().add_contact(sid, contact).await.unwrap();
+        let steps = vec![SequenceStep {
+            delay_days: 0,
+            channel: "email".into(),
+            template: "intro".into(),
+        }];
+        let seq_id = engine
+            .outreach()
+            .create_sequence(sid, "flow".into(), steps)
+            .await
+            .unwrap();
+        engine.outreach().activate_sequence(&seq_id).await.unwrap();
+
+        let job = Job {
+            id: JobId::new(),
+            session_id: sid,
+            kind: JobKind::OutreachSend,
+            payload: serde_json::json!({
+                "sequence_id": seq_id.to_string(),
+                "sequence_run_id": uuid::Uuid::now_v7().to_string(),
+                "contact_id": cid.to_string(),
+                "step_index": 0,
+                "channel": "email",
+                "template": "intro",
+            }),
+            status: JobStatus::Queued,
+            scheduled_at: None,
+            started_at: None,
+            completed_at: None,
+            retries: 0,
+            max_retries: 2,
+            error: None,
+            metadata: serde_json::json!({}),
+        };
+        let mock = MockEmailAdapter::new();
+        let dispatch = engine.process_outreach_send_job(&job, &mock).await.unwrap();
+        match dispatch {
+            OutreachSendDispatch::HoldForApproval(r) => {
+                assert_eq!(r.output["to"], "alice@example.com");
+            }
+            _ => panic!("expected HoldForApproval"),
+        }
+        assert_eq!(mock.sent_len(), 0);
+    }
+
     // ── Engine trait test ──────────────────────────────────────────
 
     #[tokio::test]
