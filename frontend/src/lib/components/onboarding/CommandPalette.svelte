@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { commandPaletteOpen, departments } from '$lib/stores';
+	import { page } from '$app/state';
+	import {
+		commandPaletteOpen,
+		departments,
+		contextPanelOpen,
+		bottomPanelOpen
+	} from '$lib/stores';
 	import { createSession, deptHref, resolveDeptId } from '$lib/api';
 	import type { DepartmentDef } from '$lib/api';
+	import { deptExtraSections, deptShellNavItems, isDeptShellTabVisible } from '$lib/departmentManifest';
 
 	let isOpen = $state(false);
 	let query = $state('');
@@ -22,6 +29,15 @@
 	let deptList: DepartmentDef[] = $state([]);
 	departments.subscribe((v) => (deptList = v));
 
+	let currentDeptId = $derived.by(() => {
+		const m = page.url.pathname.match(/^\/dept\/([^/]+)/);
+		return m ? decodeURIComponent(m[1]) : null;
+	});
+
+	let currentDept = $derived(
+		currentDeptId ? (deptList.find((d) => d.id === currentDeptId) ?? null) : null
+	);
+
 	interface Command {
 		id: string;
 		label: string;
@@ -30,7 +46,78 @@
 		action: () => void;
 	}
 
+	function matchQuery(q: string, c: Command): boolean {
+		if (q === '') return true;
+		const needle = q.toLowerCase();
+		return (
+			c.label.toLowerCase().includes(needle) ||
+			c.group.toLowerCase().includes(needle) ||
+			c.id.toLowerCase().includes(needle)
+		);
+	}
+
 	let commands = $derived.by((): Command[] => {
+		const layout: Command[] = [
+			{
+				id: 'layout-context-panel',
+				label: 'Toggle context panel',
+				group: 'Layout',
+				icon: 'J',
+				action: () => {
+					contextPanelOpen.update((v) => !v);
+					close();
+				}
+			},
+			{
+				id: 'layout-bottom-panel',
+				label: 'Toggle bottom panel',
+				group: 'Layout',
+				icon: '`',
+				action: () => {
+					bottomPanelOpen.update((v) => !v);
+					close();
+				}
+			}
+		];
+
+		const thisDept: Command[] = [];
+		if (currentDept) {
+			const base = `/dept/${encodeURIComponent(currentDept.id)}`;
+			thisDept.push({
+				id: `here-${currentDept.id}-chat`,
+				label: `${currentDept.title} — Chat`,
+				group: 'This department',
+				icon: '◆',
+				action: () => navigate(`${base}/chat`)
+			});
+			for (const item of deptShellNavItems) {
+				if (!isDeptShellTabVisible(item.id, currentDept)) continue;
+				thisDept.push({
+					id: `here-${currentDept.id}-${item.pathSegment}`,
+					label: `${currentDept.title} — ${item.label}`,
+					group: 'This department',
+					icon: '·',
+					action: () => navigate(`${base}/${item.pathSegment}`)
+				});
+			}
+			thisDept.push({
+				id: `here-${currentDept.id}-config`,
+				label: `${currentDept.title} — Config`,
+				group: 'This department',
+				icon: '⚙',
+				action: () => navigate(`${base}/config`)
+			});
+			for (const ex of deptExtraSections[currentDept.id] ?? []) {
+				thisDept.push({
+					id: `here-${currentDept.id}-${ex.segment}`,
+					label: `${currentDept.title} — ${ex.label}`,
+					group: 'This department',
+					icon: '◇',
+					action: () => navigate(`${base}/${ex.segment}`)
+				});
+			}
+		}
+
 		const deptNav: Command[] = deptList.map((d) => ({
 			id: `nav-${d.id}`,
 			label: d.title,
@@ -40,6 +127,8 @@
 		}));
 		const forgeId = resolveDeptId(deptList, 'forge', 'forge');
 		return [
+			...layout,
+			...thisDept,
 			{
 				id: 'nav-dashboard',
 				label: 'Dashboard',
@@ -87,13 +176,7 @@
 	});
 
 	let filtered = $derived(
-		query.trim() === ''
-			? commands
-			: commands.filter(
-					(c) =>
-						c.label.toLowerCase().includes(query.toLowerCase()) ||
-						c.group.toLowerCase().includes(query.toLowerCase())
-				)
+		query.trim() === '' ? commands : commands.filter((c) => matchQuery(query.trim(), c))
 	);
 
 	let groups = $derived(
@@ -230,11 +313,15 @@
 
 			<!-- Footer -->
 			<div
-				class="flex items-center justify-between border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--muted-foreground)]"
+				class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-[var(--border)] px-4 py-2 text-[10px] text-[var(--muted-foreground)]"
 			>
-				<div class="flex items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2">
 					<span><kbd class="rounded border border-[var(--border)] px-1">↑↓</kbd> navigate</span>
 					<span><kbd class="rounded border border-[var(--border)] px-1">↵</kbd> select</span>
+					<span
+						><kbd class="rounded border border-[var(--border)] px-1">⌘J</kbd> context ·
+						<kbd class="rounded border border-[var(--border)] px-1">⌘`</kbd> bottom</span
+					>
 				</div>
 				<span><kbd class="rounded border border-[var(--border)] px-1">⌘K</kbd> toggle</span>
 			</div>
