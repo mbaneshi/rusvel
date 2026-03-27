@@ -6,9 +6,9 @@
 ## Quick Commands
 
 ```bash
-cargo build                    # Build all workspace members (50 crates)
+cargo build                    # Build all workspace members (54 crates)
 cargo bench -p rusvel-app --bench boot  # Criterion boot slice (SQLite + registry); optional local perf
-cargo test                     # Run full suite (~399 tests; see docs/status/current-state.md)
+cargo test                     # Run full suite (~476 tests; see docs/status/current-state.md)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- --mcp             # Start MCP server (stdio JSON-RPC)
@@ -26,8 +26,8 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
 - **rusvel-core** — 20 port traits in `ports.rs` (includes five `*Store` subtraits, `BrowserPort`, etc.) + domain types + `DepartmentApp` + `DepartmentManifest`. Zero framework deps.
 - **Adapters** — Implement port traits (rusvel-db, rusvel-llm, rusvel-agent, etc.)
-- **Engines** — Domain logic, depend ONLY on rusvel-core traits (13 engines, all migrated to DepartmentApp pattern via ADR-014)
-- **dept-* wrappers** — 13 `dept-*` crates (including dept-flow), each implementing DepartmentApp
+- **Engines** — Domain logic, depend ONLY on rusvel-core traits (13 engines: 6 wired + 7 skeletons, all migrated to DepartmentApp pattern via ADR-014)
+- **dept-* wrappers** — 14 `dept-*` crates (including dept-flow, dept-messaging), each implementing DepartmentApp
 - **Surfaces** — CLI (3-tier: one-shot + REPL + TUI), API, MCP — wire adapters into engines
 - **rusvel-app** — Composition root, the single binary
 
@@ -43,7 +43,7 @@ Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 8. **NEVER use npm.** Use `pnpm` for all frontend/Node.js work. (`pnpm install`, `pnpm build`, `pnpm exec`).
 9. **NEVER use pip/pip3/python -m pip.** Use `uv` for all Python work. (`uv run`, `uv add`, `uv sync`).
 
-## Workspace Layout (50 members)
+## Workspace Layout (54 members)
 
 ```
 crates/
@@ -67,6 +67,8 @@ crates/
 ├── rusvel-vector/        Vector store (LanceDB) for semantic search
 ├── rusvel-terminal/      Terminal multiplexer (TerminalPort, PTY management)
 ├── rusvel-cdp/           Chrome DevTools Protocol client (BrowserPort / CDP wiring)
+├── rusvel-webhook/       Webhook registration + dispatch
+├── rusvel-cron/          Cron scheduling adapter
 ├── forge-engine/         Agent orchestration + Mission (goals, plans, reviews, 10 personas)
 ├── code-engine/          Code intelligence: parser, dependency graph, BM25 search, metrics
 ├── harvest-engine/       Opportunity discovery: source scanning, scorer, proposal gen, pipeline
@@ -93,8 +95,9 @@ crates/
 ├── dept-legal/           Legal department (DepartmentApp)
 ├── dept-support/         Support department (DepartmentApp)
 ├── dept-infra/           Infra department (DepartmentApp)
+├── dept-messaging/       Messaging department (DepartmentApp)
 ├── rusvel-cli/           3-tier CLI: one-shot + REPL + TUI
-├── rusvel-api/           Axum HTTP: ~105 `.route(` chains in lib.rs, 26 handler modules
+├── rusvel-api/           Axum HTTP: ~132 `.route(` chains in lib.rs, 31 handler modules
 ├── rusvel-mcp/           MCP server (stdio JSON-RPC) — wired via --mcp flag
 ├── rusvel-tui/           TUI dashboard (ratatui) — wired via --tui flag
 └── rusvel-app/           Binary entry point + composition root + rust-embed frontend
@@ -189,7 +192,7 @@ pnpm test:analyze              # AI-powered visual diff analysis (Claude Vision)
 ## Testing
 
 ```bash
-cargo test                     # Full workspace (~399 tests; counts vary by cargo output)
+cargo test                     # Full workspace (~476 tests; counts vary by cargo output)
 cargo test -p rusvel-core      # Single crate
 cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
 cargo test -p content-engine   # Content engine (7 tests)
@@ -216,11 +219,12 @@ curl -X POST http://localhost:3000/api/system/visual-report/self-correct  # Auto
 
 MCP tool: `visual_inspect` — run visual tests from Claude sessions.
 
-## API Modules (rusvel-api, 26 handler modules)
+## API Modules (rusvel-api, 31 handler modules)
 
-agents, analytics, approvals, browser, build_cmd, capability, chat, config, db_routes,
-department, engine_routes, flow_routes, help, hook_dispatch, hooks, kits, knowledge,
-mcp_servers, playbooks, routes, rules, skills, system, terminal, visual_report, workflows
+agents, analytics, approvals, auth, browser, build_cmd, capability, chat, config, cron,
+db_routes, department, engine_routes, flow_routes, help, hook_dispatch, hooks, jobs, kits,
+knowledge, mcp_servers, pipeline_runner, playbooks, routes, rules, skills, system, terminal,
+visual_report, webhooks, workflows
 
 ## Python Scripts (uv)
 
@@ -235,7 +239,7 @@ uv run --with anthropic ...    # One-off with extra deps
 
 ## Stack
 
-- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~52,560 lines Rust under `crates/`, 215 source files — see `docs/status/current-state.md`)
+- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~62,485 lines Rust under `crates/`, 258 source files — see `docs/status/current-state.md`)
 - SvelteKit 5, Tailwind CSS 4, **pnpm** package manager
 - Python scripts: **uv** (pyproject.toml at workspace root)
 - LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented

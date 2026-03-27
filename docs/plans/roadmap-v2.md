@@ -1,6 +1,6 @@
 # RUSVEL — Roadmap v2 (Post-Review)
 
-> 13 engines (5 wired + 8 stubs). 48 crates. DepartmentApp pattern. Central job queue. Session-centric everything.
+> 13 engines (6 wired + 7 skeletons). 54 crates. DepartmentApp pattern. Central job queue. Session-centric everything.
 
 ---
 
@@ -9,13 +9,13 @@
 
 **Deliverable:** `rusvel forge mission today` via CLI, Web, MCP, REPL, TUI.
 
-- rusvel-core (19 port traits: 14 Port + 5 Store + 82 domain types + DepartmentApp/Manifest + approval model)
+- rusvel-core (20 port traits: 15 Port + 5 Store + 82 domain types + DepartmentApp/Manifest + approval model)
 - Adapters: config, db (5 stores), schema, event, llm (4 providers + ModelTier + CostTracker), memory (FTS5), tool (ScopedToolRegistry), builtin-tools, engine-tools, mcp-client, jobs, embed, vector, deploy, auth, terminal
-- forge-engine + code-engine + content-engine + harvest-engine + flow-engine (all wired)
-- 13 dept-* crates implementing DepartmentApp trait (ADR-014, EngineKind removed)
+- forge-engine + code-engine + content-engine + harvest-engine + flow-engine + gtm-engine (all wired)
+- 14 dept-* crates implementing DepartmentApp trait (ADR-014, EngineKind removed)
 - AgentRuntime with run_streaming() + 22+ registered tools (10 built-in incl. tool_search + 12 engine)
-- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API (124 handlers across 23 modules), Web (SvelteKit, 12+ pages), MCP (6 tools)
-- 8 stub engines (gtm, finance, product, growth, distro, legal, support, infra)
+- Surfaces: CLI (3-tier: one-shot + REPL + TUI), API (132 route chains across 31 modules), Web (SvelteKit, 12+ pages), MCP (6 tools)
+- 7 skeleton engines (finance, product, growth, distro, legal, support, infra)
 
 **Proves:** Ports + adapters + session hierarchy + job queue + events + streaming LLM.
 
@@ -59,7 +59,7 @@
 
 **Deliverable:** Full CRM + outreach + invoicing.
 
-- gtm-engine: contacts, deals, pipeline stages, invoicing, SOPs
+- gtm-engine: contacts, deals, pipeline stages, invoicing, SOPs (substantially implemented — 1949 LOC, wired in Phase 0)
 - Outreach sequences with follow-up scheduling
 - Email + LinkedIn adapters
 - AI spend tracking and budget management
@@ -97,11 +97,11 @@
 
 | Phase | New Crates | Total |
 |-------|-----------|-------|
-| 0 | 48 (18 foundation + 13 engines + 13 dept-* + 4 surfaces) | 48 |
-| 1 | 0 (expand existing) | 48 |
-| 2 | 0 (expand existing) | 48 |
-| 3 | 0 (expand existing) | 48 |
-| 4 | 0 (expand existing) | 48 |
-| 5 | +N (plugins, new adapters) | 48+N |
+| 0 | 54 (20 foundation + 13 engines + 14 dept-* + 4 surfaces + 3 infra) | 54 |
+| 1 | 0 (expand existing) | 54 |
+| 2 | 0 (expand existing) | 54 |
+| 3 | 0 (expand existing) | 54 |
+| 4 | 0 (expand existing) | 54 |
+| 5 | +N (plugins, new adapters) | 54+N |
 
-**Note:** Crate count grew from original plan of 20 to 48. Growth: 20 → 27 (early adapters) → 34 (schema, embed, vector, deploy, builtin-tools, mcp-client, flow-engine) → 48 (13 dept-* crates for DepartmentApp pattern + rusvel-engine-tools + rusvel-terminal). The architecture holds — all growth was in foundation adapters, department encapsulation, and the tool system.
+**Note:** Crate count grew from original plan of 20 to 54. Growth: 20 → 27 (early adapters) → 34 (schema, embed, vector, deploy, builtin-tools, mcp-client, flow-engine) → 48 (13 dept-* crates for DepartmentApp pattern + rusvel-engine-tools + rusvel-terminal) → 54 (webhook, cron, dept-messaging, cdp, channel, additional adapters). The architecture holds — all growth was in foundation adapters, department encapsulation, and the tool system.

@@ -39,11 +39,11 @@
 └──────────────────────┬─────────────────────────┘
                        │
 ┌──────────────────────┴─────────────────────────┐
-│          DOMAIN ENGINES (13: 5 core + 8 ext)    │
-│          + 13 dept-* DepartmentApp crates        │
+│          DOMAIN ENGINES (13: 6 wired + 7 ext)    │
+│          + 14 dept-* DepartmentApp crates        │
 │                                                  │
-│  Core:     Forge  │ Code  │ Harvest │ Content    │
-│            GoToMarket                            │
+│  Wired:   Forge  │ Code  │ Harvest │ Content    │
+│            Flow   │ GoToMarket                   │
 │                                                  │
 │  Extended: Finance │ Product │ Growth │ Distro   │
 │            Legal   │ Support │ Infra             │
@@ -53,7 +53,7 @@
 │              FOUNDATION                          │
 │                                                 │
 │  ┌──────────── rusvel-core ──────────────┐      │
-│  │  19 Port Traits + 82 Domain Types     │      │
+│  │  20 Port Traits + 82 Domain Types     │      │
 │  │  DepartmentApp + DepartmentManifest   │      │
 │  └───────────────────────────────────────┘      │
 │                                                 │
@@ -91,23 +91,24 @@ Each department implements the `DepartmentApp` trait (ADR-014) and declares a `D
 String IDs (e.g. `"forge"`, `"code"`) replace the former `EngineKind` enum, which has been removed.
 The manifest declares name, icon, color, system prompt, capabilities, routes, tools, and quick actions.
 
-### Core (5 — original engines, each has its own crate)
+### Wired (6 — engines with substantial implementation)
 
 1. **Forge** (`forge-engine`) — Agent orchestration + Mission (goals, daily planning, reviews). The meta-engine.
 2. **Code** (`code-engine`) — Code intelligence: parsing, symbol graph, BM25 search, metrics.
 3. **Harvest** (`harvest-engine`) — Opportunity discovery: source scanning, scoring, proposal generation.
 4. **Content** (`content-engine`) — Content creation, platform adaptation, publishing. Human approval gate.
 5. **GoToMarket** (`gtm-engine`) — CRM, outreach sequences, deal pipeline, invoicing. Human approval gate.
+6. **Flow** (`flow-engine`) — DAG workflow engine (petgraph), code/condition/agent nodes.
 
-### Extended (7 — added to cover full business operations)
+### Skeleton (7 — added to cover full business operations)
 
-6. **Finance** (`finance-engine`) — Revenue tracking, expenses, tax, runway forecasting, P&L.
-7. **Product** (`product-engine`) — Roadmaps, feature prioritization, pricing strategy, user feedback.
-8. **Growth** (`growth-engine`) — Funnel optimization, conversion tracking, cohort analysis, KPI dashboards.
-9. **Distribution** (`distro-engine`) — Marketplace listings, SEO, affiliate programs, partnerships.
-10. **Legal** (`legal-engine`) — Contracts, IP protection, compliance, licensing, privacy policies.
-11. **Support** (`support-engine`) — Customer support tickets, knowledge base, NPS tracking, auto-triage.
-12. **Infra** (`infra-engine`) — CI/CD pipelines, deployments, monitoring, incident response.
+7. **Finance** (`finance-engine`) — Revenue tracking, expenses, tax, runway forecasting, P&L.
+8. **Product** (`product-engine`) — Roadmaps, feature prioritization, pricing strategy, user feedback.
+9. **Growth** (`growth-engine`) — Funnel optimization, conversion tracking, cohort analysis, KPI dashboards.
+10. **Distribution** (`distro-engine`) — Marketplace listings, SEO, affiliate programs, partnerships.
+11. **Legal** (`legal-engine`) — Contracts, IP protection, compliance, licensing, privacy policies.
+12. **Support** (`support-engine`) — Customer support tickets, knowledge base, NPS tracking, auto-triage.
+13. **Infra** (`infra-engine`) — CI/CD pipelines, deployments, monitoring, incident response.
 
 ### DepartmentApp Trait + dept-* Crates (ADR-014)
 
@@ -136,10 +137,10 @@ pub struct DepartmentManifest {
 }
 ```
 
-13 dept-* crates: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`,
+14 dept-* crates: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`,
 `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`,
-`dept-support`, `dept-infra`. Each wraps its engine crate and wires it into the host
-via `DepartmentApp::register()`.
+`dept-support`, `dept-infra`, `dept-messaging`. Each wraps its engine crate and wires it
+into the host via `DepartmentApp::register()`.
 
 ### Parameterized Department Routing
 
@@ -177,9 +178,9 @@ Also available in department chat via `!build <description>` prefix.
 
 ---
 
-## The 19 Port Traits (14 Port + 5 Store) — was 13 in v1, 10 in early v2
+## The 20 Port Traits (15 Port + 5 Store) — was 13 in v1, 10 in early v2
 
-Evolved from 10 to 19 as the system grew — added sub-store traits, embedding/vector ports, deploy, and terminal:
+Evolved from 10 to 20 as the system grew — added sub-store traits, embedding/vector ports, deploy, and terminal:
 
 | Port | Responsibility | Notes |
 |------|---------------|-------|
@@ -485,7 +486,7 @@ pub struct Event {
 ```
 rusvel-app (binary, composition root)
 ├── rusvel-cli
-├── rusvel-api (Axum, 124 handlers across 23 modules) ── serves SPA via fallback
+├── rusvel-api (Axum, 132 route chains across 31 modules) ── serves SPA via fallback
 ├── rusvel-tui (Ratatui)
 ├── rusvel-mcp (rmcp, 6 tools)
 │
@@ -501,7 +502,8 @@ rusvel-app (binary, composition root)
 ├── dept-distro ──────┤
 ├── dept-legal ───────┤
 ├── dept-support ─────┤
-├── dept-infra ───────┘
+├── dept-infra ───────┤
+├── dept-messaging ───┘
 │
 ├── forge-engine ─────┐
 ├── code-engine ──────┤
@@ -541,7 +543,7 @@ rusvel-app (binary, composition root)
 ```
 rusvel/
 ├── crates/
-│   ├── rusvel-core/          ← 19 port traits (14 Port + 5 Store) + 82 domain types + DepartmentApp/Manifest
+│   ├── rusvel-core/          ← 20 port traits (15 Port + 5 Store) + 82 domain types + DepartmentApp/Manifest
 │   ├── rusvel-schema/        ← DB schema introspection (RusvelBase)
 │   ├── rusvel-db/            ← SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           ← LlmPort: Ollama, OpenAI, Claude API, CLI + ModelTier + CostTracker
@@ -559,13 +561,15 @@ rusvel/
 │   ├── rusvel-auth/          ← AuthPort (opaque credential handles)
 │   ├── rusvel-config/        ← ConfigPort (TOML + per-session overrides)
 │   ├── rusvel-terminal/      ← TerminalPort adapter
+│   ├── rusvel-webhook/       ← Webhook registration + dispatch
+│   ├── rusvel-cron/          ← Cron scheduling adapter
 │   │
 │   ├── forge-engine/         ← Agent orchestration + Mission (goals/planning) [WIRED]
 │   ├── code-engine/          ← Code intelligence: parser, graph, BM25 [WIRED]
 │   ├── harvest-engine/       ← Opportunity discovery + scoring [WIRED]
 │   ├── content-engine/       ← Content creation + publishing [WIRED]
 │   ├── flow-engine/          ← DAG workflow engine (petgraph) [WIRED]
-│   ├── gtm-engine/           ← GoToMarket (CRM + outreach + ops) [STUB]
+│   ├── gtm-engine/           ← GoToMarket (CRM + outreach + ops) [WIRED]
 │   ├── finance-engine/       ← Revenue, expenses, tax, runway, P&L [STUB]
 │   ├── product-engine/       ← Roadmaps, pricing, feature prioritization [STUB]
 │   ├── growth-engine/        ← Funnels, cohorts, KPIs, retention [STUB]
@@ -587,8 +591,9 @@ rusvel/
 │   ├── dept-legal/           ← DepartmentApp for Legal [NEW]
 │   ├── dept-support/         ← DepartmentApp for Support [NEW]
 │   ├── dept-infra/           ← DepartmentApp for Infra [NEW]
+│   ├── dept-messaging/       ← DepartmentApp for Messaging [NEW]
 │   │
-│   ├── rusvel-api/           ← Axum HTTP: 124 handler functions, 23 modules
+│   ├── rusvel-api/           ← Axum HTTP: 132 route chains, 31 modules
 │   ├── rusvel-cli/           ← 3-tier CLI: one-shot (Clap) + REPL (reedline) + dept subcommands
 │   ├── rusvel-tui/           ← TUI dashboard (Ratatui) — wired via --tui flag
 │   ├── rusvel-mcp/           ← MCP server (stdio JSON-RPC, 6 tools)
@@ -599,7 +604,7 @@ rusvel/
 └── CLAUDE.md
 ```
 
-48 crates. 13 engines (5 wired + 8 stubs) + 13 dept-* crates + 18 adapters + 4 surfaces.
+54 crates. 13 engines (6 wired + 7 skeletons) + 14 dept-* crates + 20 adapters + 4 surfaces.
 
 ### AgentRuntime Streaming + Tool Loop
 

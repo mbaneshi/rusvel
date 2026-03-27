@@ -28,10 +28,10 @@ Use the same host environment as normal development. Some integration tests (e.g
 | **Workspace members** | Packages listed in `[workspace].members` in root `Cargo.toml` — `cargo metadata --no-deps` count. |
 | **Rust LOC** | Total lines of `*.rs` under `crates/` only (excludes `frontend/`). |
 | **Rust source files** | Count of `*.rs` files under `crates/`. |
-| **Tests (count)** | Sum of `running N tests` lines from `cargo test` output (~399). |
+| **Tests (count)** | Sum of `running N tests` lines from `cargo test` output (~476). |
 | **Test targets** | Approximate count of compiled test executables from `cargo test --no-run` (e.g. ~61); differs from **test binaries** phrasing used in older docs (~30 referred to `[[test]]` / crate-level counts). |
-| **HTTP route chains** | Lines with `.route(` in `crates/rusvel-api/src/lib.rs` main API router (**105**). One line can register multiple methods (`get().post()`). |
-| **API modules** | `*.rs` files in `crates/rusvel-api/src/` excluding `lib.rs` (**26**). |
+| **HTTP route chains** | Lines with `.route(` in `crates/rusvel-api/src/lib.rs` main API router (**132**). One line can register multiple methods (`get().post()`). |
+| **API modules** | `*.rs` files in `crates/rusvel-api/src/` excluding `lib.rs` (**31**). |
 | **Port traits** | `pub trait` entries in `crates/rusvel-core/src/ports.rs` (**20**, including five `*Store` subtraits and `BrowserPort`). `DepartmentApp` lives under `department/`. |
 
 ---
@@ -40,18 +40,18 @@ Use the same host environment as normal development. Some integration tests (e.g
 
 | Metric | Count |
 |--------|------:|
-| Workspace members | 50 |
-| Rust lines of code (crates/*.rs) | ~52,560 |
-| Rust source files (crates/) | 215 |
-| Tests (approx., `cargo test`) | ~399 (0 failures, local full run) |
+| Workspace members | 54 |
+| Rust lines of code (crates/*.rs) | ~62,485 |
+| Rust source files (crates/) | 258 |
+| Tests (approx., `cargo test`) | ~476 (0 failures, local full run) |
 | Test targets (approx., `cargo test --no-run`) | ~61 |
-| HTTP route chains (`lib.rs` `.route(`) | 105 |
-| API handler modules (`rusvel-api/src/*.rs` excl. lib) | 26 |
+| HTTP route chains (`lib.rs` `.route(`) | 132 |
+| API handler modules (`rusvel-api/src/*.rs` excl. lib) | 31 |
 | Port traits (`rusvel-core` `ports.rs`) | 20 |
 | `pub struct` / `pub enum` in `domain.rs` | 100 |
 | Departments | 12 |
-| Department crates (dept-*) | 13 |
-| Engines | 13 (all via `DepartmentApp`) |
+| Department crates (dept-*) | 14 |
+| Engines | 13 (6 wired + 7 skeletons, all via `DepartmentApp`) |
 | Registered agent tools | 22+ (built-in + `tool_search` + engine tools; optional memory, delegate, terminal, flow, browser) |
 | MCP stdio tools (`rusvel-mcp`) | 6 |
 
@@ -70,7 +70,7 @@ Use the same host environment as normal development. Some integration tests (e.g
 
 These features are wired from the binary entry [`crates/rusvel-app/src/main.rs`](../../crates/rusvel-app/src/main.rs) through adapters to the HTTP API and, where noted, the embedded frontend.
 
-**API server startup** — Boots SQLite WAL, LLM with ModelTier routing + `MetricStore` cost tracking, `EventBus`, `MemoryPort`, `ScopedToolRegistry` (built-in + engine tools + optional tools), `JobQueue`, `AgentRuntime` with streaming, optional `EmbeddingPort`, `VectorStore`, `TerminalPort`, optional `rusvel_cdp::CdpClient` / `BrowserPort`; collects `DepartmentApp` instances from 13 `dept-*` crates; `DepartmentManifest` registration order; seeds default data; spawns job worker; Axum on `:3000` with graceful shutdown.
+**API server startup** — Boots SQLite WAL, LLM with ModelTier routing + `MetricStore` cost tracking, `EventBus`, `MemoryPort`, `ScopedToolRegistry` (built-in + engine tools + optional tools), `JobQueue`, `AgentRuntime` with streaming, optional `EmbeddingPort`, `VectorStore`, `TerminalPort`, optional `rusvel_cdp::CdpClient` / `BrowserPort`; collects `DepartmentApp` instances from 14 `dept-*` crates; `DepartmentManifest` registration order; seeds default data; spawns job worker; Axum on `:3000` with graceful shutdown.
 
 **First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session.
 
@@ -94,7 +94,7 @@ These features are wired from the binary entry [`crates/rusvel-app/src/main.rs`]
 
 **Hooks** — CRUD + `GET /api/hooks/events`; dispatch on events (command / http / prompt).
 
-**Engines (core depth)** — `CodeEngine`, `ContentEngine`, `HarvestEngine`, `FlowEngine` instantiated with real logic; engine routes under `/api/dept/code/*`, `/api/dept/content/*`, `/api/dept/harvest/*`, `/api/flows/*`, playbooks, kits, brief, etc.
+**Engines (core depth)** — `CodeEngine`, `ContentEngine`, `HarvestEngine`, `FlowEngine`, `GtmEngine` instantiated with real logic; engine routes under `/api/dept/code/*`, `/api/dept/content/*`, `/api/dept/harvest/*`, `/api/dept/gtm/*`, `/api/flows/*`, playbooks, kits, brief, etc.
 **Content publishing** — `content-engine` includes **real HTTP adapters** for DEV.to, Twitter/X, LinkedIn ([`adapters/`](../../crates/content-engine/src/adapters/)); credentials via `ConfigPort` keys (e.g. `twitter_token`, `linkedin_token`).
 
 **Job queue worker** — Polls jobs; handles `CodeAnalyze`, `ContentPublish`, `HarvestScan` with `session_id` scoping.
@@ -131,7 +131,7 @@ Aligned with [`openclaw-sprint-plan.md`](../plans/openclaw-sprint-plan.md) Sprin
 
 **Authentication/authorization** — `rusvel-auth` is in-memory from env; optional bearer env; phased API middleware (see sprint implementation doc).
 
-**Eight “business” engines** — Finance, Product, Growth, Distro, Legal, Support, Infra (and GTM beyond chat) are thinner than Forge/Code/Content/Harvest; chat works via `DepartmentApp` + registry.
+**Seven “business” engines** — Finance, Product, Growth, Distro, Legal, Support, Infra are thinner than the 6 wired engines (Forge/Code/Content/Harvest/Flow/GTM); chat works via `DepartmentApp` + registry.
 
 **Gap vs old monoliths** — See [`gap-analysis.md`](gap-analysis.md): historical comparison to `old/` repos; **not** a substitute for §3–4 here.
 
