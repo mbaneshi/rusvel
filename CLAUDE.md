@@ -226,6 +226,36 @@ db_routes, department, engine_routes, flow_routes, help, hook_dispatch, hooks, j
 knowledge, mcp_servers, pipeline_runner, playbooks, routes, rules, skills, system, terminal,
 visual_report, webhooks, workflows
 
+## Claude Code Tooling
+
+Custom agents, skills, and rules in `.claude/`. See `docs/claude-code-tooling.md` for details.
+
+**Subagents** (`@name` to invoke):
+- `@researcher` — research crates, patterns, LLM integrations before implementation
+- `@arch-reviewer` — check hexagonal architecture compliance, ADR rules, crate size
+- `@dept-auditor` — audit department wiring across all layers
+
+**Skills** (`/name` to invoke):
+- `/dept-scaffold <name>` — scaffold a new department (engine + dept-* + wiring)
+- `/engine-check <crate>` — verify engine boundary compliance
+- `/crate-audit [crate]` — line count, deps, test coverage health check
+
+**Path-based Rules** (auto-loaded when editing matching files):
+- `engines.md` → `crates/*-engine/**` — port-only deps, AgentPort, metadata
+- `api.md` → `crates/rusvel-api/**` — route patterns, SSE, spawn_blocking
+- `frontend.md` → `frontend/**` — pnpm, Svelte 5 runes, Tailwind 4
+- `docs.md` → `docs/**/*.md` — formatting conventions
+- `dept-crates.md` → `crates/dept-*/**` — DepartmentApp pattern
+
+**Task Runner** (justfile):
+```bash
+just check              # cargo check + pnpm check
+just ci                 # fmt-check + lint + test
+just crate-lines        # flag crates over 2000 lines
+just check-boundaries   # detect engine→adapter imports
+just stats              # workspace statistics
+```
+
 ## Python Scripts (uv)
 
 **Package manager: uv** (not pip). Python is used for auxiliary scripts only — the app itself is Rust.
