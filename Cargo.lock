@@ -2415,8 +2415,11 @@ dependencies = [
 name = "dept-messaging"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "rusvel-channel",
  "rusvel-core",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -6437,6 +6440,7 @@ dependencies = [
  "dept-harvest",
  "dept-infra",
  "dept-legal",
+ "dept-messaging",
  "dept-product",
  "dept-support",
  "distro-engine",

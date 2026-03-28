@@ -85,6 +85,8 @@ pub fn installed_departments() -> Vec<Box<dyn DepartmentApp>> {
         Box::new(dept_legal::LegalDepartment::new()),
         Box::new(dept_support::SupportDepartment::new()),
         Box::new(dept_infra::InfraDepartment::new()),
+        // Outbound channels — registered after core departments (see dept-messaging crate).
+        Box::new(dept_messaging::MessagingDepartment::new()),
     ]
 }
 

@@ -388,7 +388,7 @@ macro_rules! test_department_contract {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Contract tests for all 13 DepartmentApp implementations
+//  Contract tests for all 14 DepartmentApp implementations
 // ════════════════════════════════════════════════════════════════════
 
 test_department_contract!(forge, dept_forge::ForgeDepartment, "forge", min_tools = 5);
@@ -404,3 +404,9 @@ test_department_contract!(distro, dept_distro::DistroDepartment, "distro", min_t
 test_department_contract!(legal, dept_legal::LegalDepartment, "legal", min_tools = 4);
 test_department_contract!(support, dept_support::SupportDepartment, "support", min_tools = 4);
 test_department_contract!(infra, dept_infra::InfraDepartment, "infra", min_tools = 4);
+test_department_contract!(
+    messaging,
+    dept_messaging::MessagingDepartment,
+    "messaging",
+    min_tools = 0
+);

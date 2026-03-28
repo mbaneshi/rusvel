@@ -55,6 +55,7 @@ dept-distro    = { path = "../dept-distro" }
 dept-legal     = { path = "../dept-legal" }
 dept-support   = { path = "../dept-support" }
 dept-infra     = { path = "../dept-infra" }
+dept-messaging = { path = "../dept-messaging" }
 
 # ─── RAG ───
 rusvel-embed  = { workspace = true }

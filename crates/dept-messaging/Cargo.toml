@@ -8,8 +8,11 @@ repository.workspace = true
 description = "Messaging department shell — wires ChannelPort adapters when present (Sprint 8)"
 
 [dependencies]
+async-trait = { workspace = true }
 rusvel-core = { workspace = true }
 rusvel-channel = { path = "../rusvel-channel" }
+serde_json = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true
