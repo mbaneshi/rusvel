@@ -12,6 +12,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Fixed
 - Force exit after 5s when SSE connections block graceful shutdown (`ba440dc`)
 
+### Security
+- Restrict CORS to localhost origins (was allow-all)
+- Add SQL identifier validation in rusvel-db store (prevent injection)
+- Add path traversal guard to all built-in file tools (canonicalize + cwd check)
+
+### Performance
+- Wrap all sync DB I/O in `spawn_blocking` (18 async trait methods across 5 stores)
+
+### Architecture
+- Move `ChannelPort` trait from rusvel-channel to rusvel-core
+- Add department ID constants module (`rusvel-core/src/constants.rs`)
+- Extract shared SSE helper from chat.rs and department.rs
+- Add `metadata: serde_json::Value` to 9 domain structs (ADR-007 compliance)
+
+### Reliability
+- Add request ID middleware with `x-request-id` header and tracing spans
+- Add configurable rate limiting (`RUSVEL_RATE_LIMIT`, default 100/sec)
+- Deep health check: probe DB, optional services, boot failures, uptime
+- Graceful shutdown for HTTP server and job worker via watch channel
+- Track failed department registrations in boot artifacts
+
+### Auth
+- Add read-only API token support (`RUSVEL_API_READ_TOKEN`) — GET-only scope
+
+### API
+- Add `GET /api/mcp-servers/{id}` and `GET /api/hooks/{id}` handlers
+
+### GTM
+- Add SMTP retry with exponential backoff (3 retries) and 30s connection timeout
+
+### Testing
+- 25 integration tests for code-engine, content-engine, harvest-engine, gtm-engine, rusvel-vector
+- 65 DepartmentApp contract tests for all 13 departments
+- 14 CLI arg parsing tests, 8 TUI widget rendering tests
+
+### Docs
+- Sync all metrics across CLAUDE.md, current-state.md, architecture-v2.md, roadmap-v2.md
+- Generate app narrative prompt template
+
+### Dependencies
+- Bump tokio-tungstenite 0.24 → 0.28, run cargo update
+- Document transitive duplicate deps from LanceDB/DataFusion
+
 ---
 
 ## [0.1.0] — 2026-03-22 → 2026-03-28
