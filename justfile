@@ -101,3 +101,33 @@ stats:
     @echo "Rust lines: $(find crates -name '*.rs' -exec cat {} + | wc -l | tr -d ' ')"
     @echo "Frontend files: $(find frontend/src -type f 2>/dev/null | wc -l | tr -d ' ')"
     @echo "Test count: $(cargo test --workspace -- --list 2>/dev/null | grep -c ': test$' || echo '?')"
+
+# Tag and push a release (usage: just release 0.2.0)
+release version:
+    @echo "Releasing v{{version}}..."
+    sed -i '' 's/^version = ".*"/version = "{{version}}"/' Cargo.toml
+    cargo check --workspace
+    git add -A
+    git commit -m "chore: release v{{version}}"
+    git tag "v{{version}}"
+    @echo "Run 'git push origin main --tags' to trigger release workflow"
+
+# Build Docker image
+docker-build:
+    docker build -t rusvel:latest .
+
+# Run with docker-compose
+docker-up:
+    docker compose up -d
+
+# Stop docker-compose
+docker-down:
+    docker compose down
+
+# Build mdBook docs
+docs-build:
+    mdbook build docs-site
+
+# Serve mdBook docs locally
+docs-serve:
+    mdbook serve docs-site
