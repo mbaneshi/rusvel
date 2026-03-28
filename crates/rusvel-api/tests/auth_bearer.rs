@@ -18,7 +18,7 @@ fn req(uri: &str, token: Option<&str>) -> Request<Body> {
 
 #[tokio::test]
 async fn auth_no_env_passes_all() {
-    let h = build_harness_with_auth(AuthConfig { token: None }).await;
+    let h = build_harness_with_auth(AuthConfig { token: None, read_token: None }).await;
     let res = h.router.oneshot(req("/api/sessions", None)).await.unwrap();
     assert_eq!(res.status(), StatusCode::OK);
 }
@@ -27,6 +27,7 @@ async fn auth_no_env_passes_all() {
 async fn auth_valid_token_200() {
     let h = build_harness_with_auth(AuthConfig {
         token: Some("test-tok-200".into()),
+        read_token: None,
     })
     .await;
     let res = h
@@ -41,6 +42,7 @@ async fn auth_valid_token_200() {
 async fn auth_invalid_token_401() {
     let h = build_harness_with_auth(AuthConfig {
         token: Some("test-tok-401".into()),
+        read_token: None,
     })
     .await;
     let res = h
@@ -55,6 +57,7 @@ async fn auth_invalid_token_401() {
 async fn auth_missing_token_401() {
     let h = build_harness_with_auth(AuthConfig {
         token: Some("test-tok-miss".into()),
+        read_token: None,
     })
     .await;
     let res = h.router.oneshot(req("/api/sessions", None)).await.unwrap();
@@ -65,6 +68,7 @@ async fn auth_missing_token_401() {
 async fn auth_health_always_exempt() {
     let h = build_harness_with_auth(AuthConfig {
         token: Some("test-tok-health".into()),
+        read_token: None,
     })
     .await;
     let res = h.router.oneshot(req("/api/health", None)).await.unwrap();

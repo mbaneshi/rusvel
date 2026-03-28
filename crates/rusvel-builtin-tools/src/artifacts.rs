@@ -16,7 +16,8 @@ pub async fn register(registry: &ToolRegistry, storage: Arc<dyn StoragePort>) ->
         .register_with_handler(
             ToolDefinition {
                 name: "forge_save_artifact".into(),
-                description: "Save a markdown document as a Forge artifact for this session.".into(),
+                description: "Save a markdown document as a Forge artifact for this session."
+                    .into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {

@@ -32,15 +32,17 @@ fn webhook_receive_exempt(path: &str, method: &Method) -> bool {
 /// Auth configuration resolved once at startup.
 #[derive(Clone)]
 pub struct AuthConfig {
-    /// `None` means auth is disabled (opt-in).
     pub token: Option<String>,
+    pub read_token: Option<String>,
 }
 
 impl AuthConfig {
-    /// Build from the environment. Call once at router construction time.
     pub fn from_env() -> Self {
         Self {
             token: std::env::var("RUSVEL_API_TOKEN")
+                .ok()
+                .filter(|t| !t.is_empty()),
+            read_token: std::env::var("RUSVEL_API_READ_TOKEN")
                 .ok()
                 .filter(|t| !t.is_empty()),
         }
@@ -48,12 +50,11 @@ impl AuthConfig {
 }
 
 async fn bearer_check(config: &AuthConfig, req: Request<Body>, next: Next) -> Response {
-    let Some(expected) = config.token.as_ref() else {
+    if config.token.is_none() && config.read_token.is_none() {
         return next.run(req).await;
-    };
+    }
 
     let path = req.uri().path();
-    // Non-API routes (embedded SPA, static assets) do not require a bearer token.
     if !path.starts_with("/api/") {
         return next.run(req).await;
     }
@@ -61,12 +62,30 @@ async fn bearer_check(config: &AuthConfig, req: Request<Body>, next: Next) -> Re
         return next.run(req).await;
     }
 
-    if let Some(header) = req.headers().get("authorization")
-        && let Ok(value) = header.to_str()
-        && let Some(token) = value.strip_prefix("Bearer ")
-        && token == expected
-    {
-        return next.run(req).await;
+    let provided = req
+        .headers()
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+
+    let Some(provided) = provided else {
+        return unauthorized_response();
+    };
+
+    if let Some(ref admin_tok) = config.token {
+        if provided == admin_tok {
+            return next.run(req).await;
+        }
+    }
+
+    if let Some(ref read_tok) = config.read_token {
+        if provided == read_tok {
+            let method = req.method();
+            if method == Method::GET || method == Method::HEAD || method == Method::OPTIONS {
+                return next.run(req).await;
+            }
+            return forbidden_response();
+        }
     }
 
     unauthorized_response()
@@ -88,6 +107,19 @@ async fn bearer_auth_with_config(
     next: Next,
 ) -> Response {
     bearer_check(&config, req, next).await
+}
+
+fn forbidden_response() -> Response {
+    let body = json!({
+        "error": "Forbidden",
+        "message": "Read-only token cannot perform write operations"
+    });
+    (
+        StatusCode::FORBIDDEN,
+        [("content-type", "application/json")],
+        serde_json::to_string(&body).unwrap(),
+    )
+        .into_response()
 }
 
 fn unauthorized_response() -> Response {
@@ -112,12 +144,18 @@ mod tests {
     use tower::ServiceExt;
 
     fn router_with(token: Option<&str>) -> Router {
+        router_with_tokens(token, None)
+    }
+
+    fn router_with_tokens(token: Option<&str>, read_token: Option<&str>) -> Router {
         let config = AuthConfig {
             token: token.map(String::from),
+            read_token: read_token.map(String::from),
         };
         Router::new()
             .route("/api/health", get(|| async { "ok" }))
             .route("/api/sessions", get(|| async { "sessions" }))
+            .route("/api/sessions", post(|| async { "created" }))
             .layer(axum::middleware::from_fn_with_state(
                 config,
                 bearer_auth_with_config,
@@ -125,7 +163,11 @@ mod tests {
     }
 
     fn req(uri: &str, token: Option<&str>) -> Request<Body> {
-        let mut builder = Request::builder().uri(uri);
+        req_method("GET", uri, token)
+    }
+
+    fn req_method(method: &str, uri: &str, token: Option<&str>) -> Request<Body> {
+        let mut builder = Request::builder().method(method).uri(uri);
         if let Some(t) = token {
             builder = builder.header("authorization", format!("Bearer {t}"));
         }
@@ -180,6 +222,7 @@ mod tests {
     async fn webhook_receive_post_exempt_without_bearer() {
         let config = AuthConfig {
             token: Some("secret123".into()),
+            read_token: None,
         };
         let app = Router::new()
             .route("/api/webhooks/{id}", post(|| async { "ok" }))
@@ -194,5 +237,64 @@ mod tests {
             .unwrap();
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn read_token_allows_get() {
+        let app = router_with_tokens(Some("admin"), Some("reader"));
+        let res = app
+            .oneshot(req("/api/sessions", Some("reader")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn read_token_rejects_post() {
+        let app = router_with_tokens(Some("admin"), Some("reader"));
+        let res = app
+            .oneshot(req_method("POST", "/api/sessions", Some("reader")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        let bytes = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(v["error"], "Forbidden");
+    }
+
+    #[tokio::test]
+    async fn admin_token_allows_post() {
+        let app = router_with_tokens(Some("admin"), Some("reader"));
+        let res = app
+            .oneshot(req_method("POST", "/api/sessions", Some("admin")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn read_token_only_no_admin() {
+        let app = router_with_tokens(None, Some("reader"));
+        let res = app
+            .oneshot(req("/api/sessions", Some("reader")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let app = router_with_tokens(None, Some("reader"));
+        let res = app
+            .oneshot(req_method("POST", "/api/sessions", Some("reader")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn unknown_token_with_read_configured_401() {
+        let app = router_with_tokens(Some("admin"), Some("reader"));
+        let res = app
+            .oneshot(req("/api/sessions", Some("unknown")))
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
     }
 }

@@ -1,7 +1,7 @@
 //! Cold-ish startup slice: SQLite open + migrations, and department registry load.
 //! Offline; no network or Ollama.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use rusvel_core::registry::DepartmentRegistry;
 use std::path::Path;
 
@@ -24,5 +24,9 @@ fn bench_department_registry_load_missing(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_database_open_temp, bench_department_registry_load_missing);
+criterion_group!(
+    benches,
+    bench_database_open_temp,
+    bench_department_registry_load_missing
+);
 criterion_main!(benches);

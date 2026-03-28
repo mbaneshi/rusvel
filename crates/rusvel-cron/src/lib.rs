@@ -61,17 +61,27 @@ impl CronScheduler {
     }
 
     /// Run [`Self::tick`] on a fixed interval (missed ticks skipped). Used by the API binary.
+    ///
+    /// Accepts a shutdown receiver so the ticker stops when the app shuts down.
     pub fn spawn_interval_ticker(
         self: Arc<Self>,
         period: std::time::Duration,
+        mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(period);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
-                interval.tick().await;
-                if let Err(e) = self.tick().await {
-                    tracing::warn!(error = %e, "Cron tick failed");
+                tokio::select! {
+                    _ = interval.tick() => {
+                        if let Err(e) = self.tick().await {
+                            tracing::warn!(error = %e, "Cron tick failed");
+                        }
+                    }
+                    _ = shutdown_rx.changed() => {
+                        tracing::info!("Cron ticker shutting down");
+                        break;
+                    }
                 }
             }
         })

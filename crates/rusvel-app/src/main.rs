@@ -914,8 +914,11 @@ async fn main() -> Result<()> {
     rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
     rusvel_engine_tools::register_content_tools(&tool_registry, content_engine.clone()).await;
     rusvel_engine_tools::register_code_tools(&tool_registry, code_engine.clone()).await;
-    rusvel_builtin_tools::register_artifact_tools(&tool_registry, db.clone() as Arc<dyn rusvel_core::ports::StoragePort>)
-        .await;
+    rusvel_builtin_tools::register_artifact_tools(
+        &tool_registry,
+        db.clone() as Arc<dyn rusvel_core::ports::StoragePort>,
+    )
+    .await;
     tracing::info!("Engine tools registered: harvest(5), content(5), code(2), forge_save_artifact");
 
     // 5. Seed default data (agents, skills, rules) on first run
@@ -1184,10 +1187,7 @@ async fn main() -> Result<()> {
                                 harvest: harvest_engine_worker.clone(),
                                 content: content_engine_worker.clone(),
                             };
-                            match forge_worker
-                                .orchestrate_pipeline(sid, def, &runner)
-                                .await
-                            {
+                            match forge_worker.orchestrate_pipeline(sid, def, &runner).await {
                                 Ok(exec) => Ok(Some(JobResult {
                                     output: serde_json::to_value(&exec).unwrap_or_default(),
                                     metadata: serde_json::json!({"engine": "forge", "source": "webhook"}),
@@ -1545,10 +1545,12 @@ async fn main() -> Result<()> {
         tracing::info!("RUSVEL starting on http://{addr} (MCP HTTP)");
 
         let _cron_tick_task_mcp_http =
-            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30));
+            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30), shutdown_rx.clone());
 
         let mut srv_rx = shutdown_rx.clone();
-        let shutdown_fut = async move { let _ = srv_rx.changed().await; };
+        let shutdown_fut = async move {
+            let _ = srv_rx.changed().await;
+        };
         let server = rusvel_api::start_server(router, addr, shutdown_fut);
 
         tokio::spawn({
@@ -1674,10 +1676,12 @@ async fn main() -> Result<()> {
         tracing::info!("RUSVEL starting on http://{addr}");
 
         let _cron_tick_task =
-            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30));
+            cron_scheduler.spawn_interval_ticker(std::time::Duration::from_secs(30), shutdown_rx.clone());
 
         let mut srv_rx = shutdown_rx.clone();
-        let shutdown_fut = async move { let _ = srv_rx.changed().await; };
+        let shutdown_fut = async move {
+            let _ = srv_rx.changed().await;
+        };
         let server = rusvel_api::start_server(router, addr, shutdown_fut);
 
         tokio::spawn(async move {
