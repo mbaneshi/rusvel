@@ -72,6 +72,11 @@ authors = ["Mehdi Baneshi <mehdi@mbaneshi.click>"]
 repository = "https://github.com/mbaneshi/rusvel"
 
 [workspace.dependencies]
+# Note: Some transitive dependency duplicates exist (hyper, http, rustls,
+# itertools, hashbrown, petgraph 0.6, rand, thiserror v1, etc.) caused by
+# LanceDB/DataFusion/Arrow pinning older versions. These resolve when
+# upstream crates update their dependency bounds.
+
 # Async
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
@@ -79,7 +84,7 @@ futures = "0.3"
 
 # Web
 axum = { version = "0.8", features = ["ws"] }
-tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
 
