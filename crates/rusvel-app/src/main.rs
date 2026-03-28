@@ -826,8 +826,10 @@ async fn main() -> Result<()> {
     let rusvel_core::department::DepartmentsBootArtifacts {
         registry,
         event_subscriptions,
+        failed_departments,
         ..
     } = dept_registry;
+    let boot_time = std::time::Instant::now();
     tracing::info!(
         "ADR-014 boot: {} departments registered",
         registry.departments.len()
@@ -1500,6 +1502,8 @@ async fn main() -> Result<()> {
             cron_scheduler: cron_scheduler.clone(),
             context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
             channel: outbound_channel,
+            boot_time,
+            failed_departments: failed_departments.clone(),
         };
 
         let frontend_dir = [
@@ -1621,6 +1625,8 @@ async fn main() -> Result<()> {
             cron_scheduler: cron_scheduler.clone(),
             context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
             channel: outbound_channel,
+            boot_time,
+            failed_departments: failed_departments.clone(),
         };
 
         // Look for frontend build in known locations (filesystem first)

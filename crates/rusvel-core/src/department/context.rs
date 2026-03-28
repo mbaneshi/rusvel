@@ -89,7 +89,7 @@ impl RegistrationContext {
 
     /// Consume the context after registration and return the registry plus
     /// all subsystem contributions (tools, event subscriptions, job handlers).
-    pub fn finalize(self) -> DepartmentsBootArtifacts {
+    pub fn finalize(self, failed_departments: Vec<(String, String)>) -> DepartmentsBootArtifacts {
         let registry = DepartmentRegistry::from_manifests(&self.manifests);
         let tools = self.tools.into_tools();
         let event_subscriptions = self.event_handlers.into_subscriptions();
@@ -99,6 +99,7 @@ impl RegistrationContext {
             tools,
             event_subscriptions,
             job_handlers,
+            failed_departments,
         }
     }
 }
@@ -109,6 +110,7 @@ pub struct DepartmentsBootArtifacts {
     pub tools: Vec<ToolRegistration>,
     pub event_subscriptions: Vec<EventSubscription>,
     pub job_handlers: HashMap<String, JobHandlerEntry>,
+    pub failed_departments: Vec<(String, String)>,
 }
 
 // ════════════════════════════════════════════════════════════════════

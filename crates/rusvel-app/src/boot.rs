@@ -142,6 +142,7 @@ pub async fn boot_departments(
         vector_store,
     );
 
+    let mut failed = Vec::new();
     for &idx in &order {
         let dept = &departments[idx];
         let manifest = dept.manifest();
@@ -149,7 +150,7 @@ pub async fn boot_departments(
 
         if let Err(e) = dept.register(&mut ctx).await {
             tracing::error!("Failed to register department '{}': {e}", manifest.id);
-            // Continue — don't let one failed department block the rest
+            failed.push((manifest.id.clone(), e.to_string()));
         }
     }
 
@@ -157,7 +158,7 @@ pub async fn boot_departments(
     let ev_n = ctx.event_handlers.len();
     let job_n = ctx.job_handlers.len();
 
-    let artifacts = ctx.finalize();
+    let artifacts = ctx.finalize(failed);
     tracing::info!(
         "Department boot complete: {} departments registered, {} tools, {} event handlers, {} job handlers",
         artifacts.registry.departments.len(),

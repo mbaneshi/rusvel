@@ -38,8 +38,49 @@ pub struct CreateGoalBody {
 
 // ── Handlers ─────────────────────────────────────────────────────
 
-pub async fn health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "status": "ok" }))
+pub async fn health(
+    State(state): State<Arc<AppState>>,
+) -> Json<serde_json::Value> {
+    let uptime_seconds = state.boot_time.elapsed().as_secs();
+
+    let db_check = match state.database.execute_sql("SELECT 1") {
+        Ok(_) => "ok".to_string(),
+        Err(e) => format!("error: {e}"),
+    };
+
+    let vector_check = if state.vector_store.is_some() {
+        "ok"
+    } else {
+        "not_configured"
+    };
+
+    let embed_check = if state.embedding.is_some() {
+        "ok"
+    } else {
+        "not_configured"
+    };
+
+    let degraded = db_check != "ok" || !state.failed_departments.is_empty();
+    let status = if degraded { "degraded" } else { "ok" };
+
+    let failed: Vec<serde_json::Value> = state
+        .failed_departments
+        .iter()
+        .map(|(id, msg)| serde_json::json!({ "id": id, "error": msg }))
+        .collect();
+
+    Json(serde_json::json!({
+        "status": status,
+        "uptime_seconds": uptime_seconds,
+        "checks": {
+            "database": db_check,
+            "vector_store": vector_check,
+            "embedding": embed_check,
+        },
+        "departments": {
+            "failed": failed,
+        }
+    }))
 }
 
 pub async fn list_sessions(

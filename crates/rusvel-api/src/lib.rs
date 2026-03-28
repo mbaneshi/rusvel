@@ -118,6 +118,8 @@ pub struct AppState {
     pub context_pack_cache: Arc<ContextPackCache>,
     /// Outbound notifications (e.g. Telegram); `None` when not configured.
     pub channel: Option<Arc<dyn ChannelPort>>,
+    pub boot_time: Instant,
+    pub failed_departments: Vec<(String, String)>,
 }
 
 /// Build the Axum router with all routes, CORS, and tracing middleware.

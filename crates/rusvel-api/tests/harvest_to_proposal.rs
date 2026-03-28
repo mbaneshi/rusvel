@@ -321,6 +321,8 @@ async fn test_router() -> (
         cron_scheduler,
         context_pack_cache: Arc::new(rusvel_api::ContextPackCache::default()),
         channel: None,
+        boot_time: std::time::Instant::now(),
+        failed_departments: Vec::new(),
     };
 
     (
