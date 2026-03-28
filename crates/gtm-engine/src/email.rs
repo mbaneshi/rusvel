@@ -94,7 +94,9 @@ impl SmtpEmailAdapter {
         let host = host.trim();
         let mut relay = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
             .map_err(|e| RusvelError::Config(format!("SMTP relay: {e}")))?;
-        relay = relay.port(port);
+        relay = relay
+            .port(port)
+            .timeout(Some(std::time::Duration::from_secs(30)));
         if !username.is_empty() {
             relay = relay.credentials(Credentials::new(username, password));
         }
@@ -132,12 +134,30 @@ impl EmailAdapter for SmtpEmailAdapter {
         if m.from.is_empty() {
             m.from = self.default_from.clone();
         }
-        let email = Self::build_lettre_message(&m)?;
-        self.transport
-            .send(email)
-            .await
-            .map_err(|e| RusvelError::Internal(format!("SMTP send: {e}")))?;
-        Ok(())
+
+        let max_retries = 3u32;
+        let mut attempts = 0u32;
+
+        loop {
+            let email = Self::build_lettre_message(&m)?;
+            match self.transport.send(email).await {
+                Ok(_) => return Ok(()),
+                Err(e) if attempts < max_retries => {
+                    attempts += 1;
+                    let delay = std::time::Duration::from_millis(500 * 2u64.pow(attempts - 1));
+                    tracing::warn!(
+                        attempt = attempts,
+                        max = max_retries,
+                        delay_ms = delay.as_millis() as u64,
+                        "SMTP send failed, retrying: {e}"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+                Err(e) => {
+                    return Err(RusvelError::Internal(format!("SMTP send: {e}")));
+                }
+            }
+        }
     }
 }
 
