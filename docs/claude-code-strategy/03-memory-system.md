@@ -166,7 +166,7 @@ When writing tests:
 ### Current Auto Memory
 
 Already stored:
-- `project_rusvel.md` — vision, 13 ports, 7 engines
+- `project_rusvel.md` — vision; for **port/engine/dept counts** copy from [`docs/status/current-state.md`](../status/current-state.md) only
 - `user_mehdi.md` — solo founder, Rust+SvelteKit, cross-validates with AIs
 - `reference_claude_p_max.md` — env vars for Max subscription
 - `project_4layer_architecture.md` — Kernel/Runtime/Shell/Network layers

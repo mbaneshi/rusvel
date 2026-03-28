@@ -105,10 +105,10 @@
 ## ADR-011: Department Registry — Dynamic Departments Replace Hardcoded Routing
 
 **Date:** 2026-03-23
-**Status:** Accepted
+**Status:** Accepted (superseded for **registration mechanism and department identity** by **ADR-014** — manifests + string IDs; `EngineKind` removed. Parameterized `/api/dept/{dept}/*` routing and config cascade below remain in force.)
 **Context:** The original 5-engine model hardcoded routes per department. Scaling to 12 departments meant 72+ routes and touching 7 files to add one department. Config was scattered across 4 separate systems.
-**Decision:** `DepartmentRegistry` in `rusvel-core::registry` holds 12 `DepartmentDef` structs, each mapping an id to an `EngineKind`, system prompt, capabilities, tabs, quick actions, and default config. Loaded from TOML or built-in defaults. 6 parameterized `/api/dept/{dept}/*` routes replace all per-department routes. Frontend uses a single dynamic `[dept]` route.
-**Consequence:** Adding a department = adding a `DepartmentDef` entry and an `EngineKind` variant. Zero route changes. Three-layer config cascade (Global -> Department -> Session) eliminates duplication.
+**Decision (historical — pre-ADR-014):** Central registry of department metadata with parameterized `/api/dept/{dept}/*` routes replacing per-department route explosion; frontend uses a single dynamic `[dept]` route; three-layer config cascade (Global → Department → Session).
+**Consequence:** At the time: fewer route touchpoints when adding a department. **Today:** department metadata and registration live in `dept-*` crates via `DepartmentManifest` (ADR-014); registry is populated from boot, not by editing `EngineKind` in core.
 
 ---
 
@@ -118,7 +118,7 @@
 **Status:** Accepted
 **Context:** Frontend needed a consistent design system. Tailwind 4 supports oklch natively. shadcn/ui provides accessible component primitives with a `--background`/`--foreground` convention for light/dark theming.
 **Decision:** Adopt shadcn/ui design tokens with oklch color values. CSS variables follow `--background`/`--foreground` naming. Each department gets a color token from the registry (indigo, emerald, amber, etc.).
-**Consequence:** Consistent theming across all 12 department UIs. Dark mode is a CSS variable swap. Department colors are data-driven from the registry.
+**Consequence:** Consistent theming across all department UIs. Dark mode is a CSS variable swap. Department colors are data-driven from the registry.
 
 ---
 
@@ -137,5 +137,5 @@
 **Date:** 2026-03-25
 **Status:** Accepted
 **Context:** The `EngineKind` enum in `rusvel-core` grew with every new department, forcing core changes for what should be a registration concern. `DepartmentRegistry` hardcoded metadata (prompts, capabilities, colors) that belongs with the department itself. Adding a department touched 5+ files.
-**Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct in `rusvel-core::department`. Each department lives in its own `dept-*` crate implementing `DepartmentApp`. The host collects manifests, resolves dependencies, and calls `register()` in order. `EngineKind` enum is removed entirely; departments use string IDs. 13 `dept-*` crates created: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`, `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`, `dept-support`, `dept-infra`.
-**Consequence:** Adding a department = adding a `dept-*` crate. Zero changes to `rusvel-core`. Each department declares its own routes, tools, capabilities, and system prompt via `DepartmentManifest`. Supersedes the `department-scaling-proposal.md`.
+**Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct in `rusvel-core::department`. Each department lives in its own `dept-*` crate implementing `DepartmentApp`. The host collects manifests, resolves dependencies, and calls `register()` in order. `EngineKind` enum is removed entirely; departments use string IDs. **14** `dept-*` workspace crates: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`, `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`, `dept-support`, `dept-infra`, `dept-messaging` (registered **last** at boot; channel shell until expanded).
+**Consequence:** Adding a department = adding a `dept-*` crate. Zero changes to `rusvel-core`. Each department declares its own routes, tools, capabilities, and system prompt via `DepartmentManifest`. Supersedes the `department-scaling-proposal.md` and the **registration** aspects of ADR-011.

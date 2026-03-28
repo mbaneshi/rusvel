@@ -133,7 +133,7 @@ RUSVEL's architecture is guided by 14 Architecture Decision Records (ADRs). Thes
 
 **Decision:** Adopt shadcn/ui design tokens with oklch color values. Each department gets a color token from the registry.
 
-**Consequence:** Consistent theming across all 12 department UIs. Dark mode is a CSS variable swap.
+**Consequence:** Consistent theming across all department UIs. Dark mode is a CSS variable swap.
 
 
 ## ADR-013: Capability Engine — AI-Driven Entity Creation
@@ -153,6 +153,6 @@ RUSVEL's architecture is guided by 14 Architecture Decision Records (ADRs). Thes
 
 **Context:** The `EngineKind` enum forced `rusvel-core` to know about every department, violating the Open/Closed Principle. Adding a department touched 5+ files.
 
-**Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct. Each department lives in its own `dept-*` crate. `EngineKind` enum is removed entirely; departments use string IDs. 13 `dept-*` crates created.
+**Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct. Each department lives in its own `dept-*` crate. `EngineKind` enum is removed entirely; departments use string IDs. **14** `dept-*` crates including `dept-messaging` (registered last at boot).
 
 **Consequence:** Adding a department = adding a `dept-*` crate. Zero changes to `rusvel-core`. Each department declares its own routes, tools, capabilities, and system prompt via `DepartmentManifest`. Supersedes the registration mechanism of ADR-011.

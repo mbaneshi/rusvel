@@ -1,5 +1,7 @@
 # Chapter 7 — Metrics & Gaps
 
+> **Obsolete snapshot (pre-2026-03-28 refresh).** Tables and counts below do not match the current workspace. **Canonical metrics:** [`../status/current-state.md`](../status/current-state.md). This file is retained for narrative context only.
+
 ## Crate Size Distribution
 
 ### Top 15 by Lines of Rust

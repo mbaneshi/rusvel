@@ -1,5 +1,7 @@
 # RUSVEL — On-Disk Codebase Inspection Report
 
+**See also:** same-date narrative audit [`../audit/audit-2026-03-28.md`](../audit/audit-2026-03-28.md). **Live metrics:** [`../status/current-state.md`](../status/current-state.md).
+
 **Generated:** 2026-03-28  
 **Scope:** Repository tree under `/Users/bm/rusvel` (Rust workspace + referenced surfaces).  
 **Method:** Read critical modules (`rusvel-core`, `rusvel-app`, `rusvel-api`, `rusvel-agent`, `dept-*` boot path), count metrics via `find` / `rg` / `cargo metadata`, cross-check with `docs/design/architecture-v2.md`.

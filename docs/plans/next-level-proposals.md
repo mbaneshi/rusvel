@@ -3,6 +3,8 @@
 > Ecosystem research, tradeoff analysis, and detailed rationale for all enhancements.
 > Date: 2026-03-25 | Revision: 3
 > **Execution plan:** [`sprints.md`](sprints.md) is the single source of truth for sequencing and task tracking.
+>
+> **2026-03-28:** ADR-014 (`DepartmentApp`, string IDs, **`EngineKind` removed**) is **shipped**. Workstream A tables below retain useful ideas but **migration steps 4–6 are done** — verify any task against [`../status/current-state.md`](../status/current-state.md) before acting.
 
 ---
 
@@ -59,28 +61,26 @@ Independent (no ADR-014 dependency):                                      │
 
 ## Workstream A: Architecture Foundation (ADR-014)
 
-### Status: IN PROGRESS
+### Status: FOUNDATION COMPLETE (depth work continues per `sprints.md`)
 
-**Already done:**
-- `rusvel-core/src/department/` — `DepartmentApp` trait, `DepartmentManifest`, `RegistrationContext`, all contribution types (complete)
-- `rusvel-core/src/domain.rs` — `EngineKind::from_department_id()` + `as_department_id()` transitional bridges
-- `crates/dept-content/` — Proof-of-concept `DepartmentApp` impl wrapping content-engine (stub)
-- `crates/dept-forge/` — Proof-of-concept `DepartmentApp` impl wrapping forge-engine (stub)
-- `Cargo.toml` — workspace members added
+**Already done (shipped):**
+- `rusvel-core/src/department/` — `DepartmentApp`, `DepartmentManifest`, `RegistrationContext` (complete)
+- All **`dept-*`** crates + **`boot::installed_departments()`** + `EngineKind` **removed** from codebase (ADR-014)
+- `dept-content` / `dept-forge` and remaining departments registered at boot
 
-**Remaining (from ADR-014 doc, 7-step migration):**
+**ADR-014 migration checklist (historical):**
 
 | Step | What | Status | Effort |
 |------|------|--------|--------|
 | 1. Define contract | `DepartmentApp` trait + manifest types | **Done** | -- |
 | 2. Convert content-engine | Full impl: routes, tools, personas, skills in manifest | **Partial** | 2 days |
 | 3. Convert forge-engine | Full impl: mission tools, 10 personas, forge-specific routes | **Partial** | 2 days |
-| 4. Wire boot sequence | `rusvel-app/main.rs` iterates `INSTALLED_DEPTS`, calls `register()` | Not started | 1 day |
-| 5. Convert remaining depts | Code, Harvest, Flow + 8 stubs → dept-* crates | Not started | 3 days |
-| 6. Remove EngineKind | Delete enum, use string IDs everywhere | Not started | 1 day |
-| 7. Align frontend | Department manifest drives frontend UI tabs/routes | Not started | 2 days |
+| 4. Wire boot sequence | `rusvel-app` boots `DepartmentApp` list | **Done** | -- |
+| 5. Convert remaining depts | All departments → `dept-*` | **Done** | -- |
+| 6. Remove EngineKind | String IDs everywhere | **Done** | -- |
+| 7. Align frontend | Department manifest drives UI tabs/routes | **Partial** | 2 days |
 
-**Total remaining:** ~11 days
+**Total remaining (rough):** polish for rows 2–3 and 7 only — see `current-state.md` / `sprints.md`
 
 **Why first:** Every dept-specific proposal (hooks, permissions, scoped tools, playbooks, CDP, terminal) is cleaner when departments declare their own contributions via manifest instead of hardcoding in `main.rs`.
 

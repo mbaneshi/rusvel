@@ -8,7 +8,7 @@
 ```bash
 cargo build                    # Build all workspace members (54 crates)
 cargo bench -p rusvel-app --bench boot  # Criterion boot slice (SQLite + registry); optional local perf
-cargo test                     # Run full suite (~476 tests; see docs/status/current-state.md)
+cargo test                     # Run full suite from repo root (~554 tests summed; see docs/status/current-state.md)
 cargo run                      # Start API server on :3000 (requires Ollama)
 cargo run -- --help            # Show CLI help
 cargo run -- --mcp             # Start MCP server (stdio JSON-RPC)
@@ -24,7 +24,7 @@ cargo run -- growth list       # List department items
 
 Hexagonal (ports & adapters). See `docs/design/architecture-v2.md`.
 
-- **rusvel-core** — 20 port traits in `ports.rs` (includes five `*Store` subtraits, `BrowserPort`, etc.) + domain types + `DepartmentApp` + `DepartmentManifest`. Zero framework deps.
+- **rusvel-core** — 21 port traits in `ports.rs` (includes five `*Store` subtraits, `ChannelPort`, `BrowserPort`, etc.) + domain types + `DepartmentApp` + `DepartmentManifest`. Zero framework deps.
 - **Adapters** — Implement port traits (rusvel-db, rusvel-llm, rusvel-agent, etc.)
 - **Engines** — Domain logic, depend ONLY on rusvel-core traits (13 engines: 6 wired + 7 skeletons, all migrated to DepartmentApp pattern via ADR-014)
 - **dept-* wrappers** — 14 `dept-*` crates (including dept-flow, dept-messaging), each implementing DepartmentApp
@@ -106,7 +106,7 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 
 ## Wired Features
 
-- **DepartmentApp pattern (ADR-014)** — All 12 departments migrated, each with a `dept-*` wrapper crate
+- **DepartmentApp pattern (ADR-014)** — All 14 `dept-*` crates implement `DepartmentApp` (13 domain-engine-backed + `dept-messaging` shell registered last at boot)
 - **EngineKind enum removed** — String IDs everywhere for department identification
 - **AgentRuntime** — `run_streaming()` + `AgentEvent` replaced ClaudeCliStreamer
 - **LlmStreamEvent** — `stream()` on LlmPort for character-by-character streaming
@@ -115,7 +115,7 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 - **Deferred tool loading** — `tool_search` meta-tool (85% token savings)
 - **22+ registered tools** — 10 built-in (read_file, write_file, edit_file, glob, grep, bash, git_status, git_diff, git_log + tool_search) + 12 engine tools (harvest 5, content 5, code 2)
 - **MCP dispatch** — `--mcp` flag connects to `RusvelMcp::new()` in main.rs
-- **Department Registry** — 12 departments, parameterized API routes, dynamic frontend route
+- **Department Registry** — 14 booted departments, parameterized API routes, dynamic frontend route
 - **Chat** — SSE streaming per department + God Agent chat
 - **CRUD** — Agents, Skills, Rules, MCP Servers, Hooks, Workflows (all departments)
 - **Skills execution** — `resolve_skill()` with `{{input}}` interpolation
@@ -131,7 +131,7 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 - **Onboarding** — CommandPalette, OnboardingChecklist, ProductTour, DeptHelpTooltip components
 - **Workflow Builder** — AgentNode + WorkflowBuilder visual components in frontend
 - **Frontend** — ToolCallCard, ApprovalCard, ApprovalQueue with sidebar badge, manifest-aligned dept nav, /flows page
-- **Domain engines wired** — All 12 departments via DepartmentApp pattern
+- **Domain engines wired** — 13 engines + 14 `DepartmentApp` departments (messaging dept has no separate engine crate yet)
 - **Engine API routes** — 15 engine-specific endpoints (`/api/dept/code/analyze`, `/api/dept/content/draft`, `/api/dept/content/from-code`, etc.)
 - **Engine CLI commands** — `rusvel code analyze`, `rusvel code search`, `rusvel content draft`, `rusvel content from-code`, `rusvel harvest pipeline`
 - **Job queue worker** — Background worker processes CodeAnalyze, ContentPublish, HarvestScan jobs via real engines (session_id scoped)
@@ -147,7 +147,7 @@ frontend/                 SvelteKit 5 + Tailwind 4 (dept/[id], chat, database, f
 ## Three-Tier CLI Interface
 
 ```
-rusvel <dept> <action>     # Tier 1: One-shot commands (12 departments)
+rusvel <dept> <action>     # Tier 1: One-shot commands (subset of departments; see CLI — API/registry lists 14)
 rusvel shell               # Tier 2: Interactive REPL (reedline, autocomplete, history)
 rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 ```
@@ -192,7 +192,7 @@ pnpm test:analyze              # AI-powered visual diff analysis (Claude Vision)
 ## Testing
 
 ```bash
-cargo test                     # Full workspace (~476 tests; counts vary by cargo output)
+cargo test                     # Full workspace from repo root (~554 tests summed; counts vary by cargo output)
 cargo test -p rusvel-core      # Single crate
 cargo test -p forge-engine     # Engine tests (15 tests, use mock ports)
 cargo test -p content-engine   # Content engine (7 tests)
@@ -269,7 +269,7 @@ uv run --with anthropic ...    # One-off with extra deps
 
 ## Stack
 
-- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~62,485 lines Rust under `crates/`, 258 source files — see `docs/status/current-state.md`)
+- Rust edition 2024, SQLite WAL, Axum, Clap 4, reedline, ratatui, tokio (~64,382 lines Rust under `crates/`, 268 source files — see `docs/status/current-state.md`)
 - SvelteKit 5, Tailwind CSS 4, **pnpm** package manager
 - Python scripts: **uv** (pyproject.toml at workspace root)
 - LLM: Ollama (local), Claude API, Claude CLI, OpenAI — all implemented

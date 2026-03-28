@@ -186,17 +186,15 @@ Each block is **additional** to [§3 Base prompt](#3-base-prompt-copy-for-every-
 **Validation:** `cargo check --workspace` and `cargo test -p <each crate touched>`
 ```
 
-#### Task #6 — Remove EngineKind, string IDs
+#### Task #6 — Remove EngineKind, string IDs (**COMPLETED**)
+
+**Do not assign.** Shipped: `EngineKind` is gone; departments use string IDs (ADR-014). Historical block:
 
 ```markdown
-### Task assignment
-- **Task #:** 6
+### Task assignment (archived)
+- **Task #:** 6 — **DONE**
 - **Title:** Remove `EngineKind` enum, use string IDs everywhere
-- **Read first:** `docs/plans/sprints.md`, `docs/design/decisions.md` (ADR-005/014), usages of `EngineKind` in repo
-
-**Allowed paths:** wherever `EngineKind` appears — **expect** wide diff; coordinate with supervisor so no other agent touches same files in parallel.
-
-**Validation:** `cargo test --workspace` (or project convention: `cargo test` per CLAUDE.md)
+- **Verify:** `rg EngineKind crates/` → no matches; see `docs/status/current-state.md`
 ```
 
 ### Track B — Quick wins (parallel)
@@ -263,7 +261,7 @@ Before you merge:
 - [ ] **Validation commands** were run and match the task block (or stricter).
 - [ ] **Allowlist respected** — no surprise edits to unrelated crates.
 - [ ] **Architecture:** no new adapter imports from engines/dept crates.
-- [ ] **If parallel agents** were used: **merge order** documented; no half-finished `EngineKind` removal spanning branches.
+- [ ] **If parallel agents** were used: **merge order** documented (N/A for completed `EngineKind` migration).
 - [ ] **Tests green** on your machine after merge.
 - [ ] Update `sprints.md` **Status** column if you track progress there (optional).
 

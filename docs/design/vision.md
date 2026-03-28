@@ -212,24 +212,11 @@ $ rusvel --tui                   # Full-screen terminal dashboard
 - Loads live data from storage
 - Press `q` or `Esc` to exit
 
-## Current State (as of 2026-03-26)
+## Current State
 
-The vertical slice is proven and significantly expanded:
+**Canonical numbers and wiring** (workspace members, LOC, tests, routes, ports): [`docs/status/current-state.md`](../status/current-state.md).
 
-- **48 crates** (18 foundation + 13 engines + 13 dept-* crates + 4 surfaces)
-- **19 port traits** (14 Port + 5 Store) in rusvel-core with 82 domain types
-- **124 API handler functions** across 23 modules
-- **222 tests** in 30 test binaries, 0 failures
-- **~43,670 lines** of Rust across 185 source files
-- **12+ frontend routes** (home, chat, database browser, dept/[id], flows, knowledge, settings)
-- **5 wired engines** (Forge, Code, Content, Harvest, Flow) with real domain logic
-- **8 stub engines** with department chat via generic agent
-- **13 dept-* crates** implementing `DepartmentApp` trait (ADR-014, EngineKind removed)
-- **22+ registered tools** (10 built-in incl. tool_search + 12 engine)
-- **AgentRuntime streaming** with multi-turn tool loop
-- **ModelTier routing** + CostTracker for smart model selection
-- **6 MCP tools** for Claude Code integration
-- **3-tier CLI** (one-shot + REPL + TUI) fully wired
+At a glance: **54** workspace crates, **21** port traits in `rusvel-core`, **14** booted `DepartmentApp` departments (including `dept-messaging` last in boot order), **13** domain engines, **22+** registered agent tools, **AgentRuntime** streaming, **ModelTier** routing, embedded SvelteKit UI, **3-tier CLI** (one-shot + REPL + TUI), **6** MCP stdio tools.
 
 ## What RUSVEL Is NOT
 

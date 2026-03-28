@@ -1,3 +1,5 @@
+> **COMPLETED — do not run.** `EngineKind` has been **removed** from the codebase (ADR-014). This file is kept for history only. See [`../status/current-state.md`](../status/current-state.md).
+
 You are a RUSVEL implementation agent. Work only inside this repository.
 
 ## Task (from docs/plans/sprints.md Sprint 1)

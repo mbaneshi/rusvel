@@ -34,9 +34,9 @@ See full prompt: **[PASTE-10-terminal-phase1.md](./PASTE-10-terminal-phase1.md)*
 
 ---
 
-## Agent F — Sprint 1 Task 6 (EngineKind) — ALONE
+## Agent F — Sprint 1 Task 6 (EngineKind) — COMPLETED
 
-See full prompt: **[PASTE-06-engine-kind.md](./PASTE-06-engine-kind.md)** — copy the **entire file**. **No other agent on the same branch.**
+**Do not run.** Task #6 is **done** (`EngineKind` removed). Historical prompt: **[PASTE-06-engine-kind.md](./PASTE-06-engine-kind.md)** (banner at top).
 
 ---
 

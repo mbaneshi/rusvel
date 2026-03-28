@@ -1,4 +1,6 @@
 > **NOTE:** Phase 4 (remove EngineKind) completed via ADR-014.
+>
+> **2026-03-28:** Examples below may still mention `EngineKind` — treat as **historical pseudo-code**; runtime uses string department IDs (`DepartmentManifest.id`).
 
 # ADR-011: Config Hierarchy & Department Registry
 

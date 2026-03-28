@@ -133,7 +133,7 @@
 ## Definition of Done for Phase 0
 
 - [x] `cargo build --release` → single binary
-- [x] 48 crates compile (18 foundation + 13 engines + 13 dept-* + 4 surfaces)
+- [x] 54 workspace members compile (see root `Cargo.toml`; includes `dept-messaging`, webhooks, cron, channel, etc.)
 - [x] `rusvel session create "my-project"` → creates session
 - [x] `rusvel forge mission today` → generates daily plan via LLM
 - [x] `rusvel` → opens web dashboard with session view
@@ -149,7 +149,7 @@
 - [x] 5 engines fully wired (Forge, Code, Content, Harvest, Flow)
 - [x] 124 API handler functions across 23 modules
 - [x] 12+ frontend pages including database browser, flows, knowledge
-- [x] DepartmentApp trait + 13 dept-* crates (ADR-014, EngineKind removed)
+- [x] DepartmentApp trait + 14 dept-* crates (ADR-014, EngineKind removed)
 - [x] AgentRuntime streaming with multi-turn tool loop
 - [x] 22+ registered tools (10 built-in incl. tool_search + 12 engine)
 - [x] ModelTier routing + CostTracker

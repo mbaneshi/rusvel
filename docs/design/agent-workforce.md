@@ -4,6 +4,8 @@
 > Status: Proposed
 > Depends on: ADR-014 (Department-as-App), all proposal documents
 > Purpose: Design the agent system that builds RUSVEL itself
+>
+> **2026-03-28:** Shipped code follows **ADR-014** — **`EngineKind` is removed**; use string department IDs. Any instruction below to keep or avoid removing `EngineKind` is **obsolete** (treat as historical proposal text).
 
 ---
 
@@ -137,7 +139,7 @@ cargo check --workspace  # Ensure no downstream breakage
 ```
 
 **Rules**:
-- Keep `EngineKind` temporarily — don't remove yet
+- ~~Keep `EngineKind` temporarily~~ — **N/A:** removed per ADR-014
 - Keep existing `DepartmentRegistry` — new code is additive
 - All structs must derive `Debug, Clone, Serialize, Deserialize`
 - All structs must have `metadata: serde_json::Value` where appropriate (ADR-007)
@@ -165,7 +167,7 @@ Update crates/rusvel-core/src/lib.rs to re-export the department module.
 
 Rules:
 - Do NOT modify any existing traits or structs
-- Do NOT remove EngineKind or DepartmentRegistry
+- ~~Do NOT remove EngineKind~~ — **N/A:** `EngineKind` removed; registry is manifest-driven
 - All new types must derive Debug, Clone, Serialize, Deserialize
 - RegistrationContext registrars are stubs that collect Vec<T>
 - Include unit tests for manifest construction and validation
