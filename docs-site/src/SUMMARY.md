@@ -2,65 +2,50 @@
 
 [RUSVEL](./README.md)
 
----
-
-# Getting Started
-
-- [Installation](./getting-started/installation.md)
-- [First Run](./getting-started/first-run.md)
-- [First Mission](./getting-started/first-mission.md)
-
-# Concepts
-
-- [Sessions](./concepts/sessions.md)
-- [Departments](./concepts/departments.md)
-- [Agents](./concepts/agents.md)
-- [Skills & Rules](./concepts/skills-rules.md)
-- [Workflows](./concepts/workflows.md)
-- [Domain Concepts Map](./concepts/domain-concepts-map.md)
-
-# Departments
-
-- [Forge (Mission)](./departments/forge.md)
-- [Code](./departments/code.md)
-- [Content](./departments/content.md)
-- [Harvest](./departments/harvest.md)
-- [GTM](./departments/gtm.md)
-- [Finance](./departments/finance.md)
-- [Product](./departments/product.md)
-- [Growth](./departments/growth.md)
-- [Distribution](./departments/distro.md)
-- [Legal](./departments/legal.md)
-- [Support](./departments/support.md)
-- [Infra](./departments/infra.md)
-- [Flow](./departments/flow.md)
-- [Messaging](./departments/messaging.md)
-
-# Reference
-
-- [Repository status](./reference/repository-status.md)
-- [CLI](./reference/cli.md)
-- [API](./reference/api.md)
-- [Configuration](./reference/configuration.md)
-
-# Architecture
-
-- [Overview](./architecture/overview.md)
-- [Decisions (ADRs)](./architecture/decisions.md)
-
-# Testing
-
-- [Manual Testing Playbook](./testing/overview.md)
-- [Setup & Prerequisites](./testing/setup.md)
-- [CLI, REPL & TUI](./testing/cli.md)
-- [API Testing](./testing/api.md)
-- [Frontend Testing](./testing/frontend.md)
-- [Engine-Specific Testing](./testing/engines.md)
-- [Smoke Test Checklist](./testing/smoke-checklist.md)
-
-# Engineering
-
-- [Concept Hierarchy](./engineering/concept-hierarchy.md)
-- [Design Patterns](./engineering/design-patterns.md)
-- [Testing Plan](./engineering/testing-plan.md)
-- [Refactoring Plan](./engineering/refactoring-plan.md)
+- [Getting Started](./getting-started/README.md)
+  - [Installation](./getting-started/installation.md)
+  - [First Run](./getting-started/first-run.md)
+  - [First Mission](./getting-started/first-mission.md)
+- [Concepts](./concepts/README.md)
+  - [Sessions](./concepts/sessions.md)
+  - [Departments](./concepts/departments.md)
+  - [Agents](./concepts/agents.md)
+  - [Skills & Rules](./concepts/skills-rules.md)
+  - [Workflows](./concepts/workflows.md)
+  - [Domain Concepts Map](./concepts/domain-concepts-map.md)
+- [Departments](./departments/README.md)
+  - [Forge (Mission)](./departments/forge.md)
+  - [Code](./departments/code.md)
+  - [Content](./departments/content.md)
+  - [Harvest](./departments/harvest.md)
+  - [GTM](./departments/gtm.md)
+  - [Finance](./departments/finance.md)
+  - [Product](./departments/product.md)
+  - [Growth](./departments/growth.md)
+  - [Distribution](./departments/distro.md)
+  - [Legal](./departments/legal.md)
+  - [Support](./departments/support.md)
+  - [Infra](./departments/infra.md)
+  - [Flow](./departments/flow.md)
+  - [Messaging](./departments/messaging.md)
+- [Reference](./reference/README.md)
+  - [Repository Status](./reference/repository-status.md)
+  - [CLI](./reference/cli.md)
+  - [API](./reference/api.md)
+  - [Configuration](./reference/configuration.md)
+- [Architecture](./architecture/README.md)
+  - [Overview](./architecture/overview.md)
+  - [Decisions (ADRs)](./architecture/decisions.md)
+- [Testing](./testing/README.md)
+  - [Manual Testing Playbook](./testing/overview.md)
+  - [Setup & Prerequisites](./testing/setup.md)
+  - [CLI, REPL & TUI](./testing/cli.md)
+  - [API Testing](./testing/api.md)
+  - [Frontend Testing](./testing/frontend.md)
+  - [Engine-Specific Testing](./testing/engines.md)
+  - [Smoke Test Checklist](./testing/smoke-checklist.md)
+- [Engineering](./engineering/README.md)
+  - [Concept Hierarchy](./engineering/concept-hierarchy.md)
+  - [Design Patterns](./engineering/design-patterns.md)
+  - [Testing Plan](./engineering/testing-plan.md)
+  - [Refactoring Plan](./engineering/refactoring-plan.md)

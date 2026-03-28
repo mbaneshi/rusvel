@@ -14,3 +14,8 @@ preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/mbaneshi/rusvel"
 edit-url-template = "https://github.com/mbaneshi/rusvel/edit/main/docs-site/{path}"
 site-url = "/rusvel/"
+no-section-label = true
+
+[output.html.fold]
+enable = true
+level = 0
