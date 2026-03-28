@@ -29,6 +29,7 @@ pub mod knowledge;
 pub mod mcp_servers;
 pub mod pipeline_runner;
 pub mod playbooks;
+pub(crate) mod request_id;
 pub mod routes;
 pub mod rules;
 pub mod skills;
@@ -558,6 +559,7 @@ pub fn build_router_with_frontend(
         auth::bearer_auth,
     ))
     .layer(TraceLayer::new_for_http())
+    .layer(axum::middleware::from_fn(request_id::request_id_middleware))
 }
 
 /// Start the HTTP server on the given address.
