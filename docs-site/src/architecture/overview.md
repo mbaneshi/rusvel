@@ -46,7 +46,7 @@ RUSVEL follows **hexagonal architecture** (ports and adapters). The core princip
 
 The heart of the system. Contains:
 
-- **20 port traits** in `ports.rs` — includes five `*Store` subtraits under the storage model, **`BrowserPort`**, and primary ports (LlmPort, AgentPort, ToolPort, EventPort, StoragePort, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort). `DepartmentApp` is defined under `department/`.
+- **21 port traits** in `ports.rs` — includes five `*Store` subtraits under the storage model, **`BrowserPort`**, **`ChannelPort`**, and primary ports (LlmPort, AgentPort, ToolPort, EventPort, StoragePort, MemoryPort, JobPort, SessionPort, AuthPort, ConfigPort, EmbeddingPort, VectorStorePort, DeployPort, TerminalPort). `DepartmentApp` is defined under `department/`.
 - **~100** `pub struct` / `pub enum` in `domain.rs`, plus shared types — Session, Goal, Event, Agent, Content, Opportunity, Contact, Task, DepartmentManifest, etc.
 - Zero framework dependencies
 
@@ -95,7 +95,7 @@ Domain logic crates. Each engine depends **only** on `rusvel-core` traits:
 | `infra-engine` | Deployment, monitoring, incident response |
 | `flow-engine` | DAG workflow engine: petgraph, code/condition/agent nodes |
 
-Each engine also has a corresponding **`dept-*` wrapper crate** (e.g. `dept-forge`, `dept-code`, `dept-finance`) that implements the `DepartmentApp` trait (ADR-014), declaring the department's manifest, tools, and registration logic. There are 13 `dept-*` crates (12 departments + `dept-flow` for the flow engine).
+Each engine also has a corresponding **`dept-*` wrapper crate** (e.g. `dept-forge`, `dept-code`, `dept-finance`) that implements the `DepartmentApp` trait (ADR-014), declaring the department's manifest, tools, and registration logic. There are 14 `dept-*` crates (13 engine-backed departments + `dept-messaging`). Of the 13 engines, 6 are fully wired (Forge, Code, Content, Harvest, GTM, Flow) and 7 are skeletons (Finance, Product, Growth, Distro, Legal, Support, Infra).
 
 ### Layer 4: Surfaces
 
@@ -118,7 +118,7 @@ The binary entry point. It constructs all adapters, injects them into engines, a
 ```
 rusvel/
 ├── crates/                   54 workspace members
-│   ├── rusvel-core/          20 port traits in ports.rs + domain types + DepartmentApp
+│   ├── rusvel-core/          21 port traits in ports.rs + domain types + DepartmentApp
 │   ├── rusvel-db/            SQLite WAL + 5 canonical stores
 │   ├── rusvel-llm/           4 LLM providers
 │   ├── rusvel-agent/         Agent runtime (LLM+Tool+Memory)
@@ -152,7 +152,7 @@ rusvel/
 │   ├── flow-engine/          DAG workflow engine
 │   ├── dept-forge/           DepartmentApp wrapper for Forge
 │   ├── dept-code/            DepartmentApp wrapper for Code
-│   ├── dept-harvest/         ... (13 dept-* wrappers total)
+│   ├── dept-harvest/         ... (14 dept-* wrappers total)
 │   ├── dept-flow/            DepartmentApp wrapper for Flow
 │   ├── rusvel-api/           Axum HTTP API
 │   ├── rusvel-cli/           Clap CLI + REPL
@@ -160,7 +160,7 @@ rusvel/
 │   ├── rusvel-mcp/           MCP server (stdio JSON-RPC)
 │   └── rusvel-app/           Binary entry point
 ├── frontend/                 SvelteKit 5 + Tailwind 4
-├── Cargo.toml                Workspace manifest (50 members)
+├── Cargo.toml                Workspace manifest (54 members)
 └── CLAUDE.md                 Project conventions
 ```
 
@@ -176,7 +176,7 @@ rusvel/
 
 ## Port traits (`rusvel-core/src/ports.rs`)
 
-There are **20** `pub trait` definitions in `ports.rs` (including the five `*Store` subtraits). The table below lists the main contracts; see the source for the exact set.
+There are **21** `pub trait` definitions in `ports.rs` (including the five `*Store` subtraits and `ChannelPort`). The table below lists the main contracts; see the source for the exact set.
 
 | Port | Responsibility |
 |------|---------------|
@@ -200,3 +200,4 @@ There are **20** `pub trait` definitions in `ports.rs` (including the five `*Sto
 | `DeployPort` | Deployment operations |
 | `TerminalPort` | Terminal interaction and display |
 | `BrowserPort` | Browser/CDP observation and actions |
+| `ChannelPort` | Outbound notification channels (Telegram, etc.) |

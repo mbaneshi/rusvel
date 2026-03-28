@@ -107,7 +107,7 @@ pub struct DepartmentManifest {
 }
 ```
 
-The host (`rusvel-app`) collects manifests from all 13 `dept-*` crates at boot to generate the `DepartmentRegistry`. Adding a new department means adding a new `dept-*` crate -- zero changes to `rusvel-core`.
+The host (`rusvel-app`) collects manifests from all 14 `dept-*` crates at boot to generate the `DepartmentRegistry`. Adding a new department means adding a new `dept-*` crate -- zero changes to `rusvel-core`.
 
 ## Environment Variables
 
@@ -118,6 +118,8 @@ The host (`rusvel-app`) collects manifests from all 13 `dept-*` crates at boot t
 | `RUSVEL_DB_PATH` | Override database file path |
 | `RUSVEL_CONFIG_DIR` | Override config directory (default: `~/.rusvel`) |
 | `RUST_LOG` | Logging level (e.g., `info`, `debug`, `rusvel_api=debug`) |
+| `RUSVEL_RATE_LIMIT` | API rate limit in requests/second (default: 100) |
+| `RUSVEL_API_READ_TOKEN` | Read-only API bearer token (GET/HEAD/OPTIONS only) |
 
 ## Database
 

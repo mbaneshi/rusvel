@@ -32,6 +32,8 @@
 - [Legal](./departments/legal.md)
 - [Support](./departments/support.md)
 - [Infra](./departments/infra.md)
+- [Flow](./departments/flow.md)
+- [Messaging](./departments/messaging.md)
 
 # Reference
 

@@ -3,9 +3,9 @@
 
 RUSVEL exposes a JSON REST API on port **3000** via Axum. All endpoints use the `/api/` prefix. CORS is enabled for all origins.
 
-**Scale (verify on `main`):** the main router in `crates/rusvel-api/src/lib.rs` registers **105** `.route(` chains. Handler logic is split across **26** modules (one `*.rs` per module, excluding `lib.rs`). That is **not** the same as “105 HTTP methods” — a single chain can register `get().post()`.
+**Scale (verify on `main`):** the main router in `crates/rusvel-api/src/lib.rs` registers **132** `.route(` chains. Handler logic is split across **31** modules (one `*.rs` per module, excluding `lib.rs`). That is **not** the same as “132 HTTP methods” — a single chain can register `get().post()`.
 
-**Router modules:** `agents`, `analytics`, `approvals`, `browser`, `build_cmd`, `capability`, `chat`, `config`, `db_routes`, `department`, `engine_routes`, `flow_routes`, `help`, `hook_dispatch`, `hooks`, `kits`, `knowledge`, `mcp_servers`, `playbooks`, `routes`, `rules`, `skills`, `system`, `terminal`, `visual_report`, `workflows`.
+**Router modules:** `agents`, `analytics`, `approvals`, `auth`, `browser`, `build_cmd`, `capability`, `chat`, `config`, `cron`, `db_routes`, `department`, `engine_routes`, `flow_routes`, `help`, `hook_dispatch`, `hooks`, `jobs`, `kits`, `knowledge`, `mcp_servers`, `pipeline_runner`, `playbooks`, `routes`, `rules`, `skills`, `system`, `terminal`, `visual_report`, `webhooks`, `workflows`.
 
 For canonical metrics and gaps, see **[Repository status](./repository-status.md)**.
 
@@ -48,7 +48,7 @@ For canonical metrics and gaps, see **[Repository status](./repository-status.md
 
 ## Departments
 
-Replace `{dept}` with: `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`.
+Replace `{dept}` with: `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`, `flow`, `messaging`.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -141,7 +141,7 @@ Replace `{dept}` with: `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, 
 
 ## Agents, skills, rules, workflows, MCP, hooks
 
-Standard REST under `/api/agents`, `/api/skills`, `/api/rules`, `/api/workflows`, `/api/mcp-servers`, `/api/hooks`. Workflows: `POST /api/workflows/{id}/run`. Hooks: `GET /api/hooks/events` for event types.
+Standard REST under `/api/agents`, `/api/skills`, `/api/rules`, `/api/workflows`, `/api/mcp-servers`, `/api/hooks`. Individual resource endpoints include `GET /api/mcp-servers/{id}` and `GET /api/hooks/{id}`. Workflows: `POST /api/workflows/{id}/run`. Hooks: `GET /api/hooks/events` for event types.
 
 ## Capability and help
 

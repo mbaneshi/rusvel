@@ -3,7 +3,7 @@
 > **The Solo Builder's AI-Powered Virtual Agency**
 > One binary, one human, infinite leverage.
 
-RUSVEL is an AI-powered virtual agency built with **Rust + SvelteKit**. It gives a single person the leverage of an entire agency through **12 autonomous departments**, each powered by AI agents.
+RUSVEL is an AI-powered virtual agency built with **Rust + SvelteKit**. It gives a single person the leverage of an entire agency through **14 autonomous departments**, each powered by AI agents.
 
 ## Quick Start
 
@@ -17,11 +17,11 @@ cargo run
 ## What's Inside
 
 - **God Agent** — Your AI companion that knows your identity, products, and mission
-- **12 Departments** — Forge, Code, Content, Harvest, GTM, Finance, Product, Growth, Distribution, Legal, Support, Infra
+- **14 Departments** — Forge, Code, Content, Harvest, GTM, Finance, Product, Growth, Distribution, Legal, Support, Infra, Flow, Messaging
 - **Knowledge/RAG** — fastembed + lancedb for semantic search over your documents
 - **Self-Improvement** — The app can analyze and improve its own codebase
-- **54 workspace members** — Hexagonal architecture; **20** port traits in `rusvel-core/src/ports.rs` (including five `*Store` subtraits and `BrowserPort`)
-- **~476 tests** (~61 test targets); full `cargo test` passes in a normal dev environment
+- **54 workspace members** — Hexagonal architecture; **21** port traits in `rusvel-core/src/ports.rs` (15 top-level + 5 `*Store` subtraits + `ChannelPort`)
+- **~554 tests**; full `cargo test` passes in a normal dev environment
 
 See **[Repository status](./reference/repository-status.md)** for canonical metrics and links to `docs/status/current-state.md` on GitHub.
 
@@ -40,7 +40,9 @@ God Agent (Chat — full authority + visibility)
 ├── Distribution — SEO, marketplace, affiliates
 ├── Legal      — Contracts, compliance, IP
 ├── Support    — Tickets, knowledge base, NPS
-└── Infra      — Deploy, monitor, incidents
+├── Infra      — Deploy, monitor, incidents
+├── Flow       — DAG workflow engine
+└── Messaging  — Notification channels
 ```
 
 Each department is **autonomous** — own config, own chat, own agents, own events. God sees everything and can orchestrate any combination.
