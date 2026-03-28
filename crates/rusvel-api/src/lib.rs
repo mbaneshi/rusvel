@@ -578,13 +578,16 @@ pub fn build_router_with_frontend(
     .layer(axum::middleware::from_fn(request_id::request_id_middleware))
 }
 
-/// Start the HTTP server on the given address.
+/// Start the HTTP server on the given address with graceful shutdown.
 pub async fn start_server(
     router: Router,
     addr: SocketAddr,
+    shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("RUSVEL API listening on {addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, router).await?;
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown)
+        .await?;
     Ok(())
 }
