@@ -1557,8 +1557,11 @@ async fn main() -> Result<()> {
             let tx = shutdown_tx.clone();
             async move {
                 let _ = tokio::signal::ctrl_c().await;
-                tracing::info!("Shutdown signal received");
+                tracing::info!("Shutdown signal received — press Ctrl+C again to force quit");
                 let _ = tx.send(true);
+                let _ = tokio::signal::ctrl_c().await;
+                tracing::info!("Force quit");
+                std::process::exit(1);
             }
         });
 
@@ -1686,8 +1689,12 @@ async fn main() -> Result<()> {
 
         tokio::spawn(async move {
             let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("Shutdown signal received");
+            tracing::info!("Shutdown signal received — press Ctrl+C again to force quit");
             let _ = shutdown_tx.send(true);
+            // Second Ctrl+C → immediate exit
+            let _ = tokio::signal::ctrl_c().await;
+            tracing::info!("Force quit");
+            std::process::exit(1);
         });
 
         server.await.map_err(|e| anyhow::anyhow!("{e}"))?;
