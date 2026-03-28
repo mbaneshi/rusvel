@@ -282,7 +282,9 @@ impl AuthPort for StubAuth {
         Ok(None)
     }
     async fn refresh(&self, _: &str) -> Result<Credential> {
-        Err(rusvel_core::error::RusvelError::Unauthorized("no credential".into()))
+        Err(rusvel_core::error::RusvelError::Unauthorized(
+            "no credential".into(),
+        ))
     }
     async fn delete_credential(&self, _: &str) -> Result<()> {
         Ok(())
@@ -344,7 +346,9 @@ macro_rules! test_department_contract {
             async fn register_populates_context() {
                 let dept = <$dept_type>::default();
                 let mut ctx = build_test_context();
-                dept.register(&mut ctx).await.expect("register should succeed");
+                dept.register(&mut ctx)
+                    .await
+                    .expect("register should succeed");
                 assert!(
                     ctx.tools.len() >= $min_tools,
                     "{}: expected >= {} tools, got {}",
@@ -357,11 +361,15 @@ macro_rules! test_department_contract {
             #[tokio::test]
             async fn shutdown_ok() {
                 let dept = <$dept_type>::default();
-                dept.shutdown().await.expect("shutdown before register should be ok");
+                dept.shutdown()
+                    .await
+                    .expect("shutdown before register should be ok");
 
                 let mut ctx = build_test_context();
                 dept.register(&mut ctx).await.expect("register");
-                dept.shutdown().await.expect("shutdown after register should be ok");
+                dept.shutdown()
+                    .await
+                    .expect("shutdown after register should be ok");
             }
 
             #[tokio::test]
@@ -379,7 +387,8 @@ macro_rules! test_department_contract {
                     assert!(
                         tool.name.starts_with($expected_id),
                         "tool '{}' should be namespaced under '{}'",
-                        tool.name, $expected_id
+                        tool.name,
+                        $expected_id
                     );
                 }
             }
@@ -393,16 +402,51 @@ macro_rules! test_department_contract {
 
 test_department_contract!(forge, dept_forge::ForgeDepartment, "forge", min_tools = 5);
 test_department_contract!(code, dept_code::CodeDepartment, "code", min_tools = 2);
-test_department_contract!(content, dept_content::ContentDepartment, "content", min_tools = 2);
-test_department_contract!(harvest, dept_harvest::HarvestDepartment, "harvest", min_tools = 0);
+test_department_contract!(
+    content,
+    dept_content::ContentDepartment,
+    "content",
+    min_tools = 2
+);
+test_department_contract!(
+    harvest,
+    dept_harvest::HarvestDepartment,
+    "harvest",
+    min_tools = 0
+);
 test_department_contract!(flow, dept_flow::FlowDepartment, "flow", min_tools = 7);
 test_department_contract!(gtm, dept_gtm::GtmDepartment, "gtm", min_tools = 5);
-test_department_contract!(finance, dept_finance::FinanceDepartment, "finance", min_tools = 4);
-test_department_contract!(product, dept_product::ProductDepartment, "product", min_tools = 4);
-test_department_contract!(growth, dept_growth::GrowthDepartment, "growth", min_tools = 4);
-test_department_contract!(distro, dept_distro::DistroDepartment, "distro", min_tools = 4);
+test_department_contract!(
+    finance,
+    dept_finance::FinanceDepartment,
+    "finance",
+    min_tools = 4
+);
+test_department_contract!(
+    product,
+    dept_product::ProductDepartment,
+    "product",
+    min_tools = 4
+);
+test_department_contract!(
+    growth,
+    dept_growth::GrowthDepartment,
+    "growth",
+    min_tools = 4
+);
+test_department_contract!(
+    distro,
+    dept_distro::DistroDepartment,
+    "distro",
+    min_tools = 4
+);
 test_department_contract!(legal, dept_legal::LegalDepartment, "legal", min_tools = 4);
-test_department_contract!(support, dept_support::SupportDepartment, "support", min_tools = 4);
+test_department_contract!(
+    support,
+    dept_support::SupportDepartment,
+    "support",
+    min_tools = 4
+);
 test_department_contract!(infra, dept_infra::InfraDepartment, "infra", min_tools = 4);
 test_department_contract!(
     messaging,

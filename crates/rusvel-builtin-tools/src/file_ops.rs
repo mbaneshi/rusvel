@@ -343,6 +343,11 @@ mod tests {
     use super::*;
     use rusvel_core::ports::ToolPort;
 
+    /// Temp dir under process `current_dir` so `validate_path` (cwd-based sandbox) accepts paths.
+    fn test_tempdir() -> tempfile::TempDir {
+        tempfile::tempdir_in(std::env::current_dir().expect("cwd")).expect("tempdir")
+    }
+
     fn extract_text(content: &Content) -> String {
         content
             .parts
@@ -357,7 +362,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_file_works() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = test_tempdir();
         let file = dir.path().join("test.txt");
         std::fs::write(&file, "line1\nline2\nline3\n").unwrap();
 
@@ -377,7 +382,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_and_read_roundtrip() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = test_tempdir();
         let file = dir.path().join("out.txt");
 
         let registry = ToolRegistry::new();
@@ -397,7 +402,7 @@ mod tests {
 
     #[tokio::test]
     async fn edit_file_replaces() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = test_tempdir();
         let file = dir.path().join("edit.txt");
         std::fs::write(&file, "foo bar baz").unwrap();
 
@@ -422,7 +427,7 @@ mod tests {
 
     #[tokio::test]
     async fn glob_finds_files() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = test_tempdir();
         std::fs::write(dir.path().join("a.rs"), "").unwrap();
         std::fs::write(dir.path().join("b.rs"), "").unwrap();
         std::fs::write(dir.path().join("c.txt"), "").unwrap();
