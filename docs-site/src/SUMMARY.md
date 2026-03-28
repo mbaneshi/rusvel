@@ -47,3 +47,20 @@
 
 - [Overview](./architecture/overview.md)
 - [Decisions (ADRs)](./architecture/decisions.md)
+
+# Testing
+
+- [Manual Testing Playbook](./testing/overview.md)
+- [Setup & Prerequisites](./testing/setup.md)
+- [CLI, REPL & TUI](./testing/cli.md)
+- [API Testing](./testing/api.md)
+- [Frontend Testing](./testing/frontend.md)
+- [Engine-Specific Testing](./testing/engines.md)
+- [Smoke Test Checklist](./testing/smoke-checklist.md)
+
+# Engineering
+
+- [Concept Hierarchy](./engineering/concept-hierarchy.md)
+- [Design Patterns](./engineering/design-patterns.md)
+- [Testing Plan](./engineering/testing-plan.md)
+- [Refactoring Plan](./engineering/refactoring-plan.md)
