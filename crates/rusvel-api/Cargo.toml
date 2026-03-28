@@ -24,7 +24,7 @@ rusvel-webhook = { workspace = true }
 rusvel-cron = { workspace = true }
 rusvel-channel = { workspace = true }
 axum = { workspace = true }
-tower = { workspace = true }
+tower = { workspace = true, features = ["limit", "buffer"] }
 tower-http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

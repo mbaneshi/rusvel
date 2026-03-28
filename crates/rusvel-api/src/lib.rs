@@ -43,12 +43,13 @@ pub mod workflows;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::http::{HeaderValue, Method};
+use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
@@ -539,6 +540,11 @@ pub fn build_router_with_frontend(
         "http://localhost:5173".parse::<HeaderValue>().unwrap(),
         "http://localhost:3000".parse::<HeaderValue>().unwrap(),
     ];
+    let rate_limit: u64 = std::env::var("RUSVEL_RATE_LIMIT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100);
+
     app.layer(
         CorsLayer::new()
             .allow_origin(allowed_origins)
@@ -553,6 +559,14 @@ pub fn build_router_with_frontend(
                 axum::http::header::CONTENT_TYPE,
                 axum::http::header::AUTHORIZATION,
             ]),
+    )
+    .layer(
+        ServiceBuilder::new()
+            .layer(axum::error_handling::HandleErrorLayer::new(|_| async {
+                axum::http::StatusCode::TOO_MANY_REQUESTS
+            }))
+            .buffer(64)
+            .rate_limit(rate_limit, Duration::from_secs(1)),
     )
     .layer(axum::middleware::from_fn_with_state(
         shared.clone(),
