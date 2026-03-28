@@ -70,6 +70,7 @@ edition = "2024"
 license = "MIT"
 authors = ["Mehdi Baneshi <mehdi@mbaneshi.click>"]
 repository = "https://github.com/mbaneshi/rusvel"
+publish = false
 
 [workspace.dependencies]
 # Note: Some transitive dependency duplicates exist (hyper, http, rustls,
