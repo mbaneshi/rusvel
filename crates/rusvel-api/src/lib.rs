@@ -579,6 +579,9 @@ pub fn build_router_with_frontend(
 }
 
 /// Start the HTTP server on the given address with graceful shutdown.
+///
+/// After the shutdown signal fires, in-flight connections (e.g. SSE streams)
+/// get 5 seconds to finish before the process force-exits.
 pub async fn start_server(
     router: Router,
     addr: SocketAddr,
@@ -586,8 +589,26 @@ pub async fn start_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("RUSVEL API listening on {addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    let (graceful_tx, graceful_rx) = tokio::sync::oneshot::channel::<()>();
+
+    // When the shutdown signal fires, trigger graceful shutdown then start a
+    // hard-exit timer so long-lived SSE connections can't block forever.
+    tokio::spawn(async move {
+        shutdown.await;
+        let _ = graceful_tx.send(());
+        tracing::info!("Graceful shutdown started — force exit in 5s");
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tracing::info!("Force exit: in-flight connections did not close in time");
+        std::process::exit(0);
+    });
+
+    let shutdown_signal = async move {
+        let _ = graceful_rx.await;
+    };
+
     axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown)
+        .with_graceful_shutdown(shutdown_signal)
         .await?;
     Ok(())
 }
