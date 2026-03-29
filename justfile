@@ -46,9 +46,28 @@ ci: fmt-check lint test
 serve:
     cargo run
 
-# Start dev frontend on :5173
+# Hot-reload dev: backend auto-rebuilds on Rust changes, frontend HMR on :5173
+# Run in two terminals: `just dev-backend` and `just dev-frontend`
+dev-backend:
+    cargo watch -x run -w crates -w Cargo.toml --delay 1
+
+# Start dev frontend on :5173 (HMR, proxies API to :3000)
 dev-frontend:
     cd frontend && pnpm dev
+
+# Start both backend + frontend dev servers (requires a terminal multiplexer)
+dev:
+    @echo "Starting RUSVEL dev mode..."
+    @echo "  Backend: cargo-watch on :3000 (auto-rebuild on Rust changes)"
+    @echo "  Frontend: SvelteKit HMR on :5173"
+    @echo ""
+    @echo "Run in two terminals:"
+    @echo "  just dev-backend"
+    @echo "  just dev-frontend"
+    @echo ""
+    @echo "Or in one terminal with Zellij:"
+    @echo "  zellij run -- just dev-backend &"
+    @echo "  zellij run -- just dev-frontend"
 
 # Build frontend for embedding
 build-frontend:

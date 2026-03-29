@@ -94,7 +94,7 @@
 		term = new Terminal({
 			cursorBlink: true,
 			fontSize: 13,
-			fontFamily: 'ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace',
+			fontFamily: '"JetBrainsMono Nerd Font", "FiraCode Nerd Font", "CaskaydiaCove Nerd Font", "Hack Nerd Font", "MesloLGS NF", ui-monospace, "Cascadia Code", "Fira Code", Menlo, monospace',
 			theme: {
 				background: '#09090b',
 				foreground: '#fafafa',
@@ -114,7 +114,10 @@
 		fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
 		term.open(termEl);
-		fitAddon.fit();
+		// Defer initial fit so the container has final layout dimensions
+		requestAnimationFrame(() => {
+			fitAddon?.fit();
+		});
 
 		term.onData((data: string) => {
 			if (ws?.readyState === WebSocket.OPEN) {
@@ -142,13 +145,13 @@
 	});
 </script>
 
-<div class="flex h-full min-h-[240px] flex-col rounded-md border border-border bg-[#09090b]">
+<div class="flex h-full w-full min-h-[240px] flex-col rounded-md border border-border bg-[#09090b]">
 	{#if error}
 		<div class="border-b border-red-500/20 bg-red-500/5 px-3 py-1.5 text-[10px] text-red-500">
 			{error}
 		</div>
 	{/if}
-	<div class="flex min-h-0 flex-1 p-1" bind:this={termEl}></div>
+	<div class="min-h-0 min-w-0 flex-1 overflow-hidden p-1" bind:this={termEl}></div>
 	<div
 		class="flex items-center justify-end gap-2 border-t border-border px-2 py-1 text-[10px] text-muted-foreground"
 	>

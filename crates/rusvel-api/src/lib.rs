@@ -597,21 +597,16 @@ pub async fn start_server(
     let (graceful_tx, graceful_rx) = tokio::sync::oneshot::channel::<()>();
 
     // When the shutdown signal fires, trigger graceful shutdown then start a
-    // hard-exit timer so long-lived SSE connections can't block forever.
+    // hard-exit timer on a real OS thread (immune to tokio runtime shutdown).
     tokio::spawn(async move {
         shutdown.await;
         let _ = graceful_tx.send(());
         tracing::info!("Graceful shutdown started — force exit in 3s");
-        // Race: second Ctrl+C or 3s timeout — whichever comes first
-        tokio::select! {
-            _ = tokio::signal::ctrl_c() => {
-                tracing::info!("Force quit (second Ctrl+C)");
-            }
-            _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
-                tracing::info!("Force exit: in-flight connections did not close in time");
-            }
-        }
-        std::process::exit(0);
+        // OS thread guarantees the timer fires even if tokio is shutting down
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            std::process::exit(0);
+        });
     });
 
     let shutdown_signal = async move {
