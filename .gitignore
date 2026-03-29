@@ -49,3 +49,6 @@ docs-site/book/
 
 # Local OpenClaw checkout (not part of RUSVEL source)
 openclaw/
+
+# Local repo checkouts / reference clones (not part of RUSVEL source)
+repos/
