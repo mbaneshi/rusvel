@@ -1,13 +1,12 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { activeSession } from '$lib/stores';
 	import DeptTerminal from '$lib/components/DeptTerminal.svelte';
 	import { STANDALONE_TERMINAL_DEPT_ID } from '$lib/terminalConstants';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
-	activeSession.subscribe((v) => (currentSession = v));
-
 	let terminalPaneId = $state<string | null>(null);
-	let terminalPaneForKey = $state<string | null>(null);
 	let terminalLoading = $state(false);
 	let terminalErr = $state('');
 
@@ -18,43 +17,37 @@
 		return `${protocol}//${hostname}${apiPort ? `:${apiPort}` : ''}`;
 	}
 
-	$effect(() => {
-		const sessionId = currentSession?.id;
-		if (!sessionId) {
-			terminalPaneId = null;
-			terminalPaneForKey = null;
-			terminalErr = '';
-			terminalLoading = false;
-			return;
-		}
-
-		const key = `${sessionId}:${STANDALONE_TERMINAL_DEPT_ID}`;
-		if (terminalPaneForKey === key && terminalPaneId) return;
-
-		let cancelled = false;
+	async function openPane(sessionId: string): Promise<void> {
 		terminalLoading = true;
 		terminalErr = '';
-		const url = `${apiBase()}/api/terminal/dept/${encodeURIComponent(STANDALONE_TERMINAL_DEPT_ID)}?session_id=${encodeURIComponent(sessionId)}`;
-		fetch(url)
-			.then((r) => {
-				if (!r.ok) return r.text().then((t) => Promise.reject(new Error(t || r.statusText)));
-				return r.json();
-			})
-			.then((j) => {
-				if (!cancelled && j.pane_id) {
-					terminalPaneId = j.pane_id;
-					terminalPaneForKey = key;
-				}
-			})
-			.catch((e: unknown) => {
-				if (!cancelled) terminalErr = e instanceof Error ? e.message : 'Failed to open terminal';
-			})
-			.finally(() => {
-				if (!cancelled) terminalLoading = false;
-			});
-		return () => {
-			cancelled = true;
-		};
+		try {
+			const url = `${apiBase()}/api/terminal/dept/${encodeURIComponent(STANDALONE_TERMINAL_DEPT_ID)}?session_id=${encodeURIComponent(sessionId)}`;
+			const r = await fetch(url);
+			if (!r.ok) {
+				const t = await r.text();
+				throw new Error(t || r.statusText);
+			}
+			const j = await r.json();
+			if (j.pane_id) terminalPaneId = j.pane_id;
+		} catch (e: unknown) {
+			terminalErr = e instanceof Error ? e.message : 'Failed to open terminal';
+		} finally {
+			terminalLoading = false;
+		}
+	}
+
+	onMount(() => {
+		const unsub = activeSession.subscribe((v) => {
+			currentSession = v;
+			if (v?.id) {
+				openPane(v.id);
+			} else {
+				terminalPaneId = null;
+				terminalErr = '';
+				terminalLoading = false;
+			}
+		});
+		return unsub;
 	});
 </script>
 

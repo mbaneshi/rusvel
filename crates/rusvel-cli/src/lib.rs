@@ -52,17 +52,28 @@ fn save_active_session(id: &SessionId) -> Result<()> {
 
 /// RUSVEL — the AI-native solo-founder workbench.
 #[derive(Parser, Debug)]
-#[command(name = "rusvel", version, about, long_about = None)]
+#[command(
+    name = "rusvel",
+    version,
+    long_about = "RUSVEL — the AI-native solo-founder workbench.\n\n\
+        Run with no arguments to start the web UI at http://localhost:3000.\n\n\
+        Quick start:\n  \
+          rusvel                      Start web server + UI on http://localhost:3000\n  \
+          rusvel shell                Interactive REPL with autocomplete\n  \
+          rusvel --tui                Terminal dashboard (4-panel layout)\n  \
+          rusvel forge mission today  Generate a daily plan\n  \
+          rusvel <dept> status        Check any department's status"
+)]
 pub struct Cli {
-    /// Start the MCP server (stdio JSON-RPC) instead of the web server.
+    /// Start MCP server over stdio (JSON-RPC) for Claude Desktop / editors.
     #[arg(long)]
     pub mcp: bool,
 
-    /// Serve MCP over HTTP on the main web server (POST /mcp, GET /mcp/sse) instead of stdio.
+    /// Start web server with MCP over HTTP (POST /mcp, GET /mcp/sse) on :3000.
     #[arg(long)]
     pub mcp_http: bool,
 
-    /// Launch the TUI dashboard.
+    /// Launch the TUI dashboard in the terminal (ratatui, press q to exit).
     #[arg(long)]
     pub tui: bool,
 
@@ -72,78 +83,81 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Manage workspace sessions.
+    // ── Core ─────────────────────────────────────────────────────
+    /// Manage workspace sessions (create, list, switch).
     Session {
         #[command(subcommand)]
         action: SessionCmd,
     },
-    /// Forge engine: mission planning and goals.
+    /// AI agent orchestration — missions, goals, daily plans, reviews.
     Forge {
         #[command(subcommand)]
         action: ForgeCmd,
     },
     /// Cross-department executive brief (daily digest).
     Brief,
-    /// Launch interactive REPL shell.
+    /// Interactive REPL shell with autocomplete and history (Ctrl+R).
     Shell,
 
-    // ── Department subcommands (Tier 1) ──
-    /// Finance: ledger, runway, tax.
-    Finance {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Growth: funnels, cohorts, KPIs.
-    Growth {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Distribution: marketplace, SEO, affiliates.
-    Distro {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Legal: contracts, compliance, IP.
-    Legal {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Support: tickets, knowledge base, NPS.
-    Support {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Infrastructure: deploys, monitoring, incidents.
-    Infra {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Product: roadmap, pricing, feedback.
-    Product {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Code intelligence: analysis, search.
+    // ── Departments (use `<dept> status` to check any department) ─
+    /// Code intelligence — analyze repos, search symbols, dependency graphs.
     Code {
         #[command(subcommand)]
         action: departments::DeptAction,
     },
-    /// Harvest: opportunities, proposals, pipeline.
-    Harvest {
-        #[command(subcommand)]
-        action: departments::DeptAction,
-    },
-    /// Content: drafts, calendar, publishing.
+    /// Content creation — draft articles, manage calendar, publish to platforms.
     Content {
         #[command(subcommand)]
         action: departments::DeptAction,
     },
-    /// Go-to-market: CRM, outreach, invoices.
+    /// Harvest — discover opportunities, score leads, generate proposals.
+    Harvest {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Go-to-market — CRM contacts, outreach sequences, invoicing.
     Gtm {
         #[command(subcommand)]
         action: departments::DeptAction,
     },
-    /// Chrome CDP browser bridge (passive capture, tabs).
+    /// Finance — ledger entries, runway forecast, tax estimation.
+    Finance {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Product — roadmap items, pricing tiers, feedback tracking.
+    Product {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Growth — funnel analysis, cohort tracking, KPI dashboards.
+    Growth {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Distribution — SEO, marketplace listings, affiliate programs.
+    Distro {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Legal — contracts, compliance checks, IP management.
+    Legal {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Support — ticket queue, knowledge base, NPS surveys.
+    Support {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+    /// Infrastructure — deployments, monitoring, incident response.
+    Infra {
+        #[command(subcommand)]
+        action: departments::DeptAction,
+    },
+
+    // ── Tools ────────────────────────────────────────────────────
+    /// Chrome DevTools Protocol bridge — passive capture, tab management.
     Browser {
         #[command(subcommand)]
         action: BrowserCmd,

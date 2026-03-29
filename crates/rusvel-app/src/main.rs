@@ -755,14 +755,17 @@ style = "direct"
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Tracing
+    // 1. Parse CLI first so --help / --version exit instantly (no boot noise)
+    let cli = Cli::parse();
+
+    // 2. Tracing
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
 
-    // 2. Data directory
+    // 3. Data directory
     let data_dir = rusvel_dir();
     std::fs::create_dir_all(&data_dir)?;
 
@@ -1287,8 +1290,7 @@ async fn main() -> Result<()> {
     });
     tracing::info!("Job queue worker started");
 
-    // 7. Parse CLI early so we can skip wizard for subcommands
-    let cli = Cli::parse();
+    // cli was parsed at the top of main (step 1)
 
     // 8. Load user profile — run first-run wizard if no profile exists
     let profile_path = data_dir.join("profile.toml");
@@ -1557,11 +1559,8 @@ async fn main() -> Result<()> {
             let tx = shutdown_tx.clone();
             async move {
                 let _ = tokio::signal::ctrl_c().await;
-                tracing::info!("Shutdown signal received — press Ctrl+C again to force quit");
+                tracing::info!("Shutdown signal received");
                 let _ = tx.send(true);
-                let _ = tokio::signal::ctrl_c().await;
-                tracing::info!("Force quit");
-                std::process::exit(1);
             }
         });
 
@@ -1689,12 +1688,8 @@ async fn main() -> Result<()> {
 
         tokio::spawn(async move {
             let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("Shutdown signal received — press Ctrl+C again to force quit");
+            tracing::info!("Shutdown signal received");
             let _ = shutdown_tx.send(true);
-            // Second Ctrl+C → immediate exit
-            let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("Force quit");
-            std::process::exit(1);
         });
 
         server.await.map_err(|e| anyhow::anyhow!("{e}"))?;

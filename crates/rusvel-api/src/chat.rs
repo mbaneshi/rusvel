@@ -99,8 +99,9 @@ pub async fn chat_handler(
         .await
         .map_err(|e| (e.0, e.1))?;
 
-    // Build AgentConfig from chat config + profile
-    let system_prompt = profile.to_system_prompt();
+    // Build AgentConfig from chat config + profile + department capabilities
+    let mut system_prompt = profile.to_system_prompt();
+    system_prompt.push_str(&build_capabilities_overview(&state));
     let model_ref = sse_helpers::parse_model_ref(&chat_config.model);
     let tier = body
         .model_tier
@@ -295,4 +296,63 @@ async fn store_message(
         .objects()
         .put("chat_message", &msg.id, serde_json::to_value(msg)?)
         .await
+}
+
+/// Build a capabilities overview from the department registry for the God Agent.
+fn build_capabilities_overview(state: &AppState) -> String {
+    let mut out = String::from("\n\n--- RUSVEL Capabilities ---\n");
+    out.push_str("You are the God Agent — the central orchestrator across all departments.\n");
+    out.push_str("When asked what you can do, describe these capabilities:\n\n");
+
+    // Departments
+    out.push_str("DEPARTMENTS:\n");
+    for d in state.registry.list() {
+        out.push_str(&format!(
+            "- {} ({}): {}\n",
+            d.name,
+            d.id,
+            d.capabilities.join(", ")
+        ));
+    }
+
+    // Wired engines with real actions
+    out.push_str("\nWIRED ENGINE ACTIONS:\n");
+    out.push_str("- Code: analyze repos (POST /api/dept/code/analyze), search symbols (GET /api/dept/code/search)\n");
+    out.push_str("- Content: draft articles, publish to LinkedIn/Twitter/DEV.to, manage content calendar, schedule posts\n");
+    out.push_str("- Harvest: scan opportunity sources (Upwork, freelancer, CDP), score leads, generate proposals, track pipeline\n");
+    out.push_str("- GTM: manage CRM contacts, deals, outreach sequences, invoices\n");
+    out.push_str("- Forge: mission planning, daily plans, goal tracking, weekly reviews, executive briefings\n");
+    out.push_str("- Flow: DAG workflow engine with code/condition/agent nodes\n");
+    out.push_str("- Finance: ledger entries, runway forecast, tax estimation\n");
+    out.push_str("- Product: roadmap items, pricing tiers, feedback tracking\n");
+    out.push_str("- Growth: funnel analysis, cohort tracking, KPI dashboards\n");
+    out.push_str("- Distro: SEO, marketplace listings, affiliate programs\n");
+    out.push_str("- Legal: contracts, compliance checks, IP management\n");
+    out.push_str("- Support: ticket queue, knowledge base, NPS surveys\n");
+    out.push_str("- Infra: deployments, monitoring, incident response\n");
+
+    // Platform-wide capabilities
+    out.push_str("\nPLATFORM CAPABILITIES:\n");
+    out.push_str("- Chat with any department via /dept/{id}/chat\n");
+    out.push_str("- Agents: create custom AI agents with specific personas and tools\n");
+    out.push_str("- Skills: reusable prompt templates with {{input}} interpolation\n");
+    out.push_str("- Rules: auto-injected system prompt rules per department\n");
+    out.push_str("- Hooks: event-triggered actions on chat completion\n");
+    out.push_str("- Workflows: visual DAG builder for multi-step automations\n");
+    out.push_str("- Knowledge base: vector-backed RAG for semantic search\n");
+    out.push_str("- Webhooks: register incoming webhooks with HMAC verification\n");
+    out.push_str("- Cron: schedule recurring jobs (daily briefings, scans, etc.)\n");
+    out.push_str("- Terminal: browser-based PTY terminal\n");
+    out.push_str("- Database browser: schema introspection, SQL runner\n");
+    out.push_str("- MCP: connect to external MCP servers for tool discovery\n");
+    out.push_str("- Approval queue: human-in-the-loop approval for content publishing and outreach\n");
+
+    // Tools summary
+    let tool_count = state.tools.list().len();
+    out.push_str(&format!(
+        "\nTOOLS: {} registered (use tool_search to discover available tools)\n",
+        tool_count
+    ));
+
+    out
 }

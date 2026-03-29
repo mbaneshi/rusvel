@@ -9,16 +9,26 @@
 		GitBranch,
 		Settings,
 		ClipboardCheck,
-		TerminalSquare
+		TerminalSquare,
+		PanelLeftClose,
+		PanelLeftOpen
 	} from 'lucide-svelte';
 	import { get } from 'svelte/store';
-	import { departments, pendingApprovalCount, commandPaletteOpen } from '$lib/stores';
+	import { departments, pendingApprovalCount, commandPaletteOpen, sidebarOpen } from '$lib/stores';
 	import { deptHref } from '$lib/api';
 	import type { DepartmentDef } from '$lib/api';
 	import DeptIcon from '$lib/components/DeptIcon.svelte';
 
 	let deptList: DepartmentDef[] = $state([]);
 	departments.subscribe((v) => (deptList = v));
+
+	let expanded = $state(false);
+	sidebarOpen.subscribe((v) => (expanded = v));
+
+	function toggle() {
+		expanded = !expanded;
+		sidebarOpen.set(expanded);
+	}
 
 	const globalLinks = [
 		{ href: '/', label: 'Dashboard', icon: LayoutDashboard, tour: 'nav-dashboard' },
@@ -60,56 +70,92 @@
 </script>
 
 <aside
-	class="flex w-12 shrink-0 flex-col items-center gap-0.5 border-r border-border bg-sidebar py-2"
+	class="flex shrink-0 flex-col border-r border-border bg-sidebar py-2 transition-[width] duration-200 ease-in-out
+		{expanded ? 'w-48' : 'w-12'}"
 	aria-label="Primary"
 >
-	{#each globalLinks as item}
-		{@const Icon = item.icon}
-		{@const active = linkActive(item.href)}
-		<a
-			href={item.href}
-			data-tour={item.tour || undefined}
-			title={item.label}
-			class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors
-				{active
-				? 'bg-sidebar-primary/20 text-sidebar-primary'
-				: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
-		>
-			<Icon size={18} strokeWidth={1.75} />
-			{#if item.href === '/approvals' && $pendingApprovalCount > 0}
-				<span
-					class="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold leading-none text-destructive-foreground"
-				>
-					{$pendingApprovalCount > 99 ? '99+' : $pendingApprovalCount}
-				</span>
-			{/if}
-		</a>
-	{/each}
+	<!-- Toggle button -->
+	<button
+		onclick={toggle}
+		title={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
+		class="mx-auto mb-1 flex h-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+			{expanded ? 'w-[calc(100%-0.5rem)] px-2' : 'w-8'}"
+	>
+		{#if expanded}
+			<PanelLeftClose size={16} strokeWidth={1.75} />
+			<span class="ml-2 truncate text-xs">Collapse</span>
+		{:else}
+			<PanelLeftOpen size={16} strokeWidth={1.75} />
+		{/if}
+	</button>
 
-	<div class="my-1 h-px w-7 shrink-0 bg-border" aria-hidden="true"></div>
-
-	<div class="flex min-h-0 w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto overflow-x-hidden px-0.5">
-		{#each deptList as d, i}
+	<!-- Global links -->
+	<div class="flex flex-col gap-0.5 {expanded ? 'px-1.5' : 'items-center'}">
+		{#each globalLinks as item}
+			{@const Icon = item.icon}
+			{@const active = linkActive(item.href)}
 			<a
-				href={deptHref(d.id)}
-				data-tour={d.id === 'forge' ? 'nav-forge' : undefined}
-				title={i < 9 ? `${d.name} (Alt+${i + 1})` : d.name}
-				class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors
-					{deptActive(d.id)
+				href={item.href}
+				data-tour={item.tour || undefined}
+				title={expanded ? undefined : item.label}
+				class="relative flex h-9 shrink-0 items-center rounded-md transition-colors
+					{expanded ? 'gap-2.5 px-2.5' : 'w-9 justify-center'}
+					{active
 					? 'bg-sidebar-primary/20 text-sidebar-primary'
 					: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
 			>
-				<DeptIcon deptId={d.id} size={18} strokeWidth={1.75} />
+				<Icon size={18} strokeWidth={1.75} class="shrink-0" />
+				{#if expanded}
+					<span class="truncate text-xs font-medium">{item.label}</span>
+				{/if}
+				{#if item.href === '/approvals' && $pendingApprovalCount > 0}
+					<span
+						class="absolute {expanded ? 'right-1.5 top-1' : 'right-0.5 top-0.5'} flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold leading-none text-destructive-foreground"
+					>
+						{$pendingApprovalCount > 99 ? '99+' : $pendingApprovalCount}
+					</span>
+				{/if}
 			</a>
 		{/each}
 	</div>
 
+	<div class="my-1 {expanded ? 'mx-2.5' : 'mx-auto w-7'} h-px shrink-0 bg-border" aria-hidden="true"></div>
+
+	<!-- Department links -->
+	<div class="flex min-h-0 w-full flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden {expanded ? 'px-1.5' : 'items-center px-0.5'}">
+		{#each deptList as d, i}
+			<a
+				href={deptHref(d.id)}
+				data-tour={d.id === 'forge' ? 'nav-forge' : undefined}
+				title={expanded ? undefined : (i < 9 ? `${d.name} (Alt+${i + 1})` : d.name)}
+				class="flex h-9 shrink-0 items-center rounded-md transition-colors
+					{expanded ? 'gap-2.5 px-2.5' : 'w-9 justify-center'}
+					{deptActive(d.id)
+					? 'bg-sidebar-primary/20 text-sidebar-primary'
+					: 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}"
+			>
+				<DeptIcon deptId={d.id} size={18} strokeWidth={1.75} class="shrink-0" />
+				{#if expanded}
+					<span class="truncate text-xs font-medium">{d.name}</span>
+					{#if i < 9}
+						<kbd class="ml-auto shrink-0 rounded border border-border px-1 text-[9px] text-muted-foreground">Alt+{i + 1}</kbd>
+					{/if}
+				{/if}
+			</a>
+		{/each}
+	</div>
+
+	<!-- Settings -->
 	<a
 		href="/settings"
-		title="Settings"
-		class="mt-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+		title={expanded ? undefined : 'Settings'}
+		class="mt-auto flex h-9 shrink-0 items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground
+			{expanded ? 'mx-1.5 gap-2.5 px-2.5' : 'mx-auto w-9 justify-center'}
 			{linkActive('/settings') ? 'bg-sidebar-primary/20 text-sidebar-primary' : ''}"
 	>
-		<Settings size={18} strokeWidth={1.75} />
+		<Settings size={18} strokeWidth={1.75} class="shrink-0" />
+		{#if expanded}
+			<span class="truncate text-xs font-medium">Settings</span>
+		{/if}
 	</a>
 </aside>

@@ -16,7 +16,7 @@ export async function refreshPendingApprovalCount(): Promise<void> {
 
 export const sessions = writable<SessionSummary[]>([]);
 export const activeSession = writable<SessionSummary | null>(null);
-export const sidebarOpen = writable(true);
+export const sidebarOpen = writable(false);
 export const panelOpen = writable(true);
 export const sidebarWidth = writable(256);
 export const panelWidth = writable(288);

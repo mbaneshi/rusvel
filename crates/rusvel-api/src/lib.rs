@@ -491,6 +491,10 @@ pub fn build_router_with_frontend(
             get(terminal::terminal_run_panes),
         )
         .route("/api/terminal/ws", get(terminal::terminal_ws))
+        .route(
+            "/api/terminal/pane/{pane_id}/resize",
+            axum::routing::post(terminal::terminal_resize_pane),
+        )
         // Browser (CDP)
         .route("/api/browser/status", get(browser::browser_status))
         .route(
@@ -597,9 +601,16 @@ pub async fn start_server(
     tokio::spawn(async move {
         shutdown.await;
         let _ = graceful_tx.send(());
-        tracing::info!("Graceful shutdown started — force exit in 5s");
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        tracing::info!("Force exit: in-flight connections did not close in time");
+        tracing::info!("Graceful shutdown started — force exit in 3s");
+        // Race: second Ctrl+C or 3s timeout — whichever comes first
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                tracing::info!("Force quit (second Ctrl+C)");
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                tracing::info!("Force exit: in-flight connections did not close in time");
+            }
+        }
         std::process::exit(0);
     });
 
