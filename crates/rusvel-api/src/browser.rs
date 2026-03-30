@@ -1,4 +1,8 @@
 //! HTTP routes for Chrome CDP / [`rusvel_cdp::CdpClient`] (browser bridge).
+//!
+//! Optional allowlist: `RUSVEL_BROWSER_ALLOWED_ORIGINS` — comma-separated hostnames
+//! (e.g. `example.com,docs.rusvel.io`). When set, `navigate` actions must target
+//! an allowed host (Claude-for-Chrome-style safety).
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -8,13 +12,48 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
+use chrono::Utc;
 use futures::Stream;
+use rusvel_core::domain::Event as RusvelEvent;
+use rusvel_core::id::EventId;
 use rusvel_core::ports::BrowserPort;
 use serde::Deserialize;
 use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::BroadcastStream;
+use tracing::warn;
 
 use crate::AppState;
+
+fn browser_allowed_hosts() -> Option<Vec<String>> {
+    std::env::var("RUSVEL_BROWSER_ALLOWED_ORIGINS")
+        .ok()
+        .map(|s| {
+            s.split(',')
+                .map(|x| x.trim().to_ascii_lowercase())
+                .filter(|x| !x.is_empty())
+                .collect::<Vec<_>>()
+        })
+        .filter(|v| !v.is_empty())
+}
+
+fn navigate_url_host(url: &str) -> Option<String> {
+    let u = url.trim();
+    let rest = u
+        .strip_prefix("https://")
+        .or_else(|| u.strip_prefix("http://"))?;
+    let host = rest.split('/').next()?;
+    Some(host.split(':').next()?.to_ascii_lowercase())
+}
+
+fn navigate_url_allowed(url: &str) -> bool {
+    let Some(list) = browser_allowed_hosts() else {
+        return true;
+    };
+    let Some(host) = navigate_url_host(url) else {
+        return false;
+    };
+    list.iter().any(|allowed| allowed == &host || host.ends_with(&format!(".{allowed}")))
+}
 
 #[derive(Deserialize)]
 pub struct ConnectBody {
@@ -100,9 +139,33 @@ pub async fn browser_act(
     let out = match body.action.as_str() {
         "navigate" => {
             let url = body.url.as_deref().ok_or(StatusCode::BAD_REQUEST)?;
+            if !navigate_url_allowed(url) {
+                warn!(target: "rusvel::browser", %url, "navigate blocked by RUSVEL_BROWSER_ALLOWED_ORIGINS");
+                return Err(StatusCode::FORBIDDEN);
+            }
             cdp.navigate(&body.tab_id, url)
                 .await
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
+            let events = state.events.clone();
+            let url_owned = url.to_string();
+            let tab = body.tab_id.clone();
+            tokio::spawn(async move {
+                let _ = events
+                    .emit(RusvelEvent {
+                        id: EventId::new(),
+                        session_id: None,
+                        run_id: None,
+                        source: "browser".into(),
+                        kind: "browser.navigate".into(),
+                        payload: serde_json::json!({
+                            "tab_id": tab,
+                            "url": url_owned,
+                        }),
+                        created_at: Utc::now(),
+                        metadata: serde_json::json!({}),
+                    })
+                    .await;
+            });
             serde_json::json!({ "ok": true })
         }
         "evaluate" | "evaluate_js" => {
@@ -111,6 +174,26 @@ pub async fn browser_act(
                 .evaluate_js(&body.tab_id, script)
                 .await
                 .map_err(|_| StatusCode::BAD_REQUEST)?;
+            let events = state.events.clone();
+            let tab = body.tab_id.clone();
+            let script_len = script.len();
+            tokio::spawn(async move {
+                let _ = events
+                    .emit(RusvelEvent {
+                        id: EventId::new(),
+                        session_id: None,
+                        run_id: None,
+                        source: "browser".into(),
+                        kind: "browser.evaluate_js".into(),
+                        payload: serde_json::json!({
+                            "tab_id": tab,
+                            "script_len": script_len,
+                        }),
+                        created_at: Utc::now(),
+                        metadata: serde_json::json!({}),
+                    })
+                    .await;
+            });
             serde_json::json!({ "ok": true, "result": v })
         }
         _ => return Err(StatusCode::BAD_REQUEST),

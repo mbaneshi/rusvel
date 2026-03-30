@@ -132,6 +132,12 @@ pub async fn get_dashboard(
 
 const BUDGET_WARN_RATIO: f64 = 0.8;
 
+#[derive(Debug, Serialize)]
+pub struct ModelSpend {
+    pub usd: f64,
+    pub tokens: u64,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SpendQuery {
     /// Filter totals to this department id (e.g. `harvest`, `content`). Omit for all departments.
@@ -144,7 +150,7 @@ pub struct SpendQuery {
 pub struct SpendResponse {
     /// Sum of `llm.cost_usd` for the selected department (or all departments if `dept` omitted).
     pub total_usd: f64,
-    /// Aggregated spend per `dept:` tag (from metrics).
+    /// Per-department USD (`cost_events` rollups when present, else `llm.cost_usd` tags).
     pub by_department: HashMap<String, f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
@@ -157,33 +163,24 @@ pub struct SpendResponse {
     pub budget_warning: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_usage_ratio: Option<f64>,
+    /// Per-department token totals when spend is sourced from `cost_events` (keys match `by_department`).
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub department_tokens: HashMap<String, u64>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub by_model: HashMap<String, ModelSpend>,
 }
 
-async fn collect_spend(
+async fn spend_from_session_query(
     state: &Arc<AppState>,
     q: &SpendQuery,
-) -> Result<SpendResponse, (StatusCode, String)> {
-    let filter = MetricFilter {
-        name: Some(LLM_COST_METRIC_NAME.into()),
-        limit: Some(50_000),
-        ..Default::default()
-    };
-    let points = state
-        .database
-        .query(filter)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let agg = aggregate_spend(&points);
-    let by_department = agg.by_department;
-    let session_totals = agg.by_session;
-
-    let total_usd = if let Some(ref d) = q.dept {
-        *by_department.get(d.as_str()).unwrap_or(&0.0)
-    } else {
-        agg.total_usd
-    };
-
+    session_totals: &HashMap<String, f64>,
+) -> (
+    Option<String>,
+    Option<f64>,
+    Option<f64>,
+    bool,
+    Option<f64>,
+) {
     let mut session_id_out: Option<String> = None;
     let mut session_total_usd: Option<f64> = None;
     let mut session_budget_limit_usd: Option<f64> = None;
@@ -194,7 +191,8 @@ async fn collect_spend(
         if let Ok(uuid) = Uuid::parse_str(sid_str) {
             let sid = SessionId::from(uuid);
             session_id_out = Some(sid_str.clone());
-            session_total_usd = session_totals.get(&sid.to_string()).copied().or(Some(0.0));
+            let sid_key = sid.to_string();
+            session_total_usd = session_totals.get(&sid_key).copied().or(Some(0.0));
 
             if let Ok(session) = state.sessions.load(&sid).await {
                 session_budget_limit_usd = session.config.budget_limit;
@@ -212,14 +210,93 @@ async fn collect_spend(
         }
     }
 
-    Ok(SpendResponse {
-        total_usd,
-        by_department,
-        session_id: session_id_out,
+    (
+        session_id_out,
         session_total_usd,
         session_budget_limit_usd,
         budget_warning,
         budget_usage_ratio,
+    )
+}
+
+async fn collect_spend(
+    state: &Arc<AppState>,
+    q: &SpendQuery,
+) -> Result<SpendResponse, (StatusCode, String)> {
+    let snapshot = state
+        .database
+        .cost_events_spend_snapshot()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if snapshot.event_row_count == 0 {
+        let filter = MetricFilter {
+            name: Some(LLM_COST_METRIC_NAME.into()),
+            limit: Some(50_000),
+            ..Default::default()
+        };
+        let points = state
+            .database
+            .query(filter)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let agg = aggregate_spend(&points);
+        let by_department = agg.by_department;
+        let total_usd = if let Some(ref d) = q.dept {
+            *by_department.get(d.as_str()).unwrap_or(&0.0)
+        } else {
+            agg.total_usd
+        };
+
+        let (session_id, session_total_usd, session_budget_limit_usd, budget_warning, budget_usage_ratio) =
+            spend_from_session_query(state, q, &agg.by_session).await;
+
+        return Ok(SpendResponse {
+            total_usd,
+            by_department,
+            session_id,
+            session_total_usd,
+            session_budget_limit_usd,
+            budget_warning,
+            budget_usage_ratio,
+            department_tokens: HashMap::new(),
+            by_model: HashMap::new(),
+        });
+    }
+
+    let by_department = snapshot.by_department_usd.clone();
+    let total_usd = if let Some(ref d) = q.dept {
+        *by_department.get(d.as_str()).unwrap_or(&0.0)
+    } else {
+        snapshot.total_usd_all
+    };
+
+    let department_tokens = snapshot.by_department_tokens.clone();
+    let by_model: HashMap<String, ModelSpend> = snapshot
+        .by_model
+        .into_iter()
+        .map(|(k, (usd, tokens))| {
+            (
+                k,
+                ModelSpend { usd, tokens },
+            )
+        })
+        .collect();
+
+    let (session_id, session_total_usd, session_budget_limit_usd, budget_warning, budget_usage_ratio) =
+        spend_from_session_query(state, q, &snapshot.by_session_usd).await;
+
+    Ok(SpendResponse {
+        total_usd,
+        by_department,
+        session_id,
+        session_total_usd,
+        session_budget_limit_usd,
+        budget_warning,
+        budget_usage_ratio,
+        department_tokens,
+        by_model,
     })
 }
 

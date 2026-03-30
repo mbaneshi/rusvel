@@ -189,17 +189,32 @@ pub async fn list_models() -> Json<Vec<ModelOption>> {
         ModelOption {
             value: "claude/sonnet".into(),
             label: "Claude · Sonnet".into(),
-            description: "Claude CLI — fast, capable (Claude Max / API)".into(),
+            description: "Claude: Messages API when ANTHROPIC_API_KEY is set at boot; otherwise Claude CLI (Max/subscription).".into(),
         },
         ModelOption {
             value: "claude/opus".into(),
             label: "Claude · Opus".into(),
-            description: "Claude CLI — most capable".into(),
+            description: "Claude: same routing as Sonnet — API key prefers HTTP adapter.".into(),
         },
         ModelOption {
             value: "claude/haiku".into(),
             label: "Claude · Haiku".into(),
-            description: "Claude CLI — fastest".into(),
+            description: "Claude: fastest tier; HTTP API normalizes shorthand ids automatically.".into(),
+        },
+        ModelOption {
+            value: "ollama/llama3.2".into(),
+            label: "Ollama · llama3.2".into(),
+            description: "Local Ollama at OLLAMA_HOST (default localhost:11434); requires Ollama running".into(),
+        },
+        ModelOption {
+            value: "ollama/qwen2.5-coder:7b".into(),
+            label: "Ollama · qwen2.5-coder".into(),
+            description: "Local code-oriented model when pulled in Ollama".into(),
+        },
+        ModelOption {
+            value: "openai/gpt-4o".into(),
+            label: "OpenAI · gpt-4o".into(),
+            description: "OpenAI API when OPENAI_API_KEY is set at server boot".into(),
         },
     ])
 }
