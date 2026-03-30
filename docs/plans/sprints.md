@@ -151,6 +151,11 @@
 | In-Process MCP Bridge | 3d | — | agent-sdk-features.md |
 | Progress Docs (session continuity) | 2d | #12 (memory tools) | agent-sdk-features.md |
 | Agentic Search (prompt adjustment) | 1d | #7 ✅ (deferred tools) | agent-sdk-features.md |
+| WhatsApp/Signal adapters | 5d | #37, #39 | reference-repos-minibook.md |
+| Plugin system trait | 5d | — | reference-repos-minibook.md |
+| Media pipeline (image/audio/video) | 4d | #37 | reference-repos-minibook.md |
+| Desktop distribution (Tauri) | 10d | — | reference-repos-minibook.md |
+| Collaborative editing (realtime) | 8d | — | reference-repos-minibook.md |
 
 ---
 
@@ -202,31 +207,46 @@ Sprint 0   Sprint 1          Sprint 2            Sprint 3              Sprint 4 
 
 ---
 
-## Critical Path (updated)
+## Critical Path (updated 2026-03-30)
 
 ```
-✅ DONE                     Sprint 2              Sprint 3              Sprint 4         Sprint 5
----------                   ---------             ---------             ---------        ---------
-✅ ADR-014 ──────────────────────────────────→ Hooks + Permissions
-                                                    |
-✅ Cost routing ──────────→ Batch API               |
-                                                    +──→ Self-correction
-                                                    |
-✅ Terminal PTY ──────────→ Terminal Web ───────→ Terminal Agent Vis ──→ Terminal Flow ──→ Terminal CDP
-                                                    |
-                            Memory + RAG            |
-                                                    |
-                            Compaction          delegate_agent ────────→ Playbooks ──→ Executive Brief
-                                                    |                       |
-                                                Event triggers              |
-                                                    |                  Durable Exec
-                                                invoke_flow
-                                                                       AG-UI ──────────→ (AI SDK 6)
+✅ DONE                 Sprint 2          Sprint 3              Sprint 4              Sprint 5          Sprint 6
+---------               ---------         ---------             ---------             ---------         ---------
+✅ ADR-014 ────────────────────────→ Hooks + Perms
+                                         |
+✅ Cost routing ──→ Batch API            +──→ Self-correction
+                                         |
+✅ Terminal PTY ──→ Terminal Web ───→ Terminal Agent ───→ Terminal Flow ──→ Terminal CDP
+                                         |
+                    Memory + RAG         |
+                    Compaction       delegate_agent ──→ Playbooks ──→ Executive Brief
+                                         |                  |
+                                    Event triggers          |
+                                         |            Durable Exec ──→ Flow Version ──→ Templates
+                                    invoke_flow
+                                                      AG-UI ──────→ (AI SDK 6)
+
+NEW TRACKS (ADRs 015-019):
+                                    Flow nodes T1 ──→ Flow nodes T2 ──→ SubFlowNode
+                                         |                  |
+                                    Expressions         MergeNode
+                                         |
+                                    ChannelPort ──→ Discord ──→ Slack ──→ Email
+                                         |              |
+                                    ChanRouter     Inbound ──→ MsgQueue
+                                         |
+                                    Cost Track ──→ Cost API ──→ Exec Brief w/ cost
+                                         |
+                                    Claude hooks ──→ /learn ──→ Session persist ──→ Learning pipeline
+                                                                                        |
+                                                                              Design tokens + variants
+                                                                              Credential encryption
 ```
 
-**Two remaining unlock points:**
+**Three unlock points:**
 1. **delegate_agent (Sprint 3 #18)** — unlocks playbooks, executive brief, roundtable, workforce dogfooding
 2. **Terminal Web Bridge (Sprint 2 #16)** — unlocks all agent visibility features
+3. **ChannelPort expansion (Sprint 4 #37)** — unlocks all multi-channel features (Discord, Slack, Email, Webhook, inbound)
 
 ---
 
@@ -237,14 +257,21 @@ Sprint 0   Sprint 1          Sprint 2            Sprint 3              Sprint 4 
 | 0 | 5 | ~1d | ✅ Done | 1d |
 | 1 | 10 | ~10d | ✅ Done | 11d |
 | 2 | 6 remaining | ~8d | **In Progress** | 19d |
-| 3 | 7 | ~12d | Planned | 31d |
-| 4 | 4 | ~12d | Planned | 43d |
-| 5 | 5 | ~12d | Planned | 55d |
-| **Total** | **32 tasks remaining** | **~44 working days** | | **~9 weeks** |
+| 3 | 10 | ~14d | Planned | 33d |
+| 4 | 10 | ~14d | Planned | 47d |
+| 5 | 9 | ~14d | Planned | 61d |
+| 6 | 8 | ~12d | Planned | 73d |
+| **Total** | **43 tasks remaining** | **~62 working days** | | **~12.5 weeks** |
 
-Backlog: 10 items, ~45 additional days if all scheduled.
+Backlog: 15 items, ~70 additional days if all scheduled.
 
-**Progress: 17/49 tasks done (35%). ~21 working days completed. ~44 remaining.**
+**Progress: 17/60 tasks done (28%). ~21 working days completed. ~62 remaining.**
+
+**New tasks from reference repo analysis (ADRs 015-019):**
+- Sprint 3: #34 (flow nodes), #35 (expressions), #36 (Claude hooks)
+- Sprint 4: #37-42 (channels, cost, more flow nodes)
+- Sprint 5: #43-46 (Slack, email, learning, session persistence)
+- Sprint 6: #47-54 (webhook, inbound, batching, design, credentials, versioning, templates, learning pipeline)
 
 ---
 
@@ -277,7 +304,10 @@ Backlog: 10 items, ~45 additional days if all scheduled.
 | `plans/cdp-browser-bridge.md` | BrowserPort, CDP, platform extractors | Sprint 5 + Backlog |
 | `design/agent-workforce.md` | 14 builder agents for self-building | Backlog |
 | `plans/flow-engine.md` | DAG executor design, node types, triggers | Sprint 4 |
-| `design/decisions.md` | 13 ADRs + ADR-014 | Reference |
+| `proposals/reference-repos-minibook.md` | Deep analysis of 6 reference repos, pattern catalog | Sprints 3-6 |
+| `plans/pattern-extraction-design.md` | Code samples + implementation design for ADR-015/016/017 | Sprints 3-6 |
+| `plans/sprint-6-pattern-extraction.md` | Standalone sprint plan for pattern extraction (18 tasks) | Sprint 6 alt |
+| `design/decisions.md` | 19 ADRs (ADR-001 through ADR-019) | Reference |
 | `design/architecture-v2.md` | Hexagonal architecture, port traits | Reference |
 
 ---
