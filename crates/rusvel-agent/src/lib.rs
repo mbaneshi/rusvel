@@ -44,6 +44,34 @@ pub type HookHandler = Arc<dyn Fn(&str, &serde_json::Value) -> HookDecision + Se
 /// Default maximum iterations in the agent loop.
 const DEFAULT_MAX_ITERATIONS: u32 = 50;
 
+fn agent_permission_blocks_tool(
+    config: &AgentConfig,
+    tool_name: &str,
+    tool_defs: &[ToolDefinition],
+) -> Option<String> {
+    match config.permission_mode {
+        ToolPermissionMode::Auto => None,
+        ToolPermissionMode::Locked => Some(format!(
+            "Tool requires approval in Locked mode: {tool_name}"
+        )),
+        ToolPermissionMode::Supervised => {
+            let destructive = tool_defs
+                .iter()
+                .find(|t| t.name == tool_name)
+                .and_then(|d| d.metadata.get("destructive"))
+                .and_then(|v| v.as_bool())
+                == Some(true);
+            if destructive {
+                Some(format!(
+                    "Tool requires approval in Supervised mode: {tool_name}"
+                ))
+            } else {
+                None
+            }
+        }
+    }
+}
+
 /// When conversation turns exceed this count, older turns are summarized.
 const COMPACT_THRESHOLD: usize = 30;
 
@@ -751,6 +779,31 @@ async fn run_streaming_loop(
                     }
                 };
 
+                if let Some(msg) =
+                    agent_permission_blocks_tool(config, &tool_name, &tool_defs)
+                {
+                    tool_calls += 1;
+                    let _ = tx
+                        .send(AgentEvent::ToolResult {
+                            tool_call_id: tool_call_id.clone(),
+                            name: tool_name.clone(),
+                            output: msg.clone(),
+                            is_error: true,
+                        })
+                        .await;
+                    messages.push(LlmMessage {
+                        role: LlmRole::Tool,
+                        content: Content {
+                            parts: vec![Part::ToolResult {
+                                tool_call_id,
+                                content: msg,
+                                is_error: true,
+                            }],
+                        },
+                    });
+                    continue;
+                }
+
                 let tool_result = tools.call(&tool_name, effective_args).await;
                 tool_calls += 1;
 
@@ -999,6 +1052,28 @@ impl AgentPort for AgentRuntime {
                         }
                     };
 
+                    if let Some(msg) = agent_permission_blocks_tool(
+                        &config,
+                        &tool_name,
+                        &tool_defs,
+                    ) {
+                        tool_calls += 1;
+                        messages.push(LlmMessage {
+                            role: LlmRole::Tool,
+                            content: Content {
+                                parts: vec![Part::ToolResult {
+                                    tool_call_id,
+                                    content: msg,
+                                    is_error: true,
+                                }],
+                            },
+                        });
+                        self.runs.write().await.entry(*run_id).and_modify(|s| {
+                            s.status = AgentStatus::Running;
+                        });
+                        continue;
+                    }
+
                     // Execute the tool.
                     let tool_result = self.tools.call(&tool_name, effective_args).await;
                     tool_calls += 1;
@@ -1229,6 +1304,7 @@ mod tests {
             instructions: Some("You are a helpful assistant.".into()),
             budget_limit: None,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         }
     }
@@ -1330,10 +1406,12 @@ mod tests {
 
     #[tokio::test]
     async fn max_iterations_exceeded() {
-        // 11 tool-use responses should exceed the 10-iteration limit.
+        // 11 tool-use responses should exceed a 10-iteration cap (default max is higher).
         let responses: Vec<LlmResponse> = (0..11).map(|_| tool_use_response("search")).collect();
         let rt = make_runtime(responses);
-        let run_id = rt.create(make_config()).await.unwrap();
+        let mut cfg = make_config();
+        cfg.max_iterations = Some(10);
+        let run_id = rt.create(cfg).await.unwrap();
         let err = rt.run(&run_id, Content::text("loop")).await.unwrap_err();
         assert!(err.to_string().contains("exceeded"));
         assert_eq!(rt.status(&run_id).await.unwrap(), AgentStatus::Failed);

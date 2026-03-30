@@ -153,6 +153,7 @@ impl OpportunityScorer {
             ),
             budget_limit: Some(0.05),
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({ "task": "harvest_opportunity_score" }),
         };
 

@@ -238,6 +238,7 @@ impl ForgeEngine {
             instructions: Some("You are a mission planning agent. Return valid JSON only.".into()),
             budget_limit: Some(0.10),
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let output = self
@@ -403,6 +404,7 @@ impl ForgeEngine {
             instructions: Some("You are a review agent. Return valid JSON only.".into()),
             budget_limit: Some(0.10),
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let output = self

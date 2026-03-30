@@ -190,6 +190,7 @@ async fn run_trigger_agent(
         instructions: Some(instructions),
         budget_limit: None,
         max_iterations: None,
+        permission_mode: Default::default(),
         metadata,
     };
 

@@ -453,6 +453,9 @@ pub struct AgentConfig {
     /// Maximum tool-use iterations. Default: 50. Set lower for simple Q&A.
     #[serde(default)]
     pub max_iterations: Option<u32>,
+    /// Tool execution policy for this agent run ([`ToolPermissionMode`]).
+    #[serde(default)]
+    pub permission_mode: ToolPermissionMode,
     pub metadata: serde_json::Value,
 }
 
@@ -1053,9 +1056,10 @@ pub struct ToolHookConfig {
 // ════════════════════════════════════════════════════════════════════
 
 /// How a tool invocation is handled when permission is checked.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ToolPermissionMode {
     /// Execute immediately without human intervention.
+    #[default]
     Auto,
     /// Pause and require human approval before execution.
     Supervised,
@@ -1166,6 +1170,22 @@ pub struct MetricFilter {
     pub since: Option<DateTime<Utc>>,
     pub until: Option<DateTime<Utc>>,
     pub limit: Option<u32>,
+}
+
+/// Structured LLM / agent cost row for analytics (stored separately from [`MetricPoint`]).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostEvent {
+    pub id: String,
+    pub session_id: Option<SessionId>,
+    pub department_id: Option<String>,
+    pub model: String,
+    pub provider: String,
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    pub cost_usd: f64,
+    pub operation: String,
+    pub created_at: DateTime<Utc>,
+    pub metadata: serde_json::Value,
 }
 
 // ════════════════════════════════════════════════════════════════════

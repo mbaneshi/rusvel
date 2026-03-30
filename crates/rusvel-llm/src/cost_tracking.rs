@@ -5,9 +5,11 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 use rusvel_core::domain::*;
 use rusvel_core::error::Result;
+use rusvel_core::id::SessionId;
 use rusvel_core::ports::{LlmPort, MetricStore};
 
 use crate::cost::LLM_COST_METRIC_NAME;
@@ -98,6 +100,35 @@ impl CostTrackingLlm {
         };
         if let Err(e) = store.record(&point).await {
             tracing::warn!(error = %e, "metric store record failed for {}", LLM_COST_METRIC_NAME);
+        }
+
+        let cost_event = CostEvent {
+            id: Uuid::now_v7().to_string(),
+            session_id: req_for_cost
+                .metadata
+                .get(RUSVEL_META_SESSION_ID)
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .map(SessionId::from),
+            department_id: req_for_cost
+                .metadata
+                .get(RUSVEL_META_DEPARTMENT_ID)
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            model: req_for_cost.model.model.clone(),
+            provider: format!("{:?}", req_for_cost.model.provider),
+            input_tokens: resp.usage.input_tokens,
+            output_tokens: resp.usage.output_tokens,
+            cost_usd: usd,
+            operation: "llm_generate".into(),
+            created_at: Utc::now(),
+            metadata: serde_json::json!({
+                "input_tokens": resp.usage.input_tokens,
+                "output_tokens": resp.usage.output_tokens,
+            }),
+        };
+        if let Err(e) = store.record_cost(cost_event).await {
+            tracing::warn!(error = %e, "metric store record_cost failed");
         }
     }
 }

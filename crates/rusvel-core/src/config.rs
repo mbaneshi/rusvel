@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::ToolPermissionMode;
+
 /// Per-department toggles for which sections appear in the session context pack (S-045).
 /// Each field is optional; unset inherits from the parent layer in [`LayeredConfig::overlay`].
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -172,6 +174,16 @@ impl ResolvedConfig {
             args.extend(["--max-turns".into(), turns.to_string()]);
         }
         args
+    }
+}
+
+/// Map stored department [`ResolvedConfig::permission_mode`] string to agent tool policy.
+pub fn tool_permission_mode_from_dept_config_str(s: &str) -> ToolPermissionMode {
+    match s.to_ascii_lowercase().as_str() {
+        "auto" => ToolPermissionMode::Auto,
+        "supervised" => ToolPermissionMode::Supervised,
+        "locked" => ToolPermissionMode::Locked,
+        _ => ToolPermissionMode::Auto,
     }
 }
 

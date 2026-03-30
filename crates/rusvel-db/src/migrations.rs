@@ -6,7 +6,26 @@
 use rusqlite::Connection;
 
 /// Each migration is a (version, sql) pair.
-const MIGRATIONS: &[(u32, &str)] = &[(1, MIGRATION_001)];
+const MIGRATIONS: &[(u32, &str)] = &[(1, MIGRATION_001), (2, MIGRATION_002)];
+
+const MIGRATION_002: &str = r"
+CREATE TABLE IF NOT EXISTS cost_events (
+    id              TEXT PRIMARY KEY,
+    session_id      TEXT,
+    department_id   TEXT,
+    model           TEXT NOT NULL,
+    provider        TEXT NOT NULL,
+    input_tokens    INTEGER NOT NULL,
+    output_tokens   INTEGER NOT NULL,
+    cost_usd        REAL NOT NULL,
+    operation       TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    metadata        TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_cost_events_session    ON cost_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_cost_events_department ON cost_events(department_id);
+CREATE INDEX IF NOT EXISTS idx_cost_events_created    ON cost_events(created_at);
+";
 
 const MIGRATION_001: &str = r"
 -- ════════════════════════════════════════════════════════════════

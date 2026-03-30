@@ -29,6 +29,7 @@
 use std::path::Path;
 
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::domain::*;
@@ -253,6 +254,21 @@ pub trait JobStore: Send + Sync {
 pub trait MetricStore: Send + Sync {
     async fn record(&self, point: &MetricPoint) -> Result<()>;
     async fn query(&self, filter: MetricFilter) -> Result<Vec<MetricPoint>>;
+
+    /// Optional structured cost row; default is no-op for stubs.
+    async fn record_cost(&self, _event: CostEvent) -> Result<()> {
+        Ok(())
+    }
+
+    async fn query_costs(
+        &self,
+        _session_id: Option<&SessionId>,
+        _department_id: Option<&str>,
+        _from: Option<DateTime<Utc>>,
+        _to: Option<DateTime<Utc>>,
+    ) -> Result<Vec<CostEvent>> {
+        Ok(vec![])
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════

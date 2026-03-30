@@ -13,6 +13,7 @@ use rusvel_core::ports::{AgentPort, BrowserPort, EventPort, StoragePort, Termina
 
 pub mod executor;
 pub mod expression;
+pub mod expressions;
 pub mod nodes;
 pub mod templates;
 

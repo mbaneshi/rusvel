@@ -98,6 +98,7 @@ impl ForgeEngine {
             instructions: Some(profile.instructions.clone()),
             budget_limit: profile.budget_limit,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         })
     }

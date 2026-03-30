@@ -20,6 +20,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use rusvel_agent::{AgentEvent, ContextPack, to_prompt_section};
 use rusvel_core::config::{
     ContextPackFlags, LayeredConfig, ResolvedConfig, resolve_context_pack_flags,
+    tool_permission_mode_from_dept_config_str,
 };
 use rusvel_core::domain::{
     AgentConfig, Content, EventFilter, JobFilter, JobStatus, RUSVEL_META_DEPARTMENT_ID,
@@ -572,6 +573,7 @@ pub async fn dept_chat(
         instructions: Some(resolved.system_prompt.clone()),
         budget_limit: resolved.max_budget_usd,
         max_iterations: None,
+        permission_mode: tool_permission_mode_from_dept_config_str(&resolved.permission_mode),
         metadata: serde_json::Value::Object(meta),
     };
 

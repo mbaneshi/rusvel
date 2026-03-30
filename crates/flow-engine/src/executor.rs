@@ -15,6 +15,7 @@ use rusvel_core::ports::{StoragePort, TerminalPort};
 use rusvel_core::terminal::{PaneSize, PaneSource, WindowSource};
 
 use crate::CHECKPOINT_STORE;
+use crate::expressions::{flow_parameter_context, resolve_expressions};
 use crate::nodes::{NodeContext, NodeRegistry};
 
 struct FlowTerminalState {
@@ -253,8 +254,12 @@ pub async fn execute_flow_with_config(
             }
         };
 
+        let tpl_ctx = flow_parameter_context(&trigger_for_exec, &inputs);
+        let mut resolved_node = (*node_def).clone();
+        resolved_node.parameters = resolve_expressions(&node_def.parameters, &tpl_ctx);
+
         let ctx = NodeContext {
-            node: node_def.clone(),
+            node: resolved_node,
             inputs,
             variables: flow.variables.clone(),
         };

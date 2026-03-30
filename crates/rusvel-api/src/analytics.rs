@@ -14,7 +14,8 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
-use rusvel_core::domain::{EventFilter, MetricFilter, ObjectFilter};
+use chrono::{DateTime, Utc};
+use rusvel_core::domain::{CostEvent, EventFilter, MetricFilter, ObjectFilter};
 use rusvel_core::id::SessionId;
 use rusvel_core::ports::MetricStore;
 use rusvel_llm::cost::{LLM_COST_METRIC_NAME, aggregate_spend};
@@ -229,4 +230,111 @@ pub async fn get_spend(
 ) -> Result<Json<SpendResponse>, (StatusCode, String)> {
     let spend = collect_spend(&state, &q).await?;
     Ok(Json(spend))
+}
+
+// ── Cost events (structured rows) ────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct CostsQuery {
+    pub session_id: Option<String>,
+    pub department_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CostSummaryQuery {
+    pub group_by: String,
+    pub session_id: Option<String>,
+    pub department_id: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CostSummaryRow {
+    pub key: String,
+    pub total_usd: f64,
+    pub total_tokens: u64,
+}
+
+fn parse_costs_rfc3339(s: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|d| d.with_timezone(&Utc))
+}
+
+async fn query_cost_events(
+    state: &Arc<AppState>,
+    q: &CostsQuery,
+) -> Result<Vec<CostEvent>, (StatusCode, String)> {
+    let session_id = q
+        .session_id
+        .as_ref()
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .map(SessionId::from);
+    let from = q.from.as_deref().and_then(parse_costs_rfc3339);
+    let to = q.to.as_deref().and_then(parse_costs_rfc3339);
+    state
+        .database
+        .query_costs(
+            session_id.as_ref(),
+            q.department_id.as_deref(),
+            from,
+            to,
+        )
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+/// `GET /api/analytics/costs` — structured cost rows; query params all optional.
+pub async fn get_costs(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<CostsQuery>,
+) -> Result<Json<Vec<CostEvent>>, (StatusCode, String)> {
+    let events = query_cost_events(&state, &q).await?;
+    Ok(Json(events))
+}
+
+/// `GET /api/analytics/costs/summary?group_by=department|model|operation`
+pub async fn get_costs_summary(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<CostSummaryQuery>,
+) -> Result<Json<Vec<CostSummaryRow>>, (StatusCode, String)> {
+    let gb = q.group_by.to_ascii_lowercase();
+    if !matches!(gb.as_str(), "department" | "model" | "operation") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "group_by must be department, model, or operation".into(),
+        ));
+    }
+    let cq = CostsQuery {
+        session_id: q.session_id.clone(),
+        department_id: q.department_id.clone(),
+        from: q.from.clone(),
+        to: q.to.clone(),
+    };
+    let events = query_cost_events(&state, &cq).await?;
+    let mut acc: HashMap<String, (f64, u64)> = HashMap::new();
+    for e in events {
+        let key = match gb.as_str() {
+            "department" => e.department_id.clone().unwrap_or_else(|| "_none".to_string()),
+            "model" => e.model.clone(),
+            "operation" => e.operation.clone(),
+            _ => unreachable!(),
+        };
+        let ent = acc.entry(key).or_insert((0.0, 0));
+        ent.0 += e.cost_usd;
+        ent.1 += u64::from(e.input_tokens) + u64::from(e.output_tokens);
+    }
+    let mut rows: Vec<CostSummaryRow> = acc
+        .into_iter()
+        .map(|(key, (total_usd, total_tokens))| CostSummaryRow {
+            key,
+            total_usd,
+            total_tokens,
+        })
+        .collect();
+    rows.sort_by(|a, b| b.total_usd.partial_cmp(&a.total_usd).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(Json(rows))
 }

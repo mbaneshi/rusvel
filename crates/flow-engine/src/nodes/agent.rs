@@ -70,6 +70,7 @@ impl NodeHandler for AgentNode {
             instructions: Some(resolved_prompt.clone()),
             budget_limit: None,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
 

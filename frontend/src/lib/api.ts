@@ -296,6 +296,20 @@ export async function getAnalyticsSpend(
 	return request<AnalyticsSpendResponse>(`/api/analytics/spend${q ? `?${q}` : ''}`);
 }
 
+export interface CostSummaryRow {
+	key: string;
+	total_usd: number;
+	total_tokens: number;
+}
+
+/** GET /api/analytics/costs/summary — aggregated cost rows for dashboard tables. */
+export async function getCostSummaryByGroup(
+	groupBy: 'department' | 'model' | 'operation'
+): Promise<CostSummaryRow[]> {
+	const sp = new URLSearchParams({ group_by: groupBy });
+	return request<CostSummaryRow[]>(`/api/analytics/costs/summary?${sp}`);
+}
+
 export async function streamDeptChat(
 	dept: string,
 	message: string,

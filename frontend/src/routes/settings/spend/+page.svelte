@@ -2,13 +2,20 @@
 	import { onMount } from 'svelte';
 	import { Chart, Svg, Axis, Bars } from 'layerchart';
 	import { activeSession } from '$lib/stores';
-	import { getAnalyticsSpend, type AnalyticsSpendResponse } from '$lib/api';
+	import {
+		getAnalyticsSpend,
+		getCostSummaryByGroup,
+		type AnalyticsSpendResponse,
+		type CostSummaryRow
+	} from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
 	activeSession.subscribe((v) => (currentSession = v));
 
 	let spend: AnalyticsSpendResponse | null = $state(null);
+	let costByDept: CostSummaryRow[] = $state([]);
+	let costByModel: CostSummaryRow[] = $state([]);
 	let loading = $state(true);
 
 	let chartRows = $derived.by(() => {
@@ -29,9 +36,15 @@
 		loading = true;
 		try {
 			spend = await getAnalyticsSpend(undefined, currentSession?.id ?? null);
+			[costByDept, costByModel] = await Promise.all([
+				getCostSummaryByGroup('department'),
+				getCostSummaryByGroup('model')
+			]);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to load spend');
 			spend = null;
+			costByDept = [];
+			costByModel = [];
 		} finally {
 			loading = false;
 		}
@@ -117,6 +130,63 @@
 						</li>
 					{/each}
 				</ul>
+			</div>
+
+			<div class="rounded-xl border border-border bg-card p-5">
+				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+					Cost breakdown
+				</h2>
+				<p class="mb-4 text-xs text-muted-foreground">
+					From structured cost events (<code class="rounded bg-muted px-1">/api/analytics/costs/summary</code>).
+				</p>
+				<h3 class="mb-2 text-xs font-medium text-foreground">By department</h3>
+				<div class="mb-6 overflow-x-auto">
+					<table class="w-full text-left text-sm">
+						<thead>
+							<tr class="border-b border-border text-muted-foreground">
+								<th class="py-2 pr-4 font-medium">Department</th>
+								<th class="py-2 pr-4 font-medium">Total spend</th>
+								<th class="py-2 font-medium">Tokens</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each costByDept as row}
+								<tr class="border-b border-border/60">
+									<td class="py-2 pr-4 font-mono text-foreground">{row.key}</td>
+									<td class="py-2 pr-4 text-muted-foreground">${row.total_usd.toFixed(4)}</td>
+									<td class="py-2 text-muted-foreground">{row.total_tokens.toLocaleString()}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+					{#if costByDept.length === 0}
+						<p class="mt-2 text-xs text-muted-foreground">No cost events yet.</p>
+					{/if}
+				</div>
+				<h3 class="mb-2 text-xs font-medium text-foreground">By model</h3>
+				<div class="overflow-x-auto">
+					<table class="w-full text-left text-sm">
+						<thead>
+							<tr class="border-b border-border text-muted-foreground">
+								<th class="py-2 pr-4 font-medium">Model</th>
+								<th class="py-2 pr-4 font-medium">Total spend</th>
+								<th class="py-2 font-medium">Tokens</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each costByModel as row}
+								<tr class="border-b border-border/60">
+									<td class="py-2 pr-4 font-mono text-foreground">{row.key}</td>
+									<td class="py-2 pr-4 text-muted-foreground">${row.total_usd.toFixed(4)}</td>
+									<td class="py-2 text-muted-foreground">{row.total_tokens.toLocaleString()}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+					{#if costByModel.length === 0}
+						<p class="mt-2 text-xs text-muted-foreground">No cost events yet.</p>
+					{/if}
+				</div>
 			</div>
 		</div>
 	{:else}

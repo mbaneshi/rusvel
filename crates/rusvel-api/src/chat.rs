@@ -129,6 +129,7 @@ pub async fn chat_handler(
         instructions: Some(system_prompt),
         budget_limit: chat_config.max_budget_usd,
         max_iterations: None,
+        permission_mode: Default::default(),
         metadata: serde_json::Value::Object(meta),
     };
 

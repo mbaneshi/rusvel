@@ -67,6 +67,7 @@ fn cfg() -> AgentConfig {
         instructions: Some("test".into()),
         budget_limit: None,
         max_iterations: None,
+        permission_mode: Default::default(),
         metadata: serde_json::json!({}),
     }
 }

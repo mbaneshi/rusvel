@@ -602,6 +602,7 @@ impl OutreachManager {
             instructions: Some("You are a sales outreach assistant.".into()),
             budget_limit: Some(0.05),
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;

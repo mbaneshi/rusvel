@@ -427,6 +427,11 @@ pub fn build_router_with_frontend(
         .route("/api/analytics", get(analytics::get_analytics))
         .route("/api/analytics/dashboard", get(analytics::get_dashboard))
         .route("/api/analytics/spend", get(analytics::get_spend))
+        .route("/api/analytics/costs", get(analytics::get_costs))
+        .route(
+            "/api/analytics/costs/summary",
+            get(analytics::get_costs_summary),
+        )
         // Help (AI-powered)
         .route("/api/help", post(help::help_handler))
         // Job queue (ADR-003)

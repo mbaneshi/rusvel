@@ -143,6 +143,7 @@ impl ContentWriter {
             instructions: Some("You are a professional content writer.".into()),
             budget_limit: None,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;
@@ -193,6 +194,7 @@ impl ContentWriter {
             instructions: Some("You are a social-media content strategist.".into()),
             budget_limit: None,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;
@@ -215,6 +217,7 @@ impl ContentWriter {
             instructions: Some("You are an editorial reviewer.".into()),
             budget_limit: None,
             max_iterations: None,
+            permission_mode: Default::default(),
         metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;

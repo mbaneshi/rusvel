@@ -27,8 +27,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use rusvel_core::error::RusvelError;
 use rusvel_core::ports::*;
 use rusvel_core::{
-    Event, EventFilter, Job, JobFilter, JobKind, JobResult, JobStatus, MetricFilter, MetricPoint,
-    NewJob, ObjectFilter, Run, Session, SessionSummary, Thread,
+    CostEvent, Event, EventFilter, Job, JobFilter, JobKind, JobResult, JobStatus, MetricFilter,
+    MetricPoint, NewJob, ObjectFilter, Run, Session, SessionSummary, Thread,
 };
 use rusvel_core::{EventId, JobId, RunId, SessionId, ThreadId};
 
@@ -1680,6 +1680,153 @@ impl MetricStore for Database {
                 });
             }
             Ok(points)
+        })
+        .await
+        .map_err(|e| RusvelError::Internal(format!("spawn_blocking: {e}")))?
+    }
+
+    async fn record_cost(&self, event: CostEvent) -> rusvel_core::Result<()> {
+        let conn = self.conn.clone();
+        let event = event.clone();
+        tokio::task::spawn_blocking(move || {
+            let db = conn.lock().map_err(|e| RusvelError::Storage(format!("mutex poisoned: {e}")))?;
+            db.execute(
+                "INSERT INTO cost_events (id, session_id, department_id, model, provider,
+                 input_tokens, output_tokens, cost_usd, operation, created_at, metadata)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                params![
+                    event.id,
+                    event.session_id.map(|s| s.to_string()),
+                    event.department_id,
+                    event.model,
+                    event.provider,
+                    event.input_tokens,
+                    event.output_tokens,
+                    event.cost_usd,
+                    event.operation,
+                    event.created_at.to_rfc3339(),
+                    serde_json::to_string(&event.metadata)?,
+                ],
+            )
+            .map_err(|e| RusvelError::Storage(e.to_string()))?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| RusvelError::Internal(format!("spawn_blocking: {e}")))?
+    }
+
+    async fn query_costs(
+        &self,
+        session_id: Option<&SessionId>,
+        department_id: Option<&str>,
+        from: Option<chrono::DateTime<chrono::Utc>>,
+        to: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> rusvel_core::Result<Vec<CostEvent>> {
+        let conn = self.conn.clone();
+        let sid = session_id.map(|s| s.to_string());
+        let dept = department_id.map(str::to_string);
+        tokio::task::spawn_blocking(move || {
+            let db = conn.lock().map_err(|e| RusvelError::Storage(format!("mutex poisoned: {e}")))?;
+            let mut sql = String::from(
+                "SELECT id, session_id, department_id, model, provider, input_tokens, output_tokens,
+                        cost_usd, operation, created_at, metadata FROM cost_events WHERE 1=1",
+            );
+            let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+            let mut idx = 1;
+            if let Some(ref s) = sid {
+                sql.push_str(&format!(" AND session_id = ?{idx}"));
+                param_values.push(Box::new(s.clone()));
+                idx += 1;
+            }
+            if let Some(ref d) = dept {
+                sql.push_str(&format!(" AND department_id = ?{idx}"));
+                param_values.push(Box::new(d.clone()));
+                idx += 1;
+            }
+            if let Some(ref t) = from {
+                sql.push_str(&format!(" AND created_at >= ?{idx}"));
+                param_values.push(Box::new(t.to_rfc3339()));
+                idx += 1;
+            }
+            if let Some(ref t) = to {
+                sql.push_str(&format!(" AND created_at <= ?{idx}"));
+                param_values.push(Box::new(t.to_rfc3339()));
+                let _ = idx;
+            }
+            sql.push_str(" ORDER BY created_at ASC");
+            let mut stmt = db
+                .prepare(&sql)
+                .map_err(|e| RusvelError::Storage(e.to_string()))?;
+            let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values
+                .iter()
+                .map(std::convert::AsRef::as_ref)
+                .collect();
+            let rows = stmt
+                .query_map(params_refs.as_slice(), |row| {
+                    let id: String = row.get(0)?;
+                    let session_s: Option<String> = row.get(1)?;
+                    let department_id: Option<String> = row.get(2)?;
+                    let model: String = row.get(3)?;
+                    let provider: String = row.get(4)?;
+                    let input_tokens: u32 = row.get(5)?;
+                    let output_tokens: u32 = row.get(6)?;
+                    let cost_usd: f64 = row.get(7)?;
+                    let operation: String = row.get(8)?;
+                    let created_s: String = row.get(9)?;
+                    let meta_s: String = row.get(10)?;
+                    Ok((
+                        id,
+                        session_s,
+                        department_id,
+                        model,
+                        provider,
+                        input_tokens,
+                        output_tokens,
+                        cost_usd,
+                        operation,
+                        created_s,
+                        meta_s,
+                    ))
+                })
+                .map_err(|e| RusvelError::Storage(e.to_string()))?;
+            let mut out = Vec::new();
+            for row in rows {
+                let (
+                    id,
+                    session_s,
+                    department_id,
+                    model,
+                    provider,
+                    input_tokens,
+                    output_tokens,
+                    cost_usd,
+                    operation,
+                    created_s,
+                    meta_s,
+                ) = row.map_err(|e| RusvelError::Storage(e.to_string()))?;
+                let session_id = session_s
+                    .and_then(|s| uuid::Uuid::parse_str(&s).ok())
+                    .map(SessionId::from);
+                let created_at = DateTime::parse_from_rfc3339(&created_s)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| RusvelError::Storage(e.to_string()))?;
+                let metadata: serde_json::Value = serde_json::from_str(&meta_s)
+                    .map_err(|e| RusvelError::Storage(e.to_string()))?;
+                out.push(CostEvent {
+                    id,
+                    session_id,
+                    department_id,
+                    model,
+                    provider,
+                    input_tokens,
+                    output_tokens,
+                    cost_usd,
+                    operation,
+                    created_at,
+                    metadata,
+                });
+            }
+            Ok(out)
         })
         .await
         .map_err(|e| RusvelError::Internal(format!("spawn_blocking: {e}")))?
