@@ -149,7 +149,7 @@ pub struct SpendQuery {
 
 #[derive(Debug, Serialize)]
 pub struct SpendResponse {
-    /// Sum of `llm.cost_usd` for the selected department (or all departments if `dept` omitted).
+    /// Total USD for the selected department, or all departments if `dept` omitted (`cost_events` or metrics).
     pub total_usd: f64,
     /// Per-department USD (`cost_events` rollups when present, else `llm.cost_usd` tags).
     pub by_department: HashMap<String, f64>,
