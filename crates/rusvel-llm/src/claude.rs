@@ -1,6 +1,7 @@
 //! Claude (Anthropic) HTTP adapter implementing [`LlmPort`].
 
 use async_trait::async_trait;
+use futures::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -9,13 +10,40 @@ use rusvel_core::domain::*;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::ports::LlmPort;
 
-/// Beta header for Claude computer use (tool type `computer_20250124`).
-const ANTHROPIC_BETA_COMPUTER_USE: &str = "computer-use-2025-01-24";
+/// Beta header for Claude computer use (legacy tool type `computer_20250124`).
+const ANTHROPIC_BETA_COMPUTER_USE_LEGACY: &str = "computer-use-2025-01-24";
+/// Beta header for newer computer-use tool schemas (Opus/Sonnet 4.6 family).
+const ANTHROPIC_BETA_COMPUTER_USE_V2: &str = "computer-use-2025-11-24";
 
-fn request_needs_computer_beta(tools: &[serde_json::Value]) -> bool {
-    tools
-        .iter()
-        .any(|t| t.get("type").and_then(|v| v.as_str()) == Some("computer_20250124"))
+fn computer_use_beta_header(tools: &[serde_json::Value]) -> Option<&'static str> {
+    let has_v2 = tools.iter().any(|t| {
+        matches!(
+            t.get("type").and_then(|v| v.as_str()),
+            Some("computer_20251124" | "computer_20251015")
+        )
+    });
+    if has_v2 {
+        return Some(ANTHROPIC_BETA_COMPUTER_USE_V2);
+    }
+    let has_legacy = tools.iter().any(|t| {
+        t.get("type").and_then(|v| v.as_str()) == Some("computer_20250124")
+    });
+    if has_legacy {
+        return Some(ANTHROPIC_BETA_COMPUTER_USE_LEGACY);
+    }
+    None
+}
+
+/// Map UI shorthand (`sonnet`, `opus`, `haiku`) to Messages API model ids.
+fn normalize_claude_messages_api_model(model: &str) -> String {
+    match model.trim() {
+        "" => "claude-sonnet-4-20250514".into(),
+        m if m.starts_with("claude-") && m.len() > 15 => m.to_string(),
+        "sonnet" => "claude-sonnet-4-20250514".into(),
+        "opus" => "claude-opus-4-20250514".into(),
+        "haiku" => "claude-haiku-4-20250414".into(),
+        other => other.to_string(),
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -65,8 +93,8 @@ impl LlmPort for ClaudeProvider {
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json");
-        if request_needs_computer_beta(&request.tools) {
-            req = req.header("anthropic-beta", ANTHROPIC_BETA_COMPUTER_USE);
+        if let Some(beta) = computer_use_beta_header(&request.tools) {
+            req = req.header("anthropic-beta", beta);
         }
         let http_resp = req
             .json(&claude_req)
@@ -83,6 +111,130 @@ impl LlmPort for ClaudeProvider {
         let claude_resp: ClaudeResponse = http_resp.json().await.map_err(map_reqwest_error)?;
 
         Ok(from_claude_response(claude_resp))
+    }
+
+    async fn stream(
+        &self,
+        request: LlmRequest,
+    ) -> Result<tokio::sync::mpsc::Receiver<LlmStreamEvent>> {
+        let claude_req = to_claude_request(&request);
+        let url = format!("{}/messages", self.base_url);
+        let mut body = serde_json::to_value(&claude_req)
+            .map_err(|e| RusvelError::Llm(format!("claude stream body: {e}")))?;
+        if let Some(obj) = body.as_object_mut() {
+            obj.insert("stream".into(), serde_json::json!(true));
+        }
+        let api_key = self.api_key.clone();
+        let client = self.client.clone();
+        let beta = computer_use_beta_header(&request.tools).map(str::to_string);
+
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
+
+        tokio::spawn(async move {
+            let mut req = client
+                .post(&url)
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json");
+            if let Some(ref b) = beta {
+                req = req.header("anthropic-beta", b);
+            }
+            let http_resp = match req.json(&body).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = tx
+                        .send(LlmStreamEvent::Error(e.to_string()))
+                        .await
+                        .is_ok();
+                    return;
+                }
+            };
+            let status = http_resp.status();
+            if !status.is_success() {
+                let body_txt = http_resp.text().await.unwrap_or_default();
+                let _ = tx
+                    .send(LlmStreamEvent::Error(format!(
+                        "HTTP {}: {body_txt}",
+                        status.as_u16()
+                    )))
+                    .await
+                    .is_ok();
+                return;
+            }
+
+            let mut full_text = String::new();
+            let mut input_tokens: u32 = 0;
+            let mut output_tokens: u32 = 0;
+            let mut buf = String::new();
+            let mut stream = http_resp.bytes_stream();
+
+            while let Some(chunk) = stream.next().await {
+                let chunk = match chunk {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = tx.send(LlmStreamEvent::Error(e.to_string())).await;
+                        return;
+                    }
+                };
+                buf.push_str(&String::from_utf8_lossy(&chunk));
+                while let Some(pos) = buf.find('\n') {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf.drain(..=pos);
+                    let line = line.trim();
+                    if let Some(data) = line.strip_prefix("data:") {
+                        let data = data.trim();
+                        if data.is_empty() {
+                            continue;
+                        }
+                        let Ok(ev) = serde_json::from_str::<serde_json::Value>(data) else {
+                            continue;
+                        };
+                        let typ = ev.get("type").and_then(|t| t.as_str());
+                        if typ == Some("content_block_delta") {
+                            if let Some(delta) = ev.get("delta") {
+                                if delta.get("type").and_then(|t| t.as_str()) == Some("text_delta") {
+                                    if let Some(text) =
+                                        delta.get("text").and_then(|t| t.as_str())
+                                    {
+                                        full_text.push_str(text);
+                                        let _ = tx.send(LlmStreamEvent::Delta(text.to_string())).await;
+                                    }
+                                }
+                            }
+                        } else if typ == Some("message_delta") {
+                            if let Some(u) = ev.get("usage") {
+                                if let Some(ot) =
+                                    u.get("output_tokens").and_then(|v| v.as_u64())
+                                {
+                                    output_tokens = ot as u32;
+                                }
+                            }
+                        } else if typ == Some("message_start") {
+                            if let Some(u) = ev.get("message").and_then(|m| m.get("usage")) {
+                                if let Some(it) =
+                                    u.get("input_tokens").and_then(|v| v.as_u64())
+                                {
+                                    input_tokens = it as u32;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let done = LlmResponse {
+                content: Content::text(&full_text),
+                finish_reason: FinishReason::Stop,
+                usage: LlmUsage {
+                    input_tokens,
+                    output_tokens,
+                },
+                metadata: serde_json::json!({}),
+            };
+            let _ = tx.send(LlmStreamEvent::Done(done)).await;
+        });
+
+        Ok(rx)
     }
 
     async fn embed(&self, _model: &ModelRef, _text: &str) -> rusvel_core::error::Result<Vec<f32>> {
@@ -361,7 +513,7 @@ fn to_claude_request(req: &LlmRequest) -> ClaudeRequest {
     }
 
     ClaudeRequest {
-        model: req.model.model.clone(),
+        model: normalize_claude_messages_api_model(&req.model.model),
         messages,
         max_tokens: req.max_tokens.unwrap_or(4096),
         system,
@@ -828,13 +980,13 @@ mod tests {
 
     #[test]
     fn to_claude_request_computer_tool_triggers_beta_scan() {
-        assert!(!request_needs_computer_beta(&[]));
-        assert!(request_needs_computer_beta(&[serde_json::json!({
+        assert!(computer_use_beta_header(&[]).is_none());
+        assert!(computer_use_beta_header(&[serde_json::json!({
             "type": "computer_20250124",
             "name": "computer",
             "display_width_px": 1024,
             "display_height_px": 768
-        })]));
+        })]).is_some());
     }
 
     #[test]

@@ -84,6 +84,9 @@ pub struct LayeredConfig {
     pub max_turns: Option<u32>,
     #[serde(default)]
     pub context_pack: Option<ContextPackFlags>,
+    /// `discuss` | `agentic` — steers system prompt (Claude-style modes); default discuss.
+    #[serde(default)]
+    pub chat_mode: Option<String>,
 }
 
 /// Fully resolved config — all fields present, ready to use.
@@ -98,6 +101,8 @@ pub struct ResolvedConfig {
     pub system_prompt: String,
     pub add_dirs: Vec<String>,
     pub max_turns: Option<u32>,
+    /// `discuss` or `agentic`.
+    pub chat_mode: String,
 }
 
 impl LayeredConfig {
@@ -125,6 +130,7 @@ impl LayeredConfig {
                 (None, Some(b)) => Some(b.clone()),
                 (None, None) => None,
             },
+            chat_mode: self.chat_mode.clone().or(parent.chat_mode.clone()),
         }
     }
 
@@ -143,6 +149,10 @@ impl LayeredConfig {
             system_prompt: self.system_prompt.clone().unwrap_or_default(),
             add_dirs: self.add_dirs.clone().unwrap_or_default(),
             max_turns: self.max_turns,
+            chat_mode: self
+                .chat_mode
+                .clone()
+                .unwrap_or_else(|| "discuss".into()),
         }
     }
 }
@@ -212,6 +222,7 @@ mod tests {
         assert_eq!(config.model, "sonnet");
         assert_eq!(config.effort, "medium");
         assert_eq!(config.permission_mode, "plan");
+        assert_eq!(config.chat_mode, "discuss");
     }
 
     #[test]
@@ -264,6 +275,7 @@ mod tests {
             system_prompt: String::new(),
             add_dirs: vec![".".into()],
             max_turns: None,
+            chat_mode: "discuss".into(),
         };
         let args = config.to_claude_args();
         assert!(args.contains(&"--model".to_string()));

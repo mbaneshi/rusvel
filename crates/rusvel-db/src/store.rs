@@ -4,6 +4,7 @@
 //! five sub-store traits. Async wrappers use `tokio::task::spawn_blocking`
 //! internally since rusqlite is synchronous.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
@@ -21,6 +22,95 @@ fn validate_identifier(name: &str) -> rusvel_core::Result<&str> {
     }
     Ok(name)
 }
+
+fn cost_events_spend_snapshot_inner(db: &Connection) -> CostEventsSpendSnapshot {
+    let event_row_count: u64 = db
+        .query_row("SELECT COUNT(*) FROM cost_events", [], |r| r.get::<_, i64>(0))
+        .unwrap_or(0) as u64;
+    if event_row_count == 0 {
+        return CostEventsSpendSnapshot {
+            event_row_count: 0,
+            ..Default::default()
+        };
+    }
+
+    let total_usd_all: f64 = db
+        .query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM cost_events",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0.0);
+
+    let mut by_department_usd = HashMap::new();
+    let mut by_department_tokens = HashMap::new();
+    if let Ok(mut stmt) = db.prepare(
+        "SELECT COALESCE(department_id, '_none') AS dept,
+                SUM(cost_usd) AS usd,
+                SUM(CAST(input_tokens AS INTEGER) + CAST(output_tokens AS INTEGER)) AS tok
+         FROM cost_events GROUP BY dept",
+    ) {
+        let rows = stmt.query_map([], |row| {
+            let dept: String = row.get(0)?;
+            let usd: f64 = row.get(1)?;
+            let tok: i64 = row.get(2)?;
+            Ok((dept, usd, tok.max(0) as u64))
+        });
+        if let Ok(iter) = rows {
+            for r in iter.flatten() {
+                let (dept, usd, tok) = r;
+                by_department_usd.insert(dept.clone(), usd);
+                by_department_tokens.insert(dept, tok);
+            }
+        }
+    }
+
+    let mut by_session_usd = HashMap::new();
+    if let Ok(mut stmt) = db.prepare(
+        "SELECT session_id, SUM(cost_usd) FROM cost_events WHERE session_id IS NOT NULL GROUP BY session_id",
+    ) {
+        let rows = stmt.query_map([], |row| {
+            let sid: String = row.get(0)?;
+            let usd: f64 = row.get(1)?;
+            Ok((sid, usd))
+        });
+        if let Ok(iter) = rows {
+            for r in iter.flatten() {
+                by_session_usd.insert(r.0, r.1);
+            }
+        }
+    }
+
+    let mut by_model = HashMap::new();
+    if let Ok(mut stmt) = db.prepare(
+        "SELECT model,
+                SUM(cost_usd) AS usd,
+                SUM(CAST(input_tokens AS INTEGER) + CAST(output_tokens AS INTEGER)) AS tok
+         FROM cost_events GROUP BY model",
+    ) {
+        let rows = stmt.query_map([], |row| {
+            let model: String = row.get(0)?;
+            let usd: f64 = row.get(1)?;
+            let tok: i64 = row.get(2)?;
+            Ok((model, usd, tok.max(0) as u64))
+        });
+        if let Ok(iter) = rows {
+            for r in iter.flatten() {
+                by_model.insert(r.0, (r.1, r.2));
+            }
+        }
+    }
+
+    CostEventsSpendSnapshot {
+        event_row_count,
+        total_usd_all,
+        by_department_usd,
+        by_department_tokens,
+        by_session_usd,
+        by_model,
+    }
+}
+
 use chrono::{DateTime, Utc};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -92,6 +182,19 @@ pub struct SqlColumn {
 
 /// SQLite-backed storage adapter.
 ///
+/// Aggregated LLM spend from `cost_events` for analytics (single query round-trip pattern).
+#[derive(Debug, Clone, Default)]
+pub struct CostEventsSpendSnapshot {
+    /// Rows in `cost_events` (0 if table missing or empty).
+    pub event_row_count: u64,
+    pub total_usd_all: f64,
+    pub by_department_usd: HashMap<String, f64>,
+    pub by_department_tokens: HashMap<String, u64>,
+    pub by_session_usd: HashMap<String, f64>,
+    /// Model name -> (usd, tokens).
+    pub by_model: HashMap<String, (f64, u64)>,
+}
+
 /// Thread-safe via an internal `Mutex<Connection>`. For the single-writer
 /// nature of `SQLite` this is the simplest correct approach.
 pub struct Database {
@@ -135,6 +238,17 @@ impl Database {
     ) -> rusvel_core::Result<R> {
         let guard = self.conn();
         f(&guard)
+    }
+
+    /// Roll up `cost_events` for `/api/analytics/spend`. On missing table or query error, returns zeros.
+    pub async fn cost_events_spend_snapshot(&self) -> rusvel_core::Result<CostEventsSpendSnapshot> {
+        let conn = self.conn.clone();
+        tokio::task::spawn_blocking(move || {
+            let db = conn.lock().map_err(|e| RusvelError::Storage(format!("mutex poisoned: {e}")))?;
+            Ok(cost_events_spend_snapshot_inner(&db))
+        })
+        .await
+        .map_err(|e| RusvelError::Internal(format!("spawn_blocking: {e}")))?
     }
 
     // ── Schema introspection ─────────────────────────────────────
@@ -2244,6 +2358,62 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(all.len(), 6);
+    }
+
+    #[tokio::test]
+    async fn cost_events_spend_snapshot_empty() {
+        let db = test_db();
+        let snap = db.cost_events_spend_snapshot().await.unwrap();
+        assert_eq!(snap.event_row_count, 0);
+        assert!(snap.by_department_usd.is_empty());
+        assert_eq!(snap.total_usd_all, 0.0);
+    }
+
+    #[tokio::test]
+    async fn cost_events_spend_snapshot_aggregates() {
+        let db = test_db();
+        let sid = SessionId::new();
+        let base = Utc::now();
+        let e1 = CostEvent {
+            id: "ce-a".into(),
+            session_id: Some(sid),
+            department_id: Some("harvest".into()),
+            model: "m1".into(),
+            provider: "ollama".into(),
+            input_tokens: 10,
+            output_tokens: 20,
+            cost_usd: 1.0,
+            operation: "generate".into(),
+            created_at: base,
+            metadata: serde_json::json!({}),
+        };
+        let e2 = CostEvent {
+            id: "ce-b".into(),
+            session_id: Some(sid),
+            department_id: None,
+            model: "m1".into(),
+            provider: "ollama".into(),
+            input_tokens: 5,
+            output_tokens: 5,
+            cost_usd: 2.0,
+            operation: "generate".into(),
+            created_at: base,
+            metadata: serde_json::json!({}),
+        };
+        MetricStore::record_cost(&db, e1).await.unwrap();
+        MetricStore::record_cost(&db, e2).await.unwrap();
+
+        let snap = db.cost_events_spend_snapshot().await.unwrap();
+        assert_eq!(snap.event_row_count, 2);
+        assert!((snap.total_usd_all - 3.0).abs() < 1e-9);
+        assert!((snap.by_department_usd["harvest"] - 1.0).abs() < 1e-9);
+        assert!((snap.by_department_usd["_none"] - 2.0).abs() < 1e-9);
+        assert_eq!(snap.by_department_tokens["harvest"], 30);
+        assert_eq!(snap.by_department_tokens["_none"], 10);
+        assert!((snap.by_session_usd[&sid.to_string()] - 3.0).abs() < 1e-9);
+        let m = snap.by_model.get("m1").expect("model m1");
+        assert!((m.0 - 3.0).abs() < 1e-9);
+        assert_eq!(m.1, 40);
     }
 
     // ── StoragePort trait object ──────────────────────────────────
