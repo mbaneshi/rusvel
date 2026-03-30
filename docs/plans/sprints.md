@@ -3,6 +3,8 @@
 > Single source of truth. All other plan docs are reference material.
 > Date: 2026-03-25 | Status: Active | Updated: 2026-03-26
 
+**Parallel initiative:** [program-harvest-agency.md](program-harvest-agency.md) — native harvest / autonomous agency (waves, priorities, AG-1…7 slices, Cursor todo map). Orthogonal to Sprint 2–5 below.
+
 ---
 
 ## Where We Are (verified 2026-03-27)

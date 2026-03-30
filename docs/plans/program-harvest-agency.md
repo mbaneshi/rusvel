@@ -13,7 +13,7 @@
 | [autonomous-freelance-agency.md](autonomous-freelance-agency.md) | Vision, phases, file impact; §13 Sprint A–G (see **supersedes** below) |
 | [browser-fleet-and-capture-architecture.md](browser-fleet-and-capture-architecture.md) | Multi-profile CDP, capture mesh (Phase 2–3) |
 | [native-app-tooling-permissions-cost-map.md](native-app-tooling-permissions-cost-map.md) | Hooks, tool policy, flow MiniJinja, cost pipeline, gaps (e.g. session snapshot) |
-| [sprints.md](sprints.md) | Workspace sprint SSOT (agent intelligence, flows, channels) |
+| [sprints.md](sprints.md) | Workspace sprint SSOT; links to this doc as **parallel initiative** (Sprint 2–5 unchanged) |
 | [roadmap-consolidated.md](roadmap-consolidated.md) | Phased quick wins; **orthogonal** unless you explicitly pull items into AG-backlog |
 
 **Cursor plan (machine-local, full code map + YAML todos):**  
@@ -135,4 +135,4 @@ flowchart LR
 
 | Date | Note |
 |------|------|
-| 2026-03-30 | Initial program index: glossary, todo mapping, AG slices, Sprint A supersedes note. |
+| 2026-03-30 | Initial program index; `sprints.md` header links here as parallel AG initiative. |
