@@ -23,10 +23,11 @@ async fn create_get_delete_rule_roundtrip() {
         "POST",
         "/api/rules",
         Some(json!({
+            "id": "",
             "name": "no-mocks",
             "content": "Never use mocks in integration tests.",
-            "engine": "code",
-            "metadata": {}
+            "enabled": true,
+            "metadata": { "engine": "code" }
         })),
     )
     .await;
@@ -46,7 +47,7 @@ async fn create_get_delete_rule_roundtrip() {
 
     let (st4, _) =
         json_request(&mut h.router, "DELETE", &format!("/api/rules/{id}"), None).await;
-    assert_eq!(st4, StatusCode::OK);
+    assert_eq!(st4, StatusCode::NO_CONTENT);
 
     let (st5, _) = json_request(&mut h.router, "GET", &format!("/api/rules/{id}"), None).await;
     assert_eq!(st5, StatusCode::NOT_FOUND);

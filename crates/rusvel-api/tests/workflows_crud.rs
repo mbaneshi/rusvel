@@ -26,7 +26,11 @@ async fn create_get_workflow_roundtrip() {
             "name": "test-workflow",
             "description": "A test workflow",
             "steps": [
-                {"name": "step1", "action": "echo", "config": {}}
+                {
+                    "agent_name": "default",
+                    "prompt_template": "Echo: {{input}}",
+                    "step_type": "sequential"
+                }
             ],
             "metadata": {}
         })),
@@ -45,5 +49,5 @@ async fn create_get_workflow_roundtrip() {
     // Delete
     let (st3, _) =
         json_request(&mut h.router, "DELETE", &format!("/api/workflows/{id}"), None).await;
-    assert_eq!(st3, StatusCode::OK);
+    assert_eq!(st3, StatusCode::NO_CONTENT);
 }

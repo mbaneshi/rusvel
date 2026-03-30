@@ -23,12 +23,14 @@ async fn create_get_delete_hook_roundtrip() {
         "POST",
         "/api/hooks",
         Some(json!({
+            "id": "",
             "name": "notify-on-done",
-            "event": "chat.completed",
-            "action": "command",
-            "config": {"command": "echo done"},
-            "engine": "forge",
-            "metadata": {}
+            "event": "Notification",
+            "matcher": ".*",
+            "hook_type": "command",
+            "action": "echo done",
+            "enabled": true,
+            "metadata": { "engine": "forge" }
         })),
     )
     .await;
@@ -43,7 +45,7 @@ async fn create_get_delete_hook_roundtrip() {
 
     let (st3, _) =
         json_request(&mut h.router, "DELETE", &format!("/api/hooks/{id}"), None).await;
-    assert_eq!(st3, StatusCode::OK);
+    assert_eq!(st3, StatusCode::NO_CONTENT);
 }
 
 #[tokio::test]

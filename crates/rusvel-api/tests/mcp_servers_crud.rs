@@ -23,10 +23,15 @@ async fn create_get_delete_mcp_server_roundtrip() {
         "POST",
         "/api/mcp-servers",
         Some(json!({
+            "id": "",
             "name": "test-mcp",
-            "transport": "stdio",
+            "description": "",
+            "server_type": "stdio",
             "command": "echo",
             "args": ["hello"],
+            "url": null,
+            "env": {},
+            "enabled": true,
             "metadata": {}
         })),
     )
@@ -43,5 +48,5 @@ async fn create_get_delete_mcp_server_roundtrip() {
 
     let (st3, _) =
         json_request(&mut h.router, "DELETE", &format!("/api/mcp-servers/{id}"), None).await;
-    assert_eq!(st3, StatusCode::OK);
+    assert_eq!(st3, StatusCode::NO_CONTENT);
 }

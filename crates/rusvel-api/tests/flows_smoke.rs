@@ -41,12 +41,22 @@ async fn create_get_flow_roundtrip() {
         "POST",
         "/api/flows",
         Some(json!({
+            "id": "00000000-0000-0000-0000-000000000000",
             "session_id": sid.to_string(),
             "name": "test-flow",
+            "description": "",
             "nodes": [
-                {"id": "n1", "kind": "code", "label": "echo", "config": {"command": "echo hi"}, "position": {"x": 0, "y": 0}}
+                {
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "node_type": "code",
+                    "name": "echo",
+                    "parameters": {"command": "echo hi"},
+                    "position": [0.0, 0.0],
+                    "metadata": {}
+                }
             ],
-            "edges": []
+            "connections": [],
+            "metadata": {}
         })),
     )
     .await;

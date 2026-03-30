@@ -24,10 +24,11 @@ async fn create_get_delete_skill_roundtrip() {
         "POST",
         "/api/skills",
         Some(json!({
+            "id": "",
             "name": "summarize",
-            "prompt": "Summarize this: {{input}}",
-            "engine": "forge",
-            "metadata": {}
+            "description": "",
+            "prompt_template": "Summarize this: {{input}}",
+            "metadata": { "engine": "forge" }
         })),
     )
     .await;
@@ -51,7 +52,7 @@ async fn create_get_delete_skill_roundtrip() {
     // Delete
     let (st4, _) =
         json_request(&mut h.router, "DELETE", &format!("/api/skills/{id}"), None).await;
-    assert_eq!(st4, StatusCode::OK);
+    assert_eq!(st4, StatusCode::NO_CONTENT);
 
     // Verify deleted
     let (st5, _) = json_request(&mut h.router, "GET", &format!("/api/skills/{id}"), None).await;
