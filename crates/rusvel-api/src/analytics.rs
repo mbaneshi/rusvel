@@ -3,8 +3,9 @@
 //! `GET /api/analytics` returns a JSON object with counts of agents, skills,
 //! rules, MCP servers, hooks, conversations, events, and departments.
 //!
-//! `GET /api/analytics/spend` returns LLM spend from [`MetricStore`] (`llm.cost_usd`),
-//! optionally filtered by department and scoped to a session for budget warnings.
+//! `GET /api/analytics/spend` returns LLM spend from SQLite `cost_events` rollups when the table
+//! has rows, else from [`MetricStore`] (`llm.cost_usd`), optionally filtered by department and
+//! scoped to a session for budget warnings.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

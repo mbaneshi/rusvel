@@ -130,7 +130,7 @@ flowchart TB
 |------|--------|
 | Wrapper | `CostTrackingLlm` holds `metrics: Option<Arc<dyn MetricStore>>` |
 | When | After each `generate` / stream `Done` / batch poll item |
-| Dual write | Existing `MetricPoint` (`llm.cost_usd`) **unchanged** for [`get_spend`](../../crates/rusvel-api/src/analytics.rs); **plus** `CostEvent` via `record_cost` |
+| Dual write | `MetricPoint` (`llm.cost_usd`) **unchanged**; **plus** `CostEvent` via `record_cost`. [`get_spend`](../../crates/rusvel-api/src/analytics.rs) reads **`cost_events` first** (SQL rollups via [`Database::cost_events_spend_snapshot`](../../crates/rusvel-db/src/store.rs)); if the table is empty, it falls back to metric aggregation. |
 
 Session/department attribution comes from request metadata keys already used elsewhere (`RUSVEL_META_SESSION_ID`, `RUSVEL_META_DEPARTMENT_ID`).
 
@@ -147,10 +147,10 @@ Router registration: [`rusvel-api/src/lib.rs`](../../crates/rusvel-api/src/lib.r
 
 | Piece | Path |
 |-------|------|
-| Cost breakdown tables | [`frontend/src/routes/settings/spend/+page.svelte`](../../frontend/src/routes/settings/spend/+page.svelte) |
-| Client API | `getCostSummaryByGroup` in [`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts) |
+| Spend page (chart, totals, token tables) | [`frontend/src/routes/settings/spend/+page.svelte`](../../frontend/src/routes/settings/spend/+page.svelte) |
+| Client API | `getAnalyticsSpend` in [`frontend/src/lib/api.ts`](../../frontend/src/lib/api.ts) — single fetch; optional `department_tokens` / `by_model` when the DB has `cost_events` rows |
 
-**Note:** Spend page still uses **`/api/analytics/spend`** for the chart (tag-based `MetricPoint` aggregation). Cost breakdown uses **structured** `CostEvent` rows — two complementary views until/unless unified.
+**Note:** **`GET /api/analytics/spend`** is the canonical spend endpoint for the UI: **cost_events-first** rollups with **metric fallback** when `cost_events` is empty (same `by_department` / `total_usd` shape). **`/api/analytics/costs`** and **`/api/analytics/costs/summary`** stay available for row-level queries and other clients; `getCostSummaryByGroup` in `api.ts` remains for those callers.
 
 ### 5.6 Tests
 
@@ -187,7 +187,6 @@ cargo test -p rusvel-api
 | `POST /api/system/session-snapshot` | `rusvel-api` + optional `SessionPort` / object store | Satisfy [`session-save.sh`](../../.claude/hooks/session-save.sh); define payload (session id, transcript pointer, etc.) |
 | UI for `permission_mode` | `frontend` dept settings | Map strings consistently with [`tool_permission_mode_from_dept_config_str`](../../crates/rusvel-core/src/config.rs) |
 | Record `CostEvent` for non-LLM ops | `rusvel-embed`, flow executor, tool layer | [`decisions.md`](../design/decisions.md) / roadmap mention broader cost surface |
-| Unify spend chart + cost_events | `analytics.rs` + FE | Optional migration from tag-only `MetricPoint` to primary `CostEvent` reporting |
 | Claude `settings.json` snippet | `.claude/settings.json` (repo or user) | Document which hook event runs which script |
 
 ---

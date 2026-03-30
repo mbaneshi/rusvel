@@ -249,6 +249,8 @@ export interface DepartmentConfig {
 	max_turns: number | null;
 	/** S-045: optional section toggles for session context pack */
 	context_pack?: ContextPackFlags | null;
+	/** `discuss` vs `agentic` — dept chat system prompt bias */
+	chat_mode?: string;
 }
 
 export async function getDeptConfig(dept: string): Promise<DepartmentConfig> {
@@ -282,6 +284,10 @@ export interface AnalyticsSpendResponse {
 	session_budget_limit_usd?: number;
 	budget_warning: boolean;
 	budget_usage_ratio?: number;
+	/** Token totals per department when spend is sourced from cost_events */
+	department_tokens?: Record<string, number>;
+	/** Per-model USD + tokens when cost_events provide model breakdown */
+	by_model?: Record<string, { usd: number; tokens: number }>;
 }
 
 /** GET /api/analytics/spend — LLM spend by department; optional session for budget context (S-035). */
@@ -1250,6 +1256,89 @@ export async function getJobs(
 		sp.set('limit', String(opts.limit));
 	}
 	return request<JobListItem[]>(`/api/jobs?${sp}`);
+}
+
+/** GET /api/dashboard/active — queued/running jobs, pending approvals, cron. */
+export interface ActiveDashboardResponse {
+	jobs: JobListItem[];
+	pending_approvals: Job[];
+	cron_schedules: unknown[];
+}
+
+export async function getActiveDashboard(
+	sessionId?: string | null
+): Promise<ActiveDashboardResponse> {
+	const sp = new URLSearchParams();
+	if (sessionId) sp.set('session_id', sessionId);
+	const q = sp.toString();
+	return request(`/api/dashboard/active${q ? `?${q}` : ''}`);
+}
+
+/** GET/POST /api/artifacts — saved outputs (Claude-style artifacts). */
+export interface ArtifactRecord {
+	id: string;
+	title: string;
+	kind?: string;
+	body: string;
+	session_id?: string | null;
+	department?: string | null;
+	created_at: string;
+	metadata?: Record<string, unknown>;
+}
+
+export async function listArtifacts(): Promise<ArtifactRecord[]> {
+	return request('/api/artifacts');
+}
+
+export async function createArtifact(body: {
+	title: string;
+	kind?: string;
+	body: string;
+	session_id?: string | null;
+	department?: string | null;
+	metadata?: Record<string, unknown>;
+}): Promise<ArtifactRecord> {
+	return request('/api/artifacts', {
+		method: 'POST',
+		body: JSON.stringify(body)
+	});
+}
+
+export async function deleteArtifact(id: string): Promise<void> {
+	const res = await fetch(`${BASE}/api/artifacts/${encodeURIComponent(id)}`, {
+		method: 'DELETE',
+		headers: { 'Content-Type': 'application/json' }
+	});
+	if (!res.ok && res.status !== 204) {
+		const text = await res.text();
+		throw new Error(`API error ${res.status}: ${text}`);
+	}
+}
+
+export interface GitHubConnectorStatus {
+	connected: boolean;
+}
+
+export async function getGitHubConnectorStatus(): Promise<GitHubConnectorStatus> {
+	return request('/api/connectors/github/status');
+}
+
+export async function setGitHubPat(token: string): Promise<GitHubConnectorStatus> {
+	return request('/api/connectors/github/pat', {
+		method: 'POST',
+		body: JSON.stringify({ token })
+	});
+}
+
+export async function clearGitHubPat(): Promise<void> {
+	const res = await fetch(`${BASE}/api/connectors/github/pat`, {
+		method: 'DELETE',
+		headers: { 'Content-Type': 'application/json' }
+	});
+	if (!res.ok && res.status !== 204) {
+		const text = await res.text();
+		throw new Error(`API error ${res.status}: ${text}`);
+	}
 }
 
 export interface ScheduledPostRow {

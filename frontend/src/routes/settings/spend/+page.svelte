@@ -2,21 +2,41 @@
 	import { onMount } from 'svelte';
 	import { Chart, Svg, Axis, Bars } from 'layerchart';
 	import { activeSession } from '$lib/stores';
-	import {
-		getAnalyticsSpend,
-		getCostSummaryByGroup,
-		type AnalyticsSpendResponse,
-		type CostSummaryRow
-	} from '$lib/api';
+	import { getAnalyticsSpend, type AnalyticsSpendResponse } from '$lib/api';
 	import { toast } from 'svelte-sonner';
 
 	let currentSession: import('$lib/api').SessionSummary | null = $state(null);
 	activeSession.subscribe((v) => (currentSession = v));
 
 	let spend: AnalyticsSpendResponse | null = $state(null);
-	let costByDept: CostSummaryRow[] = $state([]);
-	let costByModel: CostSummaryRow[] = $state([]);
 	let loading = $state(true);
+
+	let costByDeptRows = $derived.by(() => {
+		if (!spend?.department_tokens || Object.keys(spend.department_tokens).length === 0) {
+			return [] as { key: string; total_usd: number; total_tokens: number }[];
+		}
+		const tok = spend.department_tokens;
+		return Object.entries(spend.by_department)
+			.map(([key, total_usd]) => ({
+				key,
+				total_usd,
+				total_tokens: tok[key] ?? 0
+			}))
+			.sort((a, b) => b.total_usd - a.total_usd);
+	});
+
+	let costByModelRows = $derived.by(() => {
+		if (!spend?.by_model || Object.keys(spend.by_model).length === 0) {
+			return [] as { key: string; total_usd: number; total_tokens: number }[];
+		}
+		return Object.entries(spend.by_model)
+			.map(([key, m]) => ({
+				key,
+				total_usd: m.usd,
+				total_tokens: m.tokens
+			}))
+			.sort((a, b) => b.total_usd - a.total_usd);
+	});
 
 	let chartRows = $derived.by(() => {
 		if (!spend) return [] as { dept: string; usd: number }[];
@@ -36,15 +56,9 @@
 		loading = true;
 		try {
 			spend = await getAnalyticsSpend(undefined, currentSession?.id ?? null);
-			[costByDept, costByModel] = await Promise.all([
-				getCostSummaryByGroup('department'),
-				getCostSummaryByGroup('model')
-			]);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Failed to load spend');
 			spend = null;
-			costByDept = [];
-			costByModel = [];
 		} finally {
 			loading = false;
 		}
@@ -59,8 +73,9 @@
 <div class="p-6">
 	<h1 class="mb-2 text-2xl font-bold text-foreground">LLM spend</h1>
 	<p class="mb-6 text-sm text-muted-foreground">
-		Aggregated from metric store (<code class="rounded bg-muted px-1">llm.cost_usd</code>). Optional
-		session scope includes budget hints from session config.
+		Spend is aggregated from SQLite <code class="rounded bg-muted px-1">cost_events</code> when
+		present; otherwise from legacy metrics (<code class="rounded bg-muted px-1">llm.cost_usd</code>).
+		Optional session scope includes budget hints from session config.
 	</p>
 
 	{#if loading}
@@ -137,7 +152,8 @@
 					Cost breakdown
 				</h2>
 				<p class="mb-4 text-xs text-muted-foreground">
-					From structured cost events (<code class="rounded bg-muted px-1">/api/analytics/costs/summary</code>).
+					Token-aware breakdown is included in <code class="rounded bg-muted px-1">GET /api/analytics/spend</code>
+					when <code class="rounded bg-muted px-1">cost_events</code> has data.
 				</p>
 				<h3 class="mb-2 text-xs font-medium text-foreground">By department</h3>
 				<div class="mb-6 overflow-x-auto">
@@ -150,7 +166,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each costByDept as row}
+							{#each costByDeptRows as row}
 								<tr class="border-b border-border/60">
 									<td class="py-2 pr-4 font-mono text-foreground">{row.key}</td>
 									<td class="py-2 pr-4 text-muted-foreground">${row.total_usd.toFixed(4)}</td>
@@ -159,7 +175,7 @@
 							{/each}
 						</tbody>
 					</table>
-					{#if costByDept.length === 0}
+					{#if costByDeptRows.length === 0}
 						<p class="mt-2 text-xs text-muted-foreground">No cost events yet.</p>
 					{/if}
 				</div>
@@ -174,7 +190,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each costByModel as row}
+							{#each costByModelRows as row}
 								<tr class="border-b border-border/60">
 									<td class="py-2 pr-4 font-mono text-foreground">{row.key}</td>
 									<td class="py-2 pr-4 text-muted-foreground">${row.total_usd.toFixed(4)}</td>
@@ -183,7 +199,7 @@
 							{/each}
 						</tbody>
 					</table>
-					{#if costByModel.length === 0}
+					{#if costByModelRows.length === 0}
 						<p class="mt-2 text-xs text-muted-foreground">No cost events yet.</p>
 					{/if}
 				</div>
