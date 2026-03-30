@@ -1,7 +1,7 @@
 
 ## Overview
 
-RUSVEL organizes work into 12 departments, each with its own specialized AI agent. Together they form a virtual agency that a solo founder can command from a single interface.
+RUSVEL organizes work into **14** department apps (`dept-*` crates), each with its own specialized AI agent surface. Together they form a virtual agency that a solo founder can command from a single interface.
 
 Departments follow the **DepartmentApp pattern** (ADR-014). Each department lives in its own `dept-*` crate that implements the `DepartmentApp` trait, declares its capabilities via a `DepartmentManifest`, and registers with the host at boot. Adding a new department means adding a new `dept-*` crate -- zero changes to `rusvel-core`.
 
@@ -18,7 +18,7 @@ pub trait DepartmentApp: Send + Sync {
 
 The `DepartmentManifest` declares the department's ID, name, icon, color, system prompt, capabilities, tabs, quick actions, routes, tools, and CLI commands. The host collects all manifests to generate the `DepartmentRegistry`, API routes, CLI subcommands, and frontend navigation.
 
-## The 13 dept-* Crates
+## The 14 dept-* Crates
 
 | Crate | Department | Engine | Focus |
 |-------|-----------|--------|-------|
@@ -26,7 +26,7 @@ The `DepartmentManifest` declares the department's ID, name, icon, color, system
 | `dept-code` | [Code](/departments/code/) | Code | Code intelligence, implementation, testing |
 | `dept-content` | [Content](/departments/content/) | Content | Content creation, publishing, calendar |
 | `dept-harvest` | [Harvest](/departments/harvest/) | Harvest | Opportunity discovery, proposals, pipeline |
-| `dept-flow` | [Flow](/departments/forge/) | Flow | DAG workflow engine, visual workflow builder |
+| `dept-flow` | [Flow](/departments/flow/) | Flow | DAG workflow engine, visual workflow builder |
 | `dept-gtm` | [GTM](/departments/gtm/) | GoToMarket | CRM, outreach, deals, invoicing |
 | `dept-finance` | [Finance](/departments/finance/) | Finance | Revenue, expenses, runway, tax |
 | `dept-product` | [Product](/departments/product/) | Product | Roadmap, pricing, feedback |
@@ -35,6 +35,7 @@ The `DepartmentManifest` declares the department's ID, name, icon, color, system
 | `dept-legal` | [Legal](/departments/legal/) | Legal | Contracts, compliance, IP |
 | `dept-support` | [Support](/departments/support/) | Support | Tickets, knowledge base, NPS |
 | `dept-infra` | [Infra](/departments/infra/) | Infra | Deployments, monitoring, incidents |
+| `dept-messaging` | [Messaging](/departments/messaging/) | — (shell) | Cross-channel messaging surface |
 
 ## Department UI Structure
 

@@ -1,6 +1,6 @@
 # Maintaining RUSVEL documentation
 
-Canonical written truth for **what the repo does today** lives in [`docs/status/current-state.md`](../status/current-state.md), indexed by [`docs/README.md`](../README.md). Claim-to-evidence audits use dated logs such as [`docs/status/verification-log-2026-03-27.md`](../status/verification-log-2026-03-27.md). When you edit metrics anywhere public (README, mdBook, `PROJECT_CONTEXT.md`), copy numbers from `current-state` §1 and its metric definitions table, or link there instead of guessing.
+Canonical written truth for **what the repo does today** lives in [`docs/status/current-state.md`](../status/current-state.md), indexed by [`docs/README.md`](../README.md). Claim-to-evidence audits use dated logs such as [`docs/status/verification-log-2026-03-30.md`](../status/verification-log-2026-03-30.md). When you edit metrics anywhere public (README, mdBook, `PROJECT_CONTEXT.md`), copy numbers from `current-state` §1 and its metric definitions table, or link there instead of guessing.
 
 ## Prompt for humans and agents
 

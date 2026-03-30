@@ -14,7 +14,7 @@ cargo build
 cargo test
 ```
 
-**Expected:** ~554 tests pass, 0 failures. Some tests may be ignored (PTY tests in sandboxed environments).
+**Expected:** ~635 tests pass (workspace sum), 0 failures. Some tests may be ignored (PTY tests in sandboxed environments).
 
 ## Required Services
 

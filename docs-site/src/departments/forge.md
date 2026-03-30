@@ -252,7 +252,7 @@ The Forge engine includes a `SafetyGuard` that wraps all LLM calls made through 
 
 The `generate_brief()` method produces a cross-department daily digest:
 
-1. **Department scans**: For each of the 12 departments, the engine selects an appropriate persona (e.g., CodeWriter for code, Researcher for harvest/finance/legal) and runs a brief-section LLM call asking for status (green/yellow/red), highlights, and metrics.
+1. **Department scans**: For each of the 14 department apps, the engine selects an appropriate persona (e.g., CodeWriter for code, Researcher for harvest/finance/legal) and runs a brief-section LLM call asking for status (green/yellow/red), highlights, and metrics.
 2. **Strategist synthesis**: An Architect persona processes all department sections and produces a 2-3 sentence executive summary plus 3-5 cross-cutting action items.
 3. **Persistence**: The brief is saved to ObjectStore as `executive_brief` kind and a `forge.brief.generated` event is emitted.
 4. **Retrieval**: `latest_brief()` returns the most recent brief, sorted by `created_at`.

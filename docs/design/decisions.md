@@ -106,7 +106,7 @@
 
 **Date:** 2026-03-23
 **Status:** Accepted (superseded for **registration mechanism and department identity** by **ADR-014** — manifests + string IDs; `EngineKind` removed. Parameterized `/api/dept/{dept}/*` routing and config cascade below remain in force.)
-**Context:** The original 5-engine model hardcoded routes per department. Scaling to 12 departments meant 72+ routes and touching 7 files to add one department. Config was scattered across 4 separate systems.
+**Context:** The original 5-engine model hardcoded routes per department. Scaling to many departments (the registry now holds **14** apps) meant 72+ routes and touching 7 files to add one department. Config was scattered across 4 separate systems.
 **Decision (historical — pre-ADR-014):** Central registry of department metadata with parameterized `/api/dept/{dept}/*` routes replacing per-department route explosion; frontend uses a single dynamic `[dept]` route; three-layer config cascade (Global → Department → Session).
 **Consequence:** At the time: fewer route touchpoints when adding a department. **Today:** department metadata and registration live in `dept-*` crates via `DepartmentManifest` (ADR-014); registry is populated from boot, not by editing `EngineKind` in core.
 

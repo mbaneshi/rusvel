@@ -37,7 +37,7 @@ The **solo founder / indie builder**: one human operating one workspace, not a m
 │  SPA: rust-embed or ServeDir  │     │(reedline)│(ratatui)│       │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
-                    DepartmentRegistry (12 departments → string IDs)
+                    DepartmentRegistry (14 department apps → string IDs)
                                 │
 ┌───────────────────────────────┴─────────────────────────────────┐
 │  DOMAIN ENGINES (crates)                                          │
@@ -279,7 +279,7 @@ Single deployable binary, strong typing across a large domain surface, async per
 ### What is working today (high level)
 
 - **Multi-surface app:** default HTTP server on **port 3000**, `--mcp`, `--tui`, CLI subcommands and `shell` REPL.
-- **12 departments** in UI/API via registry; **parameterized** department routes.
+- **14 department apps** in UI/API via registry; **parameterized** department routes.
 - **Forge + Code + Harvest + Content** engines instantiated in composition root; **GTM** crate exists with partial/stub behavior; **extended seven** largely stubby but present in workspace.
 - **Chat** with SSE; **CRUD** for agents, skills, rules, hooks, workflows, MCP servers; **capability** build and `!build`; **hooks** on events.
 - **Job queue worker** processes selected job kinds through code/content/harvest engines.
@@ -289,7 +289,6 @@ Single deployable binary, strong typing across a large domain surface, async per
 
 ### In progress (from typical git state / new files)
 
-- **`flow-engine`**: DAG executor, Rhai **code** nodes, **condition** branches, **agent** nodes; domain types **`FlowDef` / `FlowExecution`** live in `rusvel-core`. Crate is a workspace member but **not yet a dependency of `rusvel-app`**, so it is **not part of the shipped binary** until wired.
 - **`Cargo.lock`** changes when workspace dependencies shift.
 
 ### Planned next
@@ -299,7 +298,7 @@ See **`docs/plans/roadmap-v2.md`**: phases for deeper agent graphs, revenue engi
 ### Known issues / tech debt
 
 - **Approval workflow:** types exist; end-to-end **API/UI** not fully productized (per project docs).
-- **GTM / OutreachSend:** some job paths still placeholders relative to full vision.
+- **GTM / CRM:** OutreachSend worker path is wired; deeper CRM surfaces and polish remain (see `docs/status/current-state.md`).
 - **Older docs** (e.g. `docs/design/vision.md` port list) may still describe pre-v2 ports; **source of truth** for ports is `crates/rusvel-core/src/ports.rs`.
 - **Metrics:** use [`docs/status/current-state.md`](docs/status/current-state.md) for crate counts and scale; avoid hard-coding numbers in prose here.
 

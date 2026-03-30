@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Docs
+- Refresh metrics and verification evidence to 2026-03-30: `docs/status/current-state.md`, `verification-log-2026-03-30.md`, mdBook sources under `docs-site/src/`, README, `CLAUDE.md`, `PROJECT_CONTEXT.md`, architecture/sprint cross-references. GitHub Actions rebuilds the published book from `docs-site` on push (see `.github/workflows/docs.yml`).
+
 ### Added
 - Claude Code agents, skills, path-based rules, PR review workflow, justfile (`8b0b0c8`)
 - Second Ctrl+C for immediate force quit (`8d3a261`)
@@ -110,7 +113,7 @@ First working release — 190 commits across 7 days. 54 crates, ~62K lines of Ru
 
 ### Surfaces
 - **rusvel-cli** — 3-tier CLI: one-shot (12 departments) + REPL (reedline) + TUI (ratatui)
-- **rusvel-api** — Axum HTTP with ~132 routes, 31 handler modules, SSE streaming, rate limiting, request IDs, deep health check
+- **rusvel-api** — Axum HTTP with ~141 route chains, 36 handler modules, SSE streaming, rate limiting, request IDs, deep health check
 - **rusvel-mcp** — MCP server (stdio JSON-RPC) via `--mcp` flag
 - **rusvel-tui** — TUI dashboard (ratatui, 4-panel layout) via `--tui` flag
 
@@ -145,7 +148,7 @@ First working release — 190 commits across 7 days. 54 crates, ~62K lines of Ru
 - LLM spend aggregation by department
 
 ### Testing
-- ~554 tests across workspace
+- ~635 tests across workspace (sum of `running N tests` lines; see `docs/status/current-state.md`)
 - 65 DepartmentApp contract tests for all 13 departments
 - 25 integration tests for 5 engine/adapter crates
 - 14 CLI arg parsing tests + 8 TUI widget rendering tests

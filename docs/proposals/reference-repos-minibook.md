@@ -175,7 +175,7 @@ informing RUSVEL's MCP server and Claude Code integration patterns.
 
 ### 3.1 Architecture Overview
 
-RUSVEL is a 54-crate Rust workspace (~62,485 LOC) implementing hexagonal
+RUSVEL is a 54-member Rust workspace (~68,443 LOC under `crates/*.rs`) implementing hexagonal
 architecture with ports & adapters:
 
 ```

@@ -129,7 +129,7 @@ Next actions:
 
 ## Explore Other Departments
 
-With your mission set, explore the 12 departments. Each has its own AI agent specialized for that domain:
+With your mission set, explore the **14** department apps. Each has its own AI agent specialized for that domain:
 
 - **[Code](/departments/code/)** -- implement features, analyze code, run tests
 - **[Content](/departments/content/)** -- write blog posts, adapt for social platforms

@@ -118,7 +118,7 @@ RUSVEL's architecture is guided by 14 Architecture Decision Records (ADRs). Thes
 
 **Status:** Accepted (superseded by ADR-014 for registration mechanism)
 
-**Context:** Scaling from 5 engines to 12 departments with hardcoded routes meant 72+ routes and touching 7 files to add one department.
+**Context:** Scaling from 5 engines to many departments (the registry now holds **14** apps) with hardcoded routes meant 72+ routes and touching 7 files to add one department.
 
 **Decision:** `DepartmentRegistry` holds `DepartmentDef` structs. 6 parameterized `/api/dept/{dept}/*` routes replace all per-department routes. Frontend uses a single dynamic `[dept]` route.
 

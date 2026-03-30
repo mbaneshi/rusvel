@@ -4,7 +4,7 @@
 RUSVEL provides a **three-tier CLI** using [Clap 4](https://docs.rs/clap). The binary is `rusvel` (or `cargo run --` during development).
 
 ```
-rusvel <dept> <action>     # Tier 1: One-shot commands (12 departments)
+rusvel <dept> <action>     # Tier 1: One-shot commands (12 depts; 14 apps in API/UI — see below)
 rusvel shell               # Tier 2: Interactive REPL (reedline, autocomplete, history)
 rusvel --tui               # Tier 3: TUI dashboard (ratatui, 4-panel layout)
 ```
@@ -46,7 +46,7 @@ cargo run -- --tui
 
 ## Tier 1: Department One-Shot Commands
 
-All 12 departments support these actions:
+These one-shot actions are registered for **12** departments (Tier 1). The web app and API register **14** `DepartmentApp` instances (`flow` and `messaging` are not in this Tier 1 list).
 
 ```bash
 rusvel <dept> status              # Show department status summary
@@ -54,7 +54,7 @@ rusvel <dept> list [--kind X]     # List department items
 rusvel <dept> events              # Show recent events for department
 ```
 
-**Departments:** `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`
+**Tier 1 departments:** `forge`, `code`, `content`, `harvest`, `gtm`, `finance`, `product`, `growth`, `distro`, `legal`, `support`, `infra`
 
 ### Engine-Specific Commands
 

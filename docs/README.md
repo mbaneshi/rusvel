@@ -5,7 +5,8 @@
 | Doc | Role |
 |-----|------|
 | [`status/current-state.md`](status/current-state.md) | **What the codebase does today** — wiring, gaps, metrics, re-verify commands. |
-| [`status/verification-log-2026-03-27.md`](status/verification-log-2026-03-27.md) | Claim → evidence for the last audit. Add new dated logs when re-verifying. |
+| [`status/verification-log-2026-03-30.md`](status/verification-log-2026-03-30.md) | Claim → evidence for the latest metrics audit. |
+| [`status/verification-log-2026-03-27.md`](status/verification-log-2026-03-27.md) | Earlier snapshot (superseded for counts; kept for history). |
 | [`design/architecture-v2.md`](design/architecture-v2.md) | Layers, ports/adapters, surfaces — structural design. |
 | [`design/decisions.md`](design/decisions.md) | ADRs (why, not feature inventory). |
 | [`plans/sprints.md`](plans/sprints.md) | Active consolidated sprint / roadmap intent (verify numbers against `current-state` glossary). |

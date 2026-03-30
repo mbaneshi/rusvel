@@ -25,7 +25,7 @@ rusvel growth list                  # List department items
 rusvel harvest events               # Recent department events
 ```
 
-All 12 departments available: `forge`, `finance`, `growth`, `distro`, `legal`, `support`, `infra`, `product`, `code`, `harvest`, `content`, `gtm`.
+**Tier 1 CLI** one-shot commands cover 12 departments: `forge`, `finance`, `growth`, `distro`, `legal`, `support`, `infra`, `product`, `code`, `harvest`, `content`, `gtm`. The API and web UI register **14** department apps (`flow`, `messaging` included).
 
 ### Interactive REPL shell
 ```bash
@@ -55,17 +55,17 @@ rusvel --mcp            # MCP server (stdio JSON-RPC) for Claude Code
 
 ## Architecture
 
-Hexagonal (ports & adapters). **54** workspace members, **~62,485** lines Rust across **258** `*.rs` files under `crates/`, **13** engines (12 departments + Flow), single binary. All departments migrated to DepartmentApp pattern (ADR-014) with dedicated `dept-*` wrapper crates (**14** `dept-*` crates). Full metrics: [docs/status/current-state.md](docs/status/current-state.md).
+Hexagonal (ports & adapters). **54** workspace members, **~68,443** lines Rust across **293** `*.rs` files under `crates/`, **13** domain engines plus **14** `dept-*` department apps (including `dept-messaging` and `dept-flow`), single binary. DepartmentApp pattern (ADR-014). Full metrics: [docs/status/current-state.md](docs/status/current-state.md).
 
 ```
 SURFACES: CLI (Clap) | REPL (reedline) | TUI (Ratatui) | Web (Svelte) | MCP
     |
-DEPARTMENTS: 12 dept-* crates (DepartmentApp pattern)
+DEPARTMENTS: 14 dept-* crates (DepartmentApp pattern)
     |
 ENGINES:  Forge | Code | Harvest | Content | GTM | Finance | Product
           Growth | Distro | Legal | Support | Infra | Flow
     |
-FOUNDATION: rusvel-core (20 port traits in ports.rs, incl. five *Store + BrowserPort) + adapter crates (DB, LLM, Agent, Events, Vector, Terminal, ...)
+FOUNDATION: rusvel-core (21 port traits in ports.rs, incl. five *Store + BrowserPort) + adapter crates (DB, LLM, Agent, Events, Vector, Terminal, ...)
     |
 TOOLS:    22+ tools (10 built-in incl. tool_search + 12 engine)
 ```
@@ -92,7 +92,7 @@ cargo test -p rusvel-api
 ## Documentation
 
 - [Vision](docs/design/vision.md) — What RUSVEL is
-- [Architecture](docs/design/architecture-v2.md) — Hexagonal architecture, 12 departments
+- [Architecture](docs/design/architecture-v2.md) — Hexagonal architecture, 14 department apps
 - [Decisions](docs/design/decisions.md) — 14 ADRs with rationale
 - [Current State](docs/status/current-state.md) — Live codebase metrics
 - [Roadmap](docs/plans/roadmap-v2.md) — 5-phase plan

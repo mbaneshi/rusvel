@@ -1,6 +1,6 @@
 # RUSVEL — Current State
 
-> **Last verified:** 2026-03-28 (metrics + `cargo test --workspace`; see [verification-log-2026-03-27.md](verification-log-2026-03-27.md))
+> **Last verified:** 2026-03-30 (metrics + `cargo test --workspace` + `cargo build`; see [verification-log-2026-03-30.md](verification-log-2026-03-30.md))
 
 ---
 
@@ -28,10 +28,10 @@ Use the same host environment as normal development. Run `cargo test` from the *
 | **Workspace members** | Packages listed in `[workspace].members` in root `Cargo.toml` — `cargo metadata --no-deps` count. |
 | **Rust LOC** | Total lines of `*.rs` under `crates/` only (excludes `frontend/`). |
 | **Rust source files** | Count of `*.rs` files under `crates/`. |
-| **Tests (count)** | Sum of `running N tests` lines from `cargo test --workspace` output (~554). |
+| **Tests (count)** | Sum of `running N tests` lines from `cargo test --workspace` output (~635). |
 | **Test targets** | Approximate count of compiled test executables from `cargo test --no-run` (e.g. ~61); differs from **test binaries** phrasing used in older docs (~30 referred to `[[test]]` / crate-level counts). |
-| **HTTP route chains** | Lines with `.route(` in `crates/rusvel-api/src/lib.rs` main API router (**132**). One line can register multiple methods (`get().post()`). |
-| **API modules** | `*.rs` files in `crates/rusvel-api/src/` excluding `lib.rs` (**33**). |
+| **HTTP route chains** | Lines with `.route(` in `crates/rusvel-api/src/lib.rs` main API router (**141**). One line can register multiple methods (`get().post()`). |
+| **API modules** | `*.rs` files in `crates/rusvel-api/src/` excluding `lib.rs` (**36**). |
 | **Port traits** | `pub trait` entries in `crates/rusvel-core/src/ports.rs` (**21**, including five `*Store` subtraits, `ChannelPort`, `BrowserPort`). `DepartmentApp` lives under `department/`. |
 
 ---
@@ -41,14 +41,14 @@ Use the same host environment as normal development. Run `cargo test` from the *
 | Metric | Count |
 |--------|------:|
 | Workspace members | 54 |
-| Rust lines of code (crates/*.rs) | ~64,382 |
-| Rust source files (crates/) | 268 |
-| Tests (approx., `cargo test`) | ~554 (0 failures, full workspace from repo root; sum of `running N tests` lines) |
-| Test targets (approx., `cargo test --no-run`) | ~61 |
-| HTTP route chains (`lib.rs` `.route(`) | 132 |
-| API handler modules (`rusvel-api/src/*.rs` excl. lib) | 33 |
+| Rust lines of code (crates/*.rs) | ~68,443 |
+| Rust source files (crates/) | 293 |
+| Tests (approx., `cargo test`) | ~635 (0 failures, full workspace from repo root; sum of `running N tests` lines) |
+| Test targets (approx., `cargo test --no-run`) | ~100 |
+| HTTP route chains (`lib.rs` `.route(`) | 141 |
+| API handler modules (`rusvel-api/src/*.rs` excl. lib) | 36 |
 | Port traits (`rusvel-core` `ports.rs`) | 21 |
-| `pub struct` / `pub enum` in `domain.rs` | 111 |
+| `pub struct` / `pub enum` in `domain.rs` | 112 |
 | Departments (booted `DepartmentApp`) | 14 |
 | Department crates (dept-*) | 14 |
 | Engines | 13 (6 wired + 7 skeletons, all via `DepartmentApp`) |
@@ -158,7 +158,7 @@ Some surface crates (`rusvel-app`, `rusvel-cli`, `rusvel-mcp`, `rusvel-tui`, …
 1. Deepen **GTM** / CRM (beyond OutreachSend worker path) and channel adapters per roadmap.
 2. Add **auth middleware** and a clear model for API keys/sessions if exposing beyond localhost.
 3. Continue **Sprint** themes in [`../plans/sprints.md`](../plans/sprints.md) (reference only).
-4. Re-run **§ How to re-verify** monthly or after large merges; append rows to [`verification-log-2026-03-27.md`](verification-log-2026-03-27.md) or a new dated log.
+4. Re-run **§ How to re-verify** monthly or after large merges; append rows to [`verification-log-2026-03-30.md`](verification-log-2026-03-30.md) or a new dated log.
 
 ---
 

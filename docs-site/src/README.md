@@ -21,7 +21,7 @@ cargo run
 - **Knowledge/RAG** — fastembed + lancedb for semantic search over your documents
 - **Self-Improvement** — The app can analyze and improve its own codebase
 - **54 workspace members** — Hexagonal architecture; **21** port traits in `rusvel-core/src/ports.rs` (15 top-level + 5 `*Store` subtraits + `ChannelPort`)
-- **~554 tests**; full `cargo test` passes in a normal dev environment
+- **~635 tests** (workspace sum); full `cargo test` passes in a normal dev environment
 
 See **[Repository status](./reference/repository-status.md)** for canonical metrics and links to `docs/status/current-state.md` on GitHub.
 

@@ -8,7 +8,7 @@ The **canonical** metrics, feature inventory, and gaps for the RUSVEL codebase l
 |----------|---------|
 | [docs/status/current-state.md](https://github.com/mbaneshi/rusvel/blob/main/docs/status/current-state.md) | **Single written source of truth** — numbers, what works E2E, gaps, re-verify commands |
 | [docs/README.md](https://github.com/mbaneshi/rusvel/blob/main/docs/README.md) | Documentation index — which folder is truth vs plans vs scratch |
-| [docs/status/verification-log-2026-03-27.md](https://github.com/mbaneshi/rusvel/blob/main/docs/status/verification-log-2026-03-27.md) | Claim → evidence for the metrics snapshot |
+| [docs/status/verification-log-2026-03-30.md](https://github.com/mbaneshi/rusvel/blob/main/docs/status/verification-log-2026-03-30.md) | Claim → evidence for the latest metrics snapshot |
 
 When this mdBook page and the repo diverge, **trust the repo files above** and refresh the tables below on the next audit.
 
@@ -24,16 +24,16 @@ When this mdBook page and the repo diverge, **trust the repo files above** and r
 
 ---
 
-## Numbers at a glance (2026-03-27)
+## Numbers at a glance (2026-03-30)
 
 | Metric | Count |
 |--------|------:|
 | Workspace members | 54 |
-| Rust LOC (`crates/*.rs`) | ~62,485 |
-| Rust source files (`crates/`) | 258 |
-| Tests (approx., full `cargo test`) | ~554 |
-| HTTP route chains in API router | 132 |
-| API modules (`rusvel-api`) | 31 |
+| Rust LOC (`crates/*.rs`) | ~68,443 |
+| Rust source files (`crates/`) | 293 |
+| Tests (approx., full `cargo test`) | ~635 |
+| HTTP route chains in API router | 141 |
+| API modules (`rusvel-api`, excl. `lib.rs`) | 36 |
 | Port traits (`rusvel-core/src/ports.rs`) | 21 |
 | Departments / `dept-*` crates | 14 / 14 |
 | Engines | 13 (6 wired + 7 skeletons) |
