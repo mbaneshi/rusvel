@@ -1,10 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getAnalyticsSpend, getDeptConfig } from '$lib/api';
+	import { getAnalyticsSpend, getDeptConfig, updateDeptConfig } from '$lib/api';
 	import type { AnalyticsSpendResponse, DepartmentConfig } from '$lib/api';
 	import { activeSession } from '$lib/stores';
+	import { toast } from 'svelte-sonner';
 
 	let config: DepartmentConfig | null = $state(null);
+	let chatModeDraft = $state('discuss');
+	let chatModeSaving = $state(false);
 	let spend: AnalyticsSpendResponse | null = $state(null);
 	let err = $state('');
 	let spendErr = $state('');
@@ -21,6 +24,7 @@
 		void getDeptConfig(id)
 			.then((c) => {
 				config = c;
+				chatModeDraft = c.chat_mode === 'agentic' ? 'agentic' : 'discuss';
 			})
 			.catch((e) => {
 				err = e instanceof Error ? e.message : String(e);
@@ -41,6 +45,23 @@
 				spendErr = e instanceof Error ? e.message : String(e);
 			});
 	});
+
+	async function saveChatMode() {
+		const id = deptId;
+		const c = config;
+		if (!id || !c) return;
+		chatModeSaving = true;
+		try {
+			const next = { ...c, chat_mode: chatModeDraft };
+			config = await updateDeptConfig(id, next);
+			chatModeDraft = config.chat_mode === 'agentic' ? 'agentic' : 'discuss';
+			toast.success('Chat mode saved');
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		} finally {
+			chatModeSaving = false;
+		}
+	}
 </script>
 
 <div class="h-full overflow-auto p-4">
@@ -107,7 +128,38 @@
 			<p class="mb-4 text-sm text-destructive">Spend: {spendErr}</p>
 		{/if}
 
+		<section
+			class="mb-6 max-w-2xl rounded-lg border border-border bg-card p-4"
+			aria-label="Chat mode"
+		>
+			<h2 class="mb-2 text-sm font-semibold text-foreground">Workspace chat mode</h2>
+			<p class="mb-3 text-xs text-muted-foreground">
+				Discuss = conversational default. Agentic = stronger tool-use guidance (Claude-style modes).
+			</p>
+			<div class="flex flex-wrap items-center gap-3">
+				<select
+					class="rounded-md border border-border bg-background px-3 py-2 text-sm"
+					bind:value={chatModeDraft}
+				>
+					<option value="discuss">Discuss</option>
+					<option value="agentic">Agentic</option>
+				</select>
+				<button
+					type="button"
+					class="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
+					disabled={chatModeSaving}
+					onclick={() => saveChatMode()}
+				>
+					{chatModeSaving ? 'Saving…' : 'Save mode'}
+				</button>
+			</div>
+		</section>
+
 		<dl class="grid max-w-2xl gap-3 text-sm">
+			<div class="grid grid-cols-[minmax(0,10rem)_1fr] gap-2 border-b border-border py-2">
+				<dt class="text-muted-foreground">Chat mode</dt>
+				<dd>{config.chat_mode ?? 'discuss'}</dd>
+			</div>
 			<div class="grid grid-cols-[minmax(0,10rem)_1fr] gap-2 border-b border-border py-2">
 				<dt class="text-muted-foreground">Engine</dt>
 				<dd class="font-mono text-xs">{config.engine}</dd>

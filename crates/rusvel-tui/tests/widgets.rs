@@ -58,6 +58,17 @@ fn make_opportunity(stage: OpportunityStage) -> Opportunity {
         score: 0.5,
         stage,
         value_estimate: None,
+        platform_job_key: None,
+        content_hash: None,
+        upstream_score: None,
+        budget_min: None,
+        budget_max: None,
+        budget_currency: None,
+        hourly: None,
+        client_hire_rate: None,
+        client_total_spent: None,
+        payment_verified: None,
+        proposal_count: None,
         metadata: serde_json::json!({}),
     }
 }

@@ -72,11 +72,19 @@ These features are wired from the binary entry [`crates/rusvel-app/src/main.rs`]
 
 **API server startup** — Boots SQLite WAL, LLM with ModelTier routing + `MetricStore` cost tracking, `EventBus`, `MemoryPort`, `ScopedToolRegistry` (built-in + engine tools + optional tools), `JobQueue`, `AgentRuntime` with streaming, optional `EmbeddingPort`, `VectorStore`, `TerminalPort`, optional `rusvel_cdp::CdpClient` / `BrowserPort`; collects `DepartmentApp` instances from 14 `dept-*` crates; `DepartmentManifest` registration order; seeds default data; spawns job worker; Axum on `:3000` with graceful shutdown.
 
-**First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session.
+**LLM composition root** — [`llm_bootstrap::compose_llm_multi`](../../crates/rusvel-app/src/llm_bootstrap.rs): `ANTHROPIC_API_KEY` → [`ClaudeProvider`](../../crates/rusvel-llm/src/claude.rs) (Messages API + streaming + batch); otherwise `ClaudeCliProvider`. `OPENAI_API_KEY` → `OpenAiProvider`. Ollama always registered at `OLLAMA_HOST` (default `http://localhost:11434`). Cursor agent unchanged. Matches picker prefixes in [`GET /api/config/models`](../../crates/rusvel-api/src/config.rs).
+
+**First-run wizard** — Interactive `cliclack` onboarding: detects Ollama, collects name/role, writes `profile.toml`, creates first session (copy explains API key vs CLI vs Ollama).
 
 **Embedded frontend** — `rust-embed` compiles `frontend/build/` into the binary; filesystem fallbacks and temp extraction as implemented in app.
 
-**Department chat (SSE)** — `POST /api/dept/{dept}/chat` streams via `AgentRuntime` (`AgentEvent` SSE). Includes config cascade, `@agent` mentions, `/skill` resolution, `!build`, rules from `ObjectStore`, per-dept MCP config, **hook dispatch** after `{engine}.chat.completed` ([`hook_dispatch.rs`](../../crates/rusvel-api/src/hook_dispatch.rs) from [`department.rs`](../../crates/rusvel-api/src/department.rs)), conversation persistence.
+**Department chat (SSE)** — `POST /api/dept/{dept}/chat` streams via `AgentRuntime` (`AgentEvent` SSE). Includes config cascade, **`chat_mode`** (`discuss` \| `agentic`) in [`LayeredConfig`](../../crates/rusvel-core/src/config.rs), optional GitHub PAT context when `github_connector` is set, `@agent` mentions, `/skill` resolution, `!build`, rules from `ObjectStore`, per-dept MCP config, **hook dispatch** after `{engine}.chat.completed` ([`hook_dispatch.rs`](../../crates/rusvel-api/src/hook_dispatch.rs) from [`department.rs`](../../crates/rusvel-api/src/department.rs)), conversation persistence.
+
+**Artifacts** — `GET/POST /api/artifacts`, `GET/DELETE /api/artifacts/{id}` ([`artifacts.rs`](../../crates/rusvel-api/src/artifacts.rs)); UI `/artifacts`.
+
+**Active tasks dashboard** — `GET /api/dashboard/active` aggregates jobs + approvals + cron ([`dashboard.rs`](../../crates/rusvel-api/src/dashboard.rs)); UI `/tasks`.
+
+**GitHub connector (PAT)** — `GET/POST/DELETE /api/connectors/github/pat` ([`connectors.rs`](../../crates/rusvel-api/src/connectors.rs)); Settings page.
 
 **God agent chat** — `POST /api/chat` with SSE, history, profile context.
 
@@ -113,7 +121,7 @@ These features are wired from the binary entry [`crates/rusvel-app/src/main.rs`]
 
 **Terminal** — API routes for dept pane, run panes, WebSocket (`/api/terminal/*`).
 
-**Browser (CDP)** — `/api/browser/*` when CDP client wired.
+**Browser (CDP)** — `/api/browser/*` when CDP client wired. Optional **`RUSVEL_BROWSER_ALLOWED_ORIGINS`** (comma-separated hosts) blocks `navigate` elsewhere; successful `navigate` / `evaluate_js` emit `browser.navigate` / `browser.evaluate_js` events ([`browser.rs`](../../crates/rusvel-api/src/browser.rs)).
 
 **System / visual** — `/api/system/*`, visual report routes for regression testing.
 

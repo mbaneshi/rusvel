@@ -9,6 +9,8 @@
 		GitBranch,
 		Settings,
 		ClipboardCheck,
+		ClipboardList,
+		FileStack,
 		TerminalSquare,
 		PanelLeftClose,
 		PanelLeftOpen
@@ -33,6 +35,8 @@
 	const globalLinks = [
 		{ href: '/', label: 'Dashboard', icon: LayoutDashboard, tour: 'nav-dashboard' },
 		{ href: '/chat', label: 'Chat', icon: MessageSquare, tour: 'nav-chat' },
+		{ href: '/tasks', label: 'Active tasks', icon: ClipboardList, tour: '' },
+		{ href: '/artifacts', label: 'Artifacts', icon: FileStack, tour: '' },
 		{ href: '/approvals', label: 'Approvals', icon: ClipboardCheck, tour: '' },
 		{ href: '/database/schema', label: 'Database', icon: Database, tour: '' },
 		{ href: '/flows', label: 'Flows', icon: GitBranch, tour: '' },

@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { checkHealth, getPendingApprovals, approveJob, rejectJob, type Job } from '$lib/api';
+	import {
+		checkHealth,
+		getPendingApprovals,
+		approveJob,
+		rejectJob,
+		getGitHubConnectorStatus,
+		setGitHubPat,
+		clearGitHubPat,
+		type Job
+	} from '$lib/api';
 	import { refreshPendingApprovalCount } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 	let health = $state('checking...');
@@ -9,6 +18,10 @@
 	let approvalsLoading = $state(true);
 	let approvalsError = $state('');
 	let actionInFlight = $state<string | null>(null);
+
+	let ghConnected = $state(false);
+	let ghPat = $state('');
+	let ghLoading = $state(true);
 
 	async function check() {
 		try {
@@ -70,8 +83,46 @@
 		return String(kind);
 	}
 
+	async function loadGitHub() {
+		ghLoading = true;
+		try {
+			const s = await getGitHubConnectorStatus();
+			ghConnected = s.connected;
+		} catch {
+			ghConnected = false;
+		} finally {
+			ghLoading = false;
+		}
+	}
+
+	async function saveGitHubPat() {
+		if (!ghPat.trim()) {
+			toast.error('Paste a token first');
+			return;
+		}
+		try {
+			await setGitHubPat(ghPat.trim());
+			ghPat = '';
+			toast.success('GitHub token saved');
+			await loadGitHub();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		}
+	}
+
+	async function removeGitHubPat() {
+		try {
+			await clearGitHubPat();
+			toast.success('GitHub token removed');
+			await loadGitHub();
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : String(e));
+		}
+	}
+
 	check();
 	loadApprovals();
+	loadGitHub();
 </script>
 
 <div class="p-6">
@@ -167,14 +218,57 @@
 					>
 				</div>
 				<div class="flex items-center justify-between">
-					<span class="text-sm text-gray-400">LLM Provider</span>
-					<span class="text-sm text-gray-200">Claude CLI (Max subscription)</span>
+					<span class="text-sm text-gray-400">LLM backends</span>
+					<span class="text-right text-xs text-gray-300"
+						>ANTHROPIC_API_KEY → HTTP; else Claude CLI. OPENAI_KEY / Ollama registered at boot.</span
+					>
 				</div>
 				<div class="flex items-center justify-between">
 					<span class="text-sm text-gray-400">Database</span>
 					<span class="text-sm text-gray-200">SQLite WAL (~/.rusvel/rusvel.db)</span>
 				</div>
 			</div>
+		</div>
+
+		<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
+			<h3 class="mb-2 text-sm font-semibold uppercase tracking-wider text-gray-400">
+				GitHub connector
+			</h3>
+			<p class="mb-3 text-xs text-gray-500">
+				Personal access token (stored on the Rusvel server). Injects context hints into department chat
+				when set. Use fine-scoped PATs.
+			</p>
+			{#if ghLoading}
+				<p class="text-sm text-gray-500">Loading…</p>
+			{:else}
+				<p class="mb-2 text-sm text-gray-300">
+					Status: {ghConnected ? 'Connected' : 'Not connected'}
+				</p>
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+					<input
+						type="password"
+						class="flex-1 rounded border border-gray-700 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-200"
+						placeholder="ghp_…"
+						bind:value={ghPat}
+					/>
+					<button
+						type="button"
+						class="rounded bg-blue-800 px-3 py-2 text-xs text-white hover:bg-blue-700"
+						onclick={() => saveGitHubPat()}
+					>
+						Save token
+					</button>
+					{#if ghConnected}
+						<button
+							type="button"
+							class="rounded border border-gray-600 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800"
+							onclick={() => removeGitHubPat()}
+						>
+							Remove
+						</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
