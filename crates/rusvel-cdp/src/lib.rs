@@ -4,6 +4,7 @@
 
 mod network;
 mod observe;
+pub mod pool;
 mod platforms;
 mod transport;
 
@@ -18,6 +19,7 @@ use rusvel_core::{Result, RusvelError};
 use tokio::sync::{Mutex, broadcast};
 
 pub use network::NetworkCapture;
+pub use pool::{ChromeProfileConfig, CdpPool};
 pub use platforms::upwork;
 
 /// Chrome DevTools Protocol client (passive foundation + network capture).

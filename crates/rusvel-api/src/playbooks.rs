@@ -97,8 +97,13 @@ fn builtin_playbooks() -> Vec<Playbook> {
                     description: "Identify candidate opportunities from configured sources.".into(),
                     action: PlaybookAction::Agent {
                         persona: Some("Sourcer".into()),
-                        prompt_template: "Outline a plan to scan and list new business opportunities relevant to this workspace (sources, filters, next actions). If you lack live data, describe the scan you would run.\n\nPrior context:\n{{last_output}}".into(),
-                        tools: vec!["read_file".into(), "grep".into()],
+                        prompt_template: "Use harvest_scan with the current session_id and configured sources (e.g. mock, upwork, cdp) plus query when required; then harvest_list to confirm stored opportunities. If tools are unavailable, outline the scan you would run.\n\nPrior context:\n{{last_output}}".into(),
+                        tools: vec![
+                            "harvest_scan".into(),
+                            "harvest_list".into(),
+                            "read_file".into(),
+                            "grep".into(),
+                        ],
                     },
                 },
                 rusvel_core::domain::PlaybookStep {
@@ -106,8 +111,8 @@ fn builtin_playbooks() -> Vec<Playbook> {
                     description: "Score and prioritize leads.".into(),
                     action: PlaybookAction::Agent {
                         persona: Some("Scorer".into()),
-                        prompt_template: "Given the scan summary below, propose a scoring rubric (0–10) and rank the top 3 opportunities with rationale.\n\n{{last_output}}".into(),
-                        tools: vec![],
+                        prompt_template: "Use harvest_score on specific opportunity IDs from harvest_list when needed. Given the scan summary below, propose a scoring rubric (0–10) and rank the top 3 opportunities with rationale.\n\n{{last_output}}".into(),
+                        tools: vec!["harvest_list".into(), "harvest_score".into()],
                     },
                 },
                 rusvel_core::domain::PlaybookStep {
@@ -115,12 +120,29 @@ fn builtin_playbooks() -> Vec<Playbook> {
                     description: "Draft outreach or proposal snippets.".into(),
                     action: PlaybookAction::Agent {
                         persona: Some("BizDev".into()),
-                        prompt_template: "Draft short proposal or outreach snippets (2–3 paragraphs total) for the top opportunity. Base it on:\n\n{{last_output}}".into(),
-                        tools: vec![],
+                        prompt_template: "Use harvest_propose for the top opportunity when session_id and opportunity_id are known. Otherwise draft short proposal or outreach snippets (2–3 paragraphs total) from:\n\n{{last_output}}".into(),
+                        tools: vec!["harvest_propose".into(), "harvest_list".into()],
                     },
                 },
             ],
             metadata: json!({"builtin": true}),
+        },
+        Playbook {
+            id: "builtin-harvest-capability-hint".into(),
+            name: "Harvest → capability gap".into(),
+            description: "After a harvest pass, spot tooling gaps and point to capability build when useful.".into(),
+            category: "harvest".into(),
+            steps: vec![rusvel_core::domain::PlaybookStep {
+                name: "Review".into(),
+                description: "List opportunities and suggest capability follow-up.".into(),
+                action: PlaybookAction::Agent {
+                    persona: Some("Sourcer".into()),
+                    prompt_template: "Call harvest_list for the session. From the highest-score rows, infer tech/skill gaps vs a lean solo stack. If a gap is worth automating, say the operator can run chat command !capability or POST /api/capability/build (see API help).\n\nContext:\n{{last_output}}"
+                        .into(),
+                    tools: vec!["harvest_list".into()],
+                },
+            }],
+            metadata: json!({"builtin": true, "triggers": ["post-harvest", "high-score-opportunity"]}),
         },
         Playbook {
             id: "builtin-daily-brief".into(),

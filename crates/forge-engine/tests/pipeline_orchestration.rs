@@ -271,6 +271,10 @@ async fn orchestrate_pipeline_persists_and_succeeds() {
         proposal_profile: "p".into(),
         draft_topic: None,
         draft_kind: ContentKind::Blog,
+        harvest_sources: vec!["mock".into()],
+        harvest_query: String::new(),
+        harvest_cdp_extract_js: None,
+        harvest_cdp_endpoint: None,
     };
 
     let exec = forge

@@ -58,6 +58,16 @@ pub struct PipelineOrchestrationDef {
     pub draft_topic: Option<String>,
     #[serde(default = "default_draft_kind")]
     pub draft_kind: ContentKind,
+    /// Harvest scan sources for the pipeline `scan` step (default: mock).
+    #[serde(default = "default_harvest_sources")]
+    pub harvest_sources: Vec<String>,
+    #[serde(default)]
+    pub harvest_query: String,
+    #[serde(default)]
+    pub harvest_cdp_extract_js: Option<String>,
+    /// CDP HTTP base for the pipeline scan step (overrides `RUSVEL_CDP_ENDPOINT`).
+    #[serde(default)]
+    pub harvest_cdp_endpoint: Option<String>,
 }
 
 fn default_steps() -> Vec<PipelineStepKind> {
@@ -77,6 +87,10 @@ fn default_draft_kind() -> ContentKind {
     ContentKind::Blog
 }
 
+fn default_harvest_sources() -> Vec<String> {
+    vec!["mock".into()]
+}
+
 impl Default for PipelineOrchestrationDef {
     fn default() -> Self {
         Self {
@@ -84,6 +98,10 @@ impl Default for PipelineOrchestrationDef {
             proposal_profile: default_profile(),
             draft_topic: None,
             draft_kind: default_draft_kind(),
+            harvest_sources: default_harvest_sources(),
+            harvest_query: String::new(),
+            harvest_cdp_extract_js: None,
+            harvest_cdp_endpoint: None,
         }
     }
 }

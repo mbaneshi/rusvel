@@ -200,6 +200,13 @@ pub struct DepartmentConfig {
     pub max_turns: Option<u32>,
     #[serde(default)]
     pub context_pack: Option<ContextPackFlags>,
+    /// `discuss` (default) or `agentic` — steers assistant behavior for this department.
+    #[serde(default = "default_dept_chat_mode")]
+    pub chat_mode: String,
+}
+
+fn default_dept_chat_mode() -> String {
+    "discuss".into()
 }
 
 impl From<(&str, ResolvedConfig)> for DepartmentConfig {
@@ -216,6 +223,7 @@ impl From<(&str, ResolvedConfig)> for DepartmentConfig {
             add_dirs: r.add_dirs,
             max_turns: r.max_turns,
             context_pack: None,
+            chat_mode: r.chat_mode,
         }
     }
 }
@@ -234,6 +242,7 @@ impl DepartmentConfig {
             add_dirs: Some(self.add_dirs.clone()),
             max_turns: self.max_turns,
             context_pack: self.context_pack.clone(),
+            chat_mode: Some(self.chat_mode.clone()),
         }
     }
 }
@@ -445,6 +454,36 @@ pub async fn dept_chat(
         }
     }
 
+    // Workspace chat mode (discuss vs agentic) — maps to Claude-style Chat / Cowork-style execution hints
+    match resolved.chat_mode.to_ascii_lowercase().as_str() {
+        "agentic" | "run" => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Mode: Agentic ---\n\
+                 Use available tools proactively to fulfill requests. For multi-step work, state a brief plan first, then execute.\n",
+            );
+        }
+        _ => {
+            resolved.system_prompt.push_str(
+                "\n\n--- Mode: Discuss ---\n\
+                 Prefer concise explanations. Offer to use tools when the user wants actions taken on their behalf.\n",
+            );
+        }
+    }
+
+    if let Ok(Some(conn)) = state.storage.objects().get("github_connector", "default").await {
+        if conn
+            .get("token")
+            .and_then(|t| t.as_str())
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+        {
+            resolved.system_prompt.push_str(
+                "\n\n--- GitHub connector ---\n\
+                 A GitHub personal access token is configured on this Rusvel instance. Prefer the GitHub API or `gh` for repository operations when relevant.\n",
+            );
+        }
+    }
+
     if let Some(sid_str) = body.session_id.as_ref()
         && let Ok(u) = Uuid::parse_str(sid_str)
     {
@@ -489,8 +528,11 @@ pub async fn dept_chat(
             resolved.system_prompt.push_str(
                 "\n\n--- Department Actions ---\n\
                  This department has a wired Harvest Engine with real capabilities:\n\
-                 - Scan sources: POST /api/dept/harvest/scan {session_id, sources: [mock|upwork|freelancer|cdp], query}\n\
-                 - CDP scan: use source \"cdp\" and query = listing page URL (Chrome remote debugging; RUSVEL_CDP_ENDPOINT)\n\
+                 - Scan sources: POST /api/dept/harvest/scan {session_id, sources: [mock|upwork|freelancer|cdp], query, cdp_endpoint?, cdp_extract_js?}\n\
+                 - Ingest push (extension/fleet): POST /api/dept/harvest/ingest {session_id, platform: upwork|freelancer|..., jobs: [{title, description, url?, ...}]}\n\
+                 - CDP scan: use source \"cdp\" and query = listing page URL; default base RUSVEL_CDP_ENDPOINT; optional cdp_endpoint per Chrome profile\n\
+                 - Passive CDP → harvest: set RUSVEL_HARVEST_CDP_SESSION_ID=<session uuid> to attach captures to that session\n\
+                 - Cron auto-scan: schedule event_kind \"harvest.auto_scan\" with payload {sources, query, cdp_extract_js?, cdp_endpoint?} (same as HarvestScan job)\n\
                  - Score opportunity: POST /api/dept/harvest/score {session_id, opportunity_id} → score + reasoning\n\
                  - Advance stage: POST /api/dept/harvest/advance {session_id, opportunity_id, stage} — Won/Lost also records outcome for learning (S-044)\n\
                  - Generate proposal: POST /api/dept/harvest/proposal {session_id, opportunity_id, profile} — default queues ProposalDraft for worker + approval; add \"sync\": true for immediate JSON response\n\
