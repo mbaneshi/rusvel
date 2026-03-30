@@ -5,6 +5,7 @@
 
 mod code;
 mod content;
+mod flow;
 mod harvest;
 
 use std::sync::Arc;
@@ -27,4 +28,11 @@ pub async fn register_content_tools(
 
 pub async fn register_code_tools(registry: &ToolRegistry, engine: Arc<code_engine::CodeEngine>) {
     code::register(registry, engine).await;
+}
+
+pub async fn register_flow_tools(
+    registry: &ToolRegistry,
+    engine: Arc<flow_engine::FlowEngine>,
+) {
+    flow::register(registry, engine).await;
 }

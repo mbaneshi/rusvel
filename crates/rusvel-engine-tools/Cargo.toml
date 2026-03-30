@@ -13,6 +13,7 @@ rusvel-tool = { workspace = true }
 harvest-engine = { workspace = true }
 content-engine = { workspace = true }
 code-engine = { workspace = true }
+flow-engine = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

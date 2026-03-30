@@ -917,6 +917,7 @@ async fn main() -> Result<()> {
     rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
     rusvel_engine_tools::register_content_tools(&tool_registry, content_engine.clone()).await;
     rusvel_engine_tools::register_code_tools(&tool_registry, code_engine.clone()).await;
+    rusvel_engine_tools::register_flow_tools(&tool_registry, flow_engine.clone()).await;
     rusvel_builtin_tools::register_artifact_tools(
         &tool_registry,
         db.clone() as Arc<dyn rusvel_core::ports::StoragePort>,
