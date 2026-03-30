@@ -46,7 +46,7 @@ async fn harvest_tools_register_five_names() {
     let db = Arc::new(Database::open(dir.path().join("r.db")).unwrap());
     let reg = ToolRegistry::new();
     let engine = Arc::new(harvest_engine::HarvestEngine::new(db));
-    rusvel_engine_tools::register_harvest_tools(&reg, engine).await;
+    rusvel_engine_tools::register_harvest_tools(&reg, engine, None).await;
     let names: Vec<String> = reg.list().into_iter().map(|d| d.name).collect();
     for n in [
         "harvest_scan",

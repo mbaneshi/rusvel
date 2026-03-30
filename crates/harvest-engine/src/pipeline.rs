@@ -28,6 +28,11 @@ impl Pipeline {
 
     /// Store a new opportunity in the pipeline.
     pub async fn add(&self, opportunity: &Opportunity) -> Result<()> {
+        self.save(opportunity).await
+    }
+
+    /// Insert or replace an opportunity row by id.
+    pub async fn save(&self, opportunity: &Opportunity) -> Result<()> {
         let value = serde_json::to_value(opportunity)?;
         self.storage
             .objects()

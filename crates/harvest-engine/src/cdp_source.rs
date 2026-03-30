@@ -207,6 +207,7 @@ impl CdpRow {
             } else {
                 self.source_data
             },
+            ..Default::default()
         }
     }
 }

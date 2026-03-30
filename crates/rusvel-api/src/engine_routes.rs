@@ -29,6 +29,7 @@ use gtm_engine::crm::CrmManager;
 use gtm_engine::{InvoiceId, InvoiceManager, InvoiceStatus, LineItem};
 
 use forge_engine::PipelineOrchestrationDef;
+use harvest_engine::{scan_from_params, HarvestScanParams};
 
 use crate::AppState;
 
@@ -48,6 +49,13 @@ fn parse_content_id(id: &str) -> Result<ContentId, (StatusCode, String)> {
 
 fn engine_err(e: impl std::fmt::Display) -> (StatusCode, String) {
     (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+}
+
+fn harvest_scan_err(e: RusvelError) -> (StatusCode, String) {
+    match e {
+        RusvelError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
+        other => engine_err(other),
+    }
 }
 
 // ── Executive brief (Forge) ────────────────────────────────────────
@@ -118,11 +126,23 @@ pub async fn forge_pipeline_orchestrate(
         StatusCode::SERVICE_UNAVAILABLE,
         "Content engine not available".into(),
     ))?;
-    let runner = crate::pipeline_runner::HarvestContentPipelineRunner {
-        harvest: harvest.clone(),
-        content: content.clone(),
-    };
     let def = body.def.unwrap_or_default();
+    let scan_params = HarvestScanParams {
+        sources: def.harvest_sources.clone(),
+        query: def.harvest_query.clone(),
+        cdp_extract_js: def.harvest_cdp_extract_js.clone(),
+        cdp_endpoint: def.harvest_cdp_endpoint.clone(),
+    };
+    let browser = state
+        .cdp
+        .clone()
+        .map(|c| c as std::sync::Arc<dyn rusvel_core::ports::BrowserPort>);
+    let runner = crate::pipeline_runner::HarvestContentPipelineRunner::new(
+        harvest.clone(),
+        content.clone(),
+        browser,
+        scan_params,
+    );
     let exec = state
         .forge
         .orchestrate_pipeline(sid, def, &runner)
@@ -394,6 +414,9 @@ pub struct HarvestScanRequest {
     /// Optional CDP extract script (must evaluate to a JSON array string). When omitted, the engine default is used.
     #[serde(default)]
     pub cdp_extract_js: Option<String>,
+    /// Optional CDP HTTP base per Chrome profile (overrides `RUSVEL_CDP_ENDPOINT`).
+    #[serde(default)]
+    pub cdp_endpoint: Option<String>,
 }
 
 /// POST /api/dept/harvest/scan — run configured sources, score, persist opportunities.
@@ -406,67 +429,83 @@ pub async fn harvest_scan(
         "Harvest engine not available".into(),
     ))?;
     let sid = parse_session_id(&body.session_id)?;
-    let skills: Vec<String> = engine.harvest_skills().iter().cloned().collect();
-    let mut all = Vec::new();
-    for s in &body.sources {
-        match s.to_lowercase().as_str() {
-            "mock" => {
-                let src = harvest_engine::source::MockSource::new();
-                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
-                all.append(&mut v);
-            }
-            "cdp" => {
-                if body.query.trim().is_empty() {
-                    return Err((
-                        StatusCode::BAD_REQUEST,
-                        "cdp source requires `query` (listing page URL)".into(),
-                    ));
-                }
-                let browser = state
-                    .cdp
-                    .clone()
-                    .map(|c| c as std::sync::Arc<dyn rusvel_core::ports::BrowserPort>);
-                let endpoint = std::env::var("RUSVEL_CDP_ENDPOINT")
-                    .unwrap_or_else(|_| "http://127.0.0.1:9222".into());
-                let mut src = harvest_engine::CdpSource::new(browser, endpoint, body.query.clone());
-                if let Some(js) = body
-                    .cdp_extract_js
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                {
-                    src = src.with_extract_js(js.to_string());
-                }
-                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
-                all.append(&mut v);
-            }
-            "upwork" => {
-                let src = harvest_engine::source::UpworkRssSource::new(
-                    body.query.clone(),
-                    skills.clone(),
-                )
-                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
-                all.append(&mut v);
-            }
-            "freelancer" => {
-                let src = harvest_engine::source::FreelancerRssSource::new(
-                    body.query.clone(),
-                    skills.clone(),
-                )
-                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-                let mut v = engine.scan(&sid, &src).await.map_err(engine_err)?;
-                all.append(&mut v);
-            }
-            other => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    format!("unknown harvest source: {other}"),
-                ));
-            }
-        }
-    }
+    let params = HarvestScanParams {
+        sources: body.sources.clone(),
+        query: body.query.clone(),
+        cdp_extract_js: body.cdp_extract_js.clone(),
+        cdp_endpoint: body.cdp_endpoint.clone(),
+    };
+    let browser = state
+        .cdp
+        .clone()
+        .map(|c| c as std::sync::Arc<dyn rusvel_core::ports::BrowserPort>);
+    let all = scan_from_params(engine, &sid, &params, browser)
+        .await
+        .map_err(harvest_scan_err)?;
+    crate::hook_dispatch::dispatch_hooks(
+        harvest_engine::events::SCAN_COMPLETED,
+        serde_json::json!({
+            "session_id": body.session_id,
+            "count": all.len(),
+            "via": "api.scan",
+        }),
+        "harvest",
+        state.storage.clone(),
+    );
     Ok(Json(all))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HarvestIngestRequest {
+    pub session_id: String,
+    /// Default when a job row omits `"source"` (e.g. `upwork`, `freelancer`, `manual`).
+    #[serde(default = "default_ingest_platform")]
+    pub platform: String,
+    /// One or more job objects (`title`, `description`, `url`, optional `source` per row, enrich fields).
+    pub jobs: Vec<serde_json::Value>,
+}
+
+fn default_ingest_platform() -> String {
+    "manual".into()
+}
+
+/// POST /api/dept/harvest/ingest — push captured jobs (extension, webhooks, fleet); same scoring + dedup as scan.
+pub async fn harvest_ingest(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<HarvestIngestRequest>,
+) -> ApiResult<Vec<Opportunity>> {
+    let engine = state.harvest_engine.as_ref().ok_or((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Harvest engine not available".into(),
+    ))?;
+    if body.jobs.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "jobs must be a non-empty array".into(),
+        ));
+    }
+    let sid = parse_session_id(&body.session_id)?;
+    let platform = body
+        .platform
+        .trim()
+        .is_empty()
+        .then_some("manual")
+        .unwrap_or(body.platform.trim());
+    let opps = engine
+        .ingest_jobs(&sid, &body.jobs, platform, "http")
+        .await
+        .map_err(engine_err)?;
+    crate::hook_dispatch::dispatch_hooks(
+        harvest_engine::events::BATCH_INGEST_COMPLETED,
+        serde_json::json!({
+            "session_id": body.session_id,
+            "count": opps.len(),
+            "platform": platform,
+        }),
+        "harvest",
+        state.storage.clone(),
+    );
+    Ok(Json(opps))
 }
 
 pub async fn harvest_score(

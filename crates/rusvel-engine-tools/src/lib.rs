@@ -10,13 +10,15 @@ mod harvest;
 
 use std::sync::Arc;
 
+use rusvel_core::ports::BrowserPort;
 use rusvel_tool::ToolRegistry;
 
 pub async fn register_harvest_tools(
     registry: &ToolRegistry,
     engine: Arc<harvest_engine::HarvestEngine>,
+    browser: Option<Arc<dyn BrowserPort>>,
 ) {
-    harvest::register(registry, engine).await;
+    harvest::register(registry, engine, browser).await;
 }
 
 pub async fn register_content_tools(

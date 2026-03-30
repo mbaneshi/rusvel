@@ -8,3 +8,7 @@ pub const PROPOSAL_GENERATED: &str = "harvest.proposal.generated";
 pub const PROPOSAL_PERSISTED: &str = "harvest.proposal.persisted";
 pub const PIPELINE_ADVANCED: &str = "harvest.pipeline.advanced";
 pub const OUTCOME_RECORDED: &str = "harvest.outcome.recorded";
+pub const OPPORTUNITY_INGESTED: &str = "harvest.opportunity.ingested";
+pub const BATCH_INGEST_COMPLETED: &str = "harvest.batch.ingest.completed";
+/// Cron `event_kind` to run [`crate::scan_execute::scan_from_params`] in the job worker.
+pub const HARVEST_AUTO_SCAN_CRON_KIND: &str = "harvest.auto_scan";

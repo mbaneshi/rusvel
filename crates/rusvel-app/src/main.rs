@@ -12,6 +12,7 @@
 //! registry for the API server.
 
 mod boot;
+mod llm_bootstrap;
 
 use std::io::IsTerminal;
 use std::net::SocketAddr;
@@ -43,7 +44,7 @@ use uuid::Uuid;
 use rusvel_db::Database;
 use rusvel_embed::FastEmbedAdapter;
 use rusvel_event::{EventBus, TriggerManager};
-use rusvel_llm::{ClaudeCliProvider, CostTrackingLlm, CursorAgentProvider, MultiProvider};
+use rusvel_llm::CostTrackingLlm;
 use rusvel_mcp::RusvelMcp;
 use rusvel_memory::MemoryStore;
 use rusvel_terminal::TerminalManager;
@@ -650,9 +651,13 @@ async fn first_run_wizard(
         .await
         .is_ok();
     if ollama_ok {
-        cliclack::log::success("Ollama detected at localhost:11434")?;
+        cliclack::log::success(
+            "Ollama detected at localhost:11434 — use model prefix ollama/<name> in Settings",
+        )?;
     } else {
-        cliclack::log::warning("Ollama not running — will use Claude CLI as fallback")?;
+        cliclack::log::warning(
+            "Ollama not reachable — ollama/* models will error until OLLAMA_HOST is up; Claude uses ANTHROPIC_API_KEY (HTTP) or claude CLI (subscription)",
+        )?;
     }
 
     // User identity
@@ -772,15 +777,7 @@ async fn main() -> Result<()> {
     // 3. Concrete adapters
     let db: Arc<Database> = Arc::new(Database::open(data_dir.join("rusvel.db"))?);
     let config = Arc::new(TomlConfig::load(data_dir.join("config.toml"))?);
-    let mut llm_multi = MultiProvider::new();
-    llm_multi.register(
-        ModelProvider::Claude,
-        Arc::new(ClaudeCliProvider::max_subscription()),
-    );
-    llm_multi.register(
-        ModelProvider::Other("cursor".into()),
-        Arc::new(CursorAgentProvider::from_env()),
-    );
+    let llm_multi = llm_bootstrap::compose_llm_multi();
     let base_llm: Arc<dyn rusvel_core::ports::LlmPort> = Arc::new(llm_multi);
     let metrics_store: Arc<dyn MetricStore> = db.clone() as Arc<dyn MetricStore>;
     let llm: Arc<dyn rusvel_core::ports::LlmPort> =
@@ -876,6 +873,9 @@ async fn main() -> Result<()> {
         content_engine::adapters::devto::DevToAdapter::new(config.clone()),
     ));
     let harvest_cfg = build_harvest_config(config.as_ref(), &data_dir.join("profile.toml"));
+    let harvest_user_prompt = rusvel_core::UserProfile::load(data_dir.join("profile.toml"))
+        .ok()
+        .map(|p| p.to_system_prompt());
     let cdp_client = Arc::new(rusvel_cdp::CdpClient::new());
     let browser_port: Arc<dyn rusvel_core::ports::BrowserPort> = cdp_client.clone();
     rusvel_builtin_tools::register_browser_tools(&tool_registry, browser_port.clone()).await;
@@ -884,7 +884,8 @@ async fn main() -> Result<()> {
             .with_events(events.clone())
             .with_agent(agent_for_harvest)
             .with_config(harvest_cfg)
-            .with_browser(browser_port.clone()),
+            .with_browser(browser_port.clone())
+            .with_user_profile_prompt(harvest_user_prompt),
     );
     let config_port: Arc<dyn ConfigPort> = config.clone();
     let deploy: Arc<dyn DeployPort> = Arc::new(rusvel_deploy::FlyDeployPort::new(config_port));
@@ -914,7 +915,43 @@ async fn main() -> Result<()> {
     tracing::info!("Domain engines initialized: Code, Content, Harvest, Flow, GTM");
 
     // 4c. Register engine tools into the tool registry
-    rusvel_engine_tools::register_harvest_tools(&tool_registry, harvest_engine.clone()).await;
+    rusvel_engine_tools::register_harvest_tools(
+        &tool_registry,
+        harvest_engine.clone(),
+        Some(browser_port.clone()),
+    )
+    .await;
+    if let Ok(sid_raw) = std::env::var("RUSVEL_HARVEST_CDP_SESSION_ID") {
+        if let Ok(uuid) = Uuid::parse_str(sid_raw.trim()) {
+            let harvest_cdp_session = SessionId::from_uuid(uuid);
+            let cdp_cap = cdp_client.clone();
+            let harvest_cap = harvest_engine.clone();
+            tokio::spawn(async move {
+                let mut rx = cdp_cap.subscribe_captures().await;
+                loop {
+                    match rx.recv().await {
+                        Ok(ev) => {
+                            if let Err(e) =
+                                harvest_cap.on_data_captured(&harvest_cdp_session, ev).await
+                            {
+                                tracing::debug!(error = %e, "harvest on_data_captured");
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+            tracing::info!(
+                "CDP capture events wired to harvest for session {}",
+                harvest_cdp_session
+            );
+        } else {
+            tracing::warn!(
+                "RUSVEL_HARVEST_CDP_SESSION_ID is not a valid UUID; CDP→harvest wiring skipped"
+            );
+        }
+    }
     rusvel_engine_tools::register_content_tools(&tool_registry, content_engine.clone()).await;
     rusvel_engine_tools::register_code_tools(&tool_registry, code_engine.clone()).await;
     rusvel_engine_tools::register_flow_tools(&tool_registry, flow_engine.clone()).await;
@@ -966,6 +1003,7 @@ async fn main() -> Result<()> {
         };
     let outreach_email_worker = outreach_email.clone();
     let forge_worker = forge.clone();
+    let browser_for_jobs: Arc<dyn rusvel_core::ports::BrowserPort> = browser_port.clone();
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
@@ -1046,9 +1084,15 @@ async fn main() -> Result<()> {
                         }
                         JobKind::HarvestScan => {
                             let sid = job.session_id;
-                            match harvest_engine_worker
-                                .scan(&sid, &harvest_engine::source::MockSource::new())
-                                .await
+                            let params =
+                                harvest_engine::HarvestScanParams::from_job_payload(&job.payload);
+                            match harvest_engine::scan_from_params(
+                                harvest_engine_worker.as_ref(),
+                                &sid,
+                                &params,
+                                Some(browser_for_jobs.clone()),
+                            )
+                            .await
                             {
                                 Ok(opportunities) => Ok(Some(JobResult {
                                     output: serde_json::json!({
@@ -1152,6 +1196,39 @@ async fn main() -> Result<()> {
                                         Err(e)
                                     }
                                 }
+                            } else if event_kind == harvest_engine::events::HARVEST_AUTO_SCAN_CRON_KIND {
+                                let sid = job.session_id;
+                                let params =
+                                    harvest_engine::HarvestScanParams::from_job_payload(&payload);
+                                match harvest_engine::scan_from_params(
+                                    harvest_engine_worker.as_ref(),
+                                    &sid,
+                                    &params,
+                                    Some(browser_for_jobs.clone()),
+                                )
+                                .await
+                                {
+                                    Ok(opportunities) => Ok(Some(JobResult {
+                                        output: serde_json::json!({
+                                            "ok": true,
+                                            "schedule_id": schedule_id,
+                                            "count": opportunities.len(),
+                                            "event_kind": event_kind,
+                                        }),
+                                        metadata: serde_json::json!({
+                                            "engine": "harvest",
+                                            "trigger": "cron",
+                                        }),
+                                    })),
+                                    Err(e) => {
+                                        tracing::error!(
+                                            job_id = %job_id,
+                                            error = %e,
+                                            "harvest.auto_scan cron failed"
+                                        );
+                                        Err(e)
+                                    }
+                                }
                             } else {
                                 let event = Event {
                                     id: EventId::new(),
@@ -1187,10 +1264,18 @@ async fn main() -> Result<()> {
                                 Some(v) if v.is_null() => PipelineOrchestrationDef::default(),
                                 Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
                             };
-                            let runner = HarvestContentPipelineRunner {
-                                harvest: harvest_engine_worker.clone(),
-                                content: content_engine_worker.clone(),
+                            let scan_params = harvest_engine::HarvestScanParams {
+                                sources: def.harvest_sources.clone(),
+                                query: def.harvest_query.clone(),
+                                cdp_extract_js: def.harvest_cdp_extract_js.clone(),
+                                cdp_endpoint: def.harvest_cdp_endpoint.clone(),
                             };
+                            let runner = HarvestContentPipelineRunner::new(
+                                harvest_engine_worker.clone(),
+                                content_engine_worker.clone(),
+                                Some(browser_for_jobs.clone()),
+                                scan_params,
+                            );
                             match forge_worker.orchestrate_pipeline(sid, def, &runner).await {
                                 Ok(exec) => Ok(Some(JobResult {
                                     output: serde_json::to_value(&exec).unwrap_or_default(),

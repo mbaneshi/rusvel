@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use harvest_engine::{HarvestConfig, HarvestEngine};
+use harvest_engine::{scan_from_params, HarvestConfig, HarvestEngine, HarvestScanParams};
 use harvest_engine::source::MockSource;
 use rusvel_core::domain::*;
 use rusvel_core::engine::Engine;
@@ -114,6 +114,58 @@ fn make_engine(storage: Arc<TestStorage>, events: Arc<RecordingEvents>) -> Harve
 }
 
 // ── Tests ─────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn scan_from_params_mock_matches_direct_scan() {
+    let sid = SessionId::new();
+    let params = HarvestScanParams {
+        sources: vec!["mock".into()],
+        query: String::new(),
+        cdp_extract_js: None,
+        cdp_endpoint: None,
+    };
+    // Separate engines so dedup/upsert from the first scan does not empty the second scan's results.
+    let storage_a = Arc::new(TestStorage::new());
+    let events_a = Arc::new(RecordingEvents(Mutex::new(Vec::new())));
+    let engine_a = make_engine(storage_a, events_a);
+    let a = scan_from_params(&engine_a, &sid, &params, None).await.unwrap();
+
+    let storage_b = Arc::new(TestStorage::new());
+    let events_b = Arc::new(RecordingEvents(Mutex::new(Vec::new())));
+    let engine_b = make_engine(storage_b, events_b);
+    let b = engine_b.scan(&sid, &MockSource).await.unwrap();
+    assert_eq!(a.len(), b.len());
+}
+
+#[tokio::test]
+async fn scan_from_params_unknown_source_errors() {
+    let storage = Arc::new(TestStorage::new());
+    let events = Arc::new(RecordingEvents(Mutex::new(Vec::new())));
+    let engine = make_engine(storage, events);
+    let sid = SessionId::new();
+    let params = HarvestScanParams {
+        sources: vec!["not_a_source".into()],
+        query: String::new(),
+        cdp_extract_js: None,
+        cdp_endpoint: None,
+    };
+    assert!(scan_from_params(&engine, &sid, &params, None).await.is_err());
+}
+
+#[tokio::test]
+async fn scan_from_params_cdp_requires_query() {
+    let storage = Arc::new(TestStorage::new());
+    let events = Arc::new(RecordingEvents(Mutex::new(Vec::new())));
+    let engine = make_engine(storage, events);
+    let sid = SessionId::new();
+    let params = HarvestScanParams {
+        sources: vec!["cdp".into()],
+        query: String::new(),
+        cdp_extract_js: None,
+        cdp_endpoint: None,
+    };
+    assert!(scan_from_params(&engine, &sid, &params, None).await.is_err());
+}
 
 #[tokio::test]
 async fn scan_discovers_and_stores_opportunities() {

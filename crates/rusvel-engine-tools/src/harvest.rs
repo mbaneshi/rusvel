@@ -4,22 +4,36 @@ use std::sync::Arc;
 
 use rusvel_core::domain::{Content, OpportunityStage, ToolDefinition, ToolResult};
 use rusvel_core::id::SessionId;
+use rusvel_core::ports::BrowserPort;
 use rusvel_tool::ToolRegistry;
 use serde_json::json;
 
-pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::HarvestEngine>) {
+pub async fn register(
+    registry: &ToolRegistry,
+    engine: Arc<harvest_engine::HarvestEngine>,
+    browser: Option<Arc<dyn BrowserPort>>,
+) {
     // ── harvest_scan ──────────────────────────────────────────────
     {
         let engine = engine.clone();
+        let browser = browser.clone();
         registry
             .register_with_handler(
                 ToolDefinition {
                     name: "harvest_scan".into(),
-                    description: "Scan for freelance opportunities using the mock source. Returns discovered opportunities.".into(),
+                    description: "Scan harvest sources (default: mock). Optional: sources [mock|cdp|upwork|freelancer], query (required for cdp; RSS search for upwork/freelancer), cdp_extract_js, cdp_endpoint (overrides RUSVEL_CDP_ENDPOINT).".into(),
                     parameters: json!({
                         "type": "object",
                         "properties": {
-                            "session_id": { "type": "string", "description": "Session UUID" }
+                            "session_id": { "type": "string", "description": "Session UUID" },
+                            "sources": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "Source ids; omit for mock-only"
+                            },
+                            "query": { "type": "string", "description": "Listing URL for cdp or RSS query" },
+                            "cdp_extract_js": { "type": "string", "description": "Optional CDP extract script" },
+                            "cdp_endpoint": { "type": "string", "description": "Optional CDP HTTP base for multi-profile Chrome" }
                         },
                         "required": ["session_id"]
                     }),
@@ -28,10 +42,18 @@ pub async fn register(registry: &ToolRegistry, engine: Arc<harvest_engine::Harve
                 },
                 Arc::new(move |args| {
                     let engine = engine.clone();
+                    let browser = browser.clone();
                     Box::pin(async move {
                         let sid = parse_session_id(&args, "session_id")?;
-                        let source = harvest_engine::source::MockSource::new();
-                        match engine.scan(&sid, &source).await {
+                        let params = harvest_engine::HarvestScanParams::from_job_payload(&args);
+                        match harvest_engine::scan_from_params(
+                            engine.as_ref(),
+                            &sid,
+                            &params,
+                            browser.clone(),
+                        )
+                        .await
+                        {
                             Ok(opps) => ok_json(&opps),
                             Err(e) => err_result(e),
                         }

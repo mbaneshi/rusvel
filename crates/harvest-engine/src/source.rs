@@ -18,6 +18,53 @@ pub struct RawOpportunity {
     pub skills: Vec<String>,
     pub posted_at: Option<String>,
     pub source_data: serde_json::Value,
+    #[serde(default)]
+    pub platform_job_key: Option<String>,
+    #[serde(default)]
+    pub content_hash: Option<String>,
+    #[serde(default)]
+    pub upstream_score: Option<f64>,
+    #[serde(default)]
+    pub budget_min: Option<f64>,
+    #[serde(default)]
+    pub budget_max: Option<f64>,
+    #[serde(default)]
+    pub budget_currency: Option<String>,
+    #[serde(default)]
+    pub hourly: Option<bool>,
+    #[serde(default)]
+    pub client_hire_rate: Option<f64>,
+    #[serde(default)]
+    pub client_total_spent: Option<f64>,
+    #[serde(default)]
+    pub payment_verified: Option<bool>,
+    #[serde(default)]
+    pub proposal_count: Option<u32>,
+}
+
+impl Default for RawOpportunity {
+    fn default() -> Self {
+        Self {
+            title: String::new(),
+            description: String::new(),
+            url: None,
+            budget: None,
+            skills: Vec::new(),
+            posted_at: None,
+            source_data: serde_json::json!({}),
+            platform_job_key: None,
+            content_hash: None,
+            upstream_score: None,
+            budget_min: None,
+            budget_max: None,
+            budget_currency: None,
+            hourly: None,
+            client_hire_rate: None,
+            client_total_spent: None,
+            payment_verified: None,
+            proposal_count: None,
+        }
+    }
 }
 
 /// Trait for opportunity sources that can be scanned.
@@ -66,6 +113,7 @@ impl HarvestSource for MockSource {
                 skills: vec!["rust".into(), "axum".into(), "sql".into()],
                 posted_at: Some("2026-03-20".into()),
                 source_data: serde_json::json!({"mock": true}),
+                ..Default::default()
             },
             RawOpportunity {
                 title: "React Native Mobile App".into(),
@@ -81,6 +129,7 @@ impl HarvestSource for MockSource {
                 ],
                 posted_at: Some("2026-03-19".into()),
                 source_data: serde_json::json!({"mock": true}),
+                ..Default::default()
             },
             RawOpportunity {
                 title: "CLI Tool for Data Processing".into(),
@@ -92,6 +141,7 @@ impl HarvestSource for MockSource {
                 skills: vec!["rust".into(), "cli".into(), "data-processing".into()],
                 posted_at: Some("2026-03-21".into()),
                 source_data: serde_json::json!({"mock": true}),
+                ..Default::default()
             },
         ])
     }
@@ -157,6 +207,7 @@ impl RssSource {
                     skills: Vec::new(),
                     posted_at: pub_date,
                     source_data: serde_json::json!({"rss": true}),
+                    ..Default::default()
                 };
                 enrich_from_description(&mut row);
                 results.push(row);
@@ -377,6 +428,7 @@ mod tests {
             skills: vec![],
             posted_at: None,
             source_data: serde_json::json!({}),
+            ..Default::default()
         };
         enrich_from_description(&mut raw);
         assert_eq!(raw.budget.as_deref(), Some("$2,500 - $4,000"));

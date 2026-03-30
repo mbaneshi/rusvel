@@ -667,9 +667,35 @@ pub struct Opportunity {
     pub title: String,
     pub url: Option<String>,
     pub description: String,
+    /// RUSVEL authoritative score (0.0–1.0 in engine; UI may show ×100).
     pub score: f64,
     pub stage: OpportunityStage,
     pub value_estimate: Option<f64>,
+    /// Stable per-platform id for deduplication (e.g. Upwork ciphertext job id).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform_job_key: Option<String>,
+    /// Hash of normalized capture fields for change detection (see harvest-engine normalize).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_hash: Option<String>,
+    /// Optional pre-filter score from upstream capture (extension, external tool). RUSVEL `score` is always recomputed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_score: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_max: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_currency: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hourly: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_hire_rate: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_total_spent: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment_verified: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposal_count: Option<u32>,
     pub metadata: serde_json::Value,
 }
 
@@ -1640,6 +1666,17 @@ mod tests {
             score: 0.85,
             stage: OpportunityStage::Cold,
             value_estimate: Some(5000.0),
+            platform_job_key: None,
+            content_hash: None,
+            upstream_score: None,
+            budget_min: None,
+            budget_max: None,
+            budget_currency: None,
+            hourly: None,
+            client_hire_rate: None,
+            client_total_spent: None,
+            payment_verified: None,
+            proposal_count: None,
             metadata: serde_json::json!({"skills": ["rust"]}),
         };
         let json = serde_json::to_string(&opp).unwrap();

@@ -15,13 +15,16 @@ use rusvel_core::{
 
 pub mod cdp_source;
 pub mod events;
+pub mod normalize;
 pub mod outcomes;
 pub mod pipeline;
 pub mod proposal;
+pub mod scan_execute;
 pub mod scorer;
 pub mod source;
 
 pub use cdp_source::{CdpSource, DEFAULT_CDP_EXTRACT_JS, extract_js_listing_cards};
+pub use scan_execute::{scan_from_params, HarvestScanParams};
 pub use outcomes::{HarvestDealOutcome, HarvestOutcomeRecord};
 pub use scorer::ScoringMethod;
 
@@ -90,6 +93,8 @@ pub struct HarvestEngine {
     config: HarvestConfig,
     /// Optional RAG: embed outcomes and retrieve similar rows for scoring (S-044 extension).
     rag: std::sync::Mutex<Option<(Arc<dyn EmbeddingPort>, Arc<dyn VectorStorePort>)>>,
+    /// Compact user identity text for LLM scoring (e.g. from [`rusvel_core::UserProfile::to_system_prompt`]).
+    user_profile_prompt: Option<String>,
 }
 
 impl HarvestEngine {
@@ -101,6 +106,7 @@ impl HarvestEngine {
             browser: None,
             config: HarvestConfig::default(),
             rag: std::sync::Mutex::new(None),
+            user_profile_prompt: None,
         }
     }
 
@@ -135,6 +141,79 @@ impl HarvestEngine {
     pub fn with_config(mut self, config: HarvestConfig) -> Self {
         self.config = config;
         self
+    }
+
+    pub fn with_user_profile_prompt(mut self, prompt: Option<String>) -> Self {
+        self.user_profile_prompt = prompt;
+        self
+    }
+
+    fn scorer_for_session(
+        &self,
+        session_id: &SessionId,
+        outcome_hints: Vec<String>,
+    ) -> OpportunityScorer {
+        OpportunityScorer::new(
+            self.agent.clone(),
+            self.config.skills.clone(),
+            self.config.min_budget,
+        )
+        .with_scoring_session(*session_id)
+        .with_outcome_hints(outcome_hints)
+        .with_user_profile_prompt(self.user_profile_prompt.clone())
+    }
+
+    /// Insert, skip duplicate, or update changed capture for same platform key / URL.
+    async fn try_upsert_opportunity(
+        &self,
+        session_id: &SessionId,
+        new: Opportunity,
+        pipe: &Pipeline,
+    ) -> Result<Option<Opportunity>> {
+        let key = new.platform_job_key.clone();
+        let url = new.url.clone();
+        if key.is_none() && url.is_none() {
+            pipe.add(&new).await?;
+            return Ok(Some(new));
+        }
+
+        let list = pipe.list(session_id, None).await?;
+        for mut ex in list {
+            let same_key = key.as_ref().is_some_and(|k| ex.platform_job_key.as_ref() == Some(k));
+            let same_url = url.as_ref().is_some_and(|u| ex.url.as_ref() == Some(u));
+            if !same_key && !same_url {
+                continue;
+            }
+            if ex.content_hash == new.content_hash && (same_key || same_url) {
+                return Ok(None);
+            }
+            ex.description = new.description.clone();
+            ex.title = new.title.clone();
+            ex.score = new.score;
+            ex.value_estimate = new.value_estimate;
+            ex.content_hash = new.content_hash.clone();
+            ex.upstream_score = new.upstream_score;
+            ex.budget_min = new.budget_min;
+            ex.budget_max = new.budget_max;
+            ex.budget_currency = new.budget_currency.clone();
+            ex.hourly = new.hourly;
+            ex.client_hire_rate = new.client_hire_rate;
+            ex.client_total_spent = new.client_total_spent;
+            ex.payment_verified = new.payment_verified;
+            ex.proposal_count = new.proposal_count;
+            ex.metadata = new.metadata.clone();
+            pipe.save(&ex).await?;
+            self.emit(
+                session_id,
+                events::OPPORTUNITY_SCORED,
+                serde_json::json!({"id": ex.id.to_string(), "updated": true}),
+            )
+            .await;
+            return Ok(Some(ex));
+        }
+
+        pipe.add(&new).await?;
+        Ok(Some(new))
     }
 
     /// Skills used for scoring and RSS query expansion (see [`HarvestConfig`]).
@@ -234,28 +313,36 @@ impl HarvestEngine {
         let raw_items = source.scan().await?;
         let pipe = Pipeline::new(self.storage.clone());
         let mut results = Vec::new();
+        let source_kind = source.source_kind();
 
-        for raw in &raw_items {
-            let hints = self.scoring_outcome_hints_for_raw(session_id, raw).await;
-            let scorer = OpportunityScorer::new(
-                self.agent.clone(),
-                self.config.skills.clone(),
-                self.config.min_budget,
-            )
-            .with_scoring_session(*session_id)
-            .with_outcome_hints(hints);
-            let scored = scorer.score(raw).await?;
+        for raw_in in &raw_items {
+            let mut raw = raw_in.clone();
+            normalize::prepare_raw(&mut raw, source_kind.clone());
+
+            let hints = self.scoring_outcome_hints_for_raw(session_id, &raw).await;
+            let scored = self.scorer_for_session(session_id, hints).score(&raw).await?;
 
             let opportunity = Opportunity {
                 id: OpportunityId::new(),
                 session_id: *session_id,
-                source: source.source_kind(),
+                source: source_kind.clone(),
                 title: scored.raw.title.clone(),
                 url: scored.raw.url.clone(),
                 description: scored.raw.description.clone(),
                 score: scored.score,
                 stage: OpportunityStage::Cold,
                 value_estimate: parse_budget(&scored.raw.budget),
+                platform_job_key: scored.raw.platform_job_key.clone(),
+                content_hash: scored.raw.content_hash.clone(),
+                upstream_score: scored.raw.upstream_score,
+                budget_min: scored.raw.budget_min,
+                budget_max: scored.raw.budget_max,
+                budget_currency: scored.raw.budget_currency.clone(),
+                hourly: scored.raw.hourly,
+                client_hire_rate: scored.raw.client_hire_rate,
+                client_total_spent: scored.raw.client_total_spent,
+                payment_verified: scored.raw.payment_verified,
+                proposal_count: scored.raw.proposal_count,
                 metadata: serde_json::json!({
                     "reasoning": scored.reasoning,
                     "skills": scored.raw.skills,
@@ -267,16 +354,18 @@ impl HarvestEngine {
                 }),
             };
 
-            pipe.add(&opportunity).await?;
-
-            self.emit(
-                session_id,
-                events::OPPORTUNITY_DISCOVERED,
-                serde_json::json!({"id": opportunity.id.to_string(), "title": &opportunity.title}),
-            )
-            .await;
-
-            results.push(opportunity);
+            if let Some(opp) = self
+                .try_upsert_opportunity(session_id, opportunity, &pipe)
+                .await?
+            {
+                self.emit(
+                    session_id,
+                    events::OPPORTUNITY_DISCOVERED,
+                    serde_json::json!({"id": opp.id.to_string(), "title": &opp.title}),
+                )
+                .await;
+                results.push(opp);
+            }
         }
 
         self.emit(
@@ -321,17 +410,21 @@ impl HarvestEngine {
                 .unwrap_or_default(),
             posted_at: opp.metadata["posted_at"].as_str().map(String::from),
             source_data: serde_json::json!({}),
+            platform_job_key: opp.platform_job_key.clone(),
+            content_hash: opp.content_hash.clone(),
+            upstream_score: opp.upstream_score,
+            budget_min: opp.budget_min,
+            budget_max: opp.budget_max,
+            budget_currency: opp.budget_currency.clone(),
+            hourly: opp.hourly,
+            client_hire_rate: opp.client_hire_rate,
+            client_total_spent: opp.client_total_spent,
+            payment_verified: opp.payment_verified,
+            proposal_count: opp.proposal_count,
         };
 
         let hints = self.scoring_outcome_hints_for_raw(session_id, &raw).await;
-        let scorer = OpportunityScorer::new(
-            self.agent.clone(),
-            self.config.skills.clone(),
-            self.config.min_budget,
-        )
-        .with_scoring_session(*session_id)
-        .with_outcome_hints(hints);
-        let scored = scorer.score(&raw).await?;
+        let scored = self.scorer_for_session(session_id, hints).score(&raw).await?;
         opp.score = scored.score;
         {
             let mut meta = opp.metadata;
@@ -531,20 +624,23 @@ impl HarvestEngine {
         else {
             return Ok(());
         };
-        if platform != "upwork" {
-            return Ok(());
-        }
+        let source = match platform.as_str() {
+            "upwork" => OpportunitySource::Upwork,
+            "freelancer" => OpportunitySource::Freelancer,
+            "linkedin" => OpportunitySource::LinkedIn,
+            _ => return Ok(()),
+        };
         match kind.as_str() {
             "job_listing" => {
                 if let Some(jobs) = data.get("jobs").and_then(|v| v.as_array()) {
                     for j in jobs {
-                        self.ingest_upwork_job_row(session_id, j).await?;
+                        self.ingest_json_row(session_id, j, source.clone(), "cdp").await?;
                     }
                 } else {
-                    self.ingest_upwork_job_row(session_id, &data).await?;
+                    self.ingest_json_row(session_id, &data, source, "cdp").await?;
                 }
             }
-            "client_profile" => {
+            "client_profile" if platform.as_str() == "upwork" => {
                 self.ingest_upwork_client(session_id, &data).await?;
             }
             _ => {}
@@ -552,75 +648,107 @@ impl HarvestEngine {
         Ok(())
     }
 
-    async fn ingest_upwork_job_row(
+    /// Batch ingest jobs from extension, webhooks, or fleet workers (always re-scored in RUSVEL).
+    pub async fn ingest_jobs(
+        &self,
+        session_id: &SessionId,
+        rows: &[serde_json::Value],
+        platform: &str,
+        ingest_source_tag: &str,
+    ) -> Result<Vec<Opportunity>> {
+        let source_kind = normalize::opportunity_source_from_platform(platform)?;
+        let mut results = Vec::new();
+        for row in rows {
+            if let Some(opp) = self
+                .ingest_json_row(session_id, row, source_kind.clone(), ingest_source_tag)
+                .await?
+            {
+                results.push(opp);
+            }
+        }
+        self.emit(
+            session_id,
+            events::BATCH_INGEST_COMPLETED,
+            serde_json::json!({
+                "count": results.len(),
+                "input_rows": rows.len(),
+                "platform": platform,
+            }),
+        )
+        .await;
+        Ok(results)
+    }
+
+    async fn ingest_json_row(
         &self,
         session_id: &SessionId,
         row: &serde_json::Value,
-    ) -> Result<()> {
-        let title = row
-            .get("title")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Untitled opportunity");
-        let raw = source::RawOpportunity {
-            title: title.into(),
-            description: row
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .into(),
-            url: row.get("url").and_then(|v| v.as_str()).map(String::from),
-            budget: row.get("budget").and_then(|v| {
-                v.as_str()
-                    .map(String::from)
-                    .or_else(|| v.as_f64().map(|n| format!("${n:.0}")))
-            }),
-            skills: row
-                .get("skills")
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|x| x.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default(),
-            posted_at: row
-                .get("posted_at")
-                .and_then(|v| v.as_str())
-                .map(String::from),
-            source_data: row.clone(),
-        };
-        let scorer = OpportunityScorer::new(
-            self.agent.clone(),
-            self.config.skills.clone(),
-            self.config.min_budget,
-        );
-        let scored = scorer.score(&raw).await?;
+        source_kind: OpportunitySource,
+        ingest_source_tag: &str,
+    ) -> Result<Option<Opportunity>> {
+        let (src, mut raw) = normalize::raw_from_ingest_row(row, source_kind);
+        if raw.title.trim().is_empty() {
+            return Ok(None);
+        }
+        normalize::prepare_raw(&mut raw, src.clone());
+        let hints = self.scoring_outcome_hints_for_raw(session_id, &raw).await;
+        let scored = self
+            .scorer_for_session(session_id, hints)
+            .score(&raw)
+            .await?;
         let opportunity = Opportunity {
             id: OpportunityId::new(),
             session_id: *session_id,
-            source: OpportunitySource::Upwork,
+            source: src,
             title: scored.raw.title.clone(),
             url: scored.raw.url.clone(),
             description: scored.raw.description.clone(),
             score: scored.score,
             stage: OpportunityStage::Cold,
             value_estimate: parse_budget(&scored.raw.budget),
+            platform_job_key: scored.raw.platform_job_key.clone(),
+            content_hash: scored.raw.content_hash.clone(),
+            upstream_score: scored.raw.upstream_score,
+            budget_min: scored.raw.budget_min,
+            budget_max: scored.raw.budget_max,
+            budget_currency: scored.raw.budget_currency.clone(),
+            hourly: scored.raw.hourly,
+            client_hire_rate: scored.raw.client_hire_rate,
+            client_total_spent: scored.raw.client_total_spent,
+            payment_verified: scored.raw.payment_verified,
+            proposal_count: scored.raw.proposal_count,
             metadata: serde_json::json!({
                 "reasoning": scored.reasoning,
                 "skills": scored.raw.skills,
                 "posted_at": scored.raw.posted_at,
-                "browser_capture": true,
+                "ingest_source": ingest_source_tag,
+                "scoring_method": match scored.scoring_method {
+                    ScoringMethod::Llm => "llm",
+                    ScoringMethod::Keyword => "keyword",
+                },
             }),
         };
         let pipe = Pipeline::new(self.storage.clone());
-        pipe.add(&opportunity).await?;
-        self.emit(
-            session_id,
-            events::OPPORTUNITY_DISCOVERED,
-            serde_json::json!({"id": opportunity.id.to_string(), "title": &opportunity.title, "source": "browser"}),
-        )
-        .await;
-        Ok(())
+        if let Some(opp) = self
+            .try_upsert_opportunity(session_id, opportunity, &pipe)
+            .await?
+        {
+            self.emit(
+                session_id,
+                events::OPPORTUNITY_DISCOVERED,
+                serde_json::json!({"id": opp.id.to_string(), "title": &opp.title, "source": ingest_source_tag}),
+            )
+            .await;
+            self.emit(
+                session_id,
+                events::OPPORTUNITY_INGESTED,
+                serde_json::json!({"id": opp.id.to_string(), "source": ingest_source_tag}),
+            )
+            .await;
+            Ok(Some(opp))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn ingest_upwork_client(

@@ -368,6 +368,48 @@ async fn post_harvest_scan_mock_persists_opportunities() {
 }
 
 #[tokio::test]
+async fn post_harvest_ingest_persists_opportunities() {
+    let (mut router, session_a, _, _, _) = test_router().await;
+    let (status, body) = json_request(
+        &mut router,
+        "POST",
+        "/api/dept/harvest/ingest",
+        Some(json!({
+            "session_id": session_a.to_string(),
+            "jobs": [{
+                "title": "Ingested gig",
+                "description": "Rust systems programming",
+                "url": "https://example.com/j/ingest-1",
+                "platform_job_key": "ingest-test-1",
+                "source": "manual"
+            }]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let ops: Vec<Value> = serde_json::from_slice(&body).expect("json");
+    assert_eq!(ops.len(), 1);
+    assert_eq!(ops[0]["title"], "Ingested gig");
+
+    let (st2, list_body) = json_request(
+        &mut router,
+        "GET",
+        &format!(
+            "/api/dept/harvest/list?session_id={}",
+            session_a.to_string()
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(st2, StatusCode::OK);
+    let listed: Vec<Value> = serde_json::from_slice(&list_body).unwrap();
+    assert!(
+        listed.iter().any(|o| o["title"] == "Ingested gig"),
+        "list should include ingested opportunity"
+    );
+}
+
+#[tokio::test]
 async fn post_harvest_proposal_persists_proposal() {
     let (mut router, session_a, _, harvest, _) = test_router().await;
     let (st, scan_body) = json_request(

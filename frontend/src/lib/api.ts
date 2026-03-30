@@ -1152,6 +1152,25 @@ export async function getHarvestOpportunities(
 	return request(`/api/dept/harvest/list?${sp}`);
 }
 
+/** POST /api/dept/harvest/ingest — push job-shaped rows (extension/webhook); same scoring + dedup as scan. */
+export async function postHarvestIngest(
+	sessionId: string,
+	jobs: Record<string, unknown>[],
+	opts?: { platform?: string }
+): Promise<OpportunityRow[]> {
+	const body: Record<string, unknown> = {
+		session_id: sessionId,
+		jobs
+	};
+	if (opts?.platform != null && opts.platform !== '') {
+		body.platform = opts.platform;
+	}
+	return request<OpportunityRow[]>('/api/dept/harvest/ingest', {
+		method: 'POST',
+		body: JSON.stringify(body)
+	});
+}
+
 export async function postHarvestAdvance(
 	sessionId: string,
 	opportunityId: string,

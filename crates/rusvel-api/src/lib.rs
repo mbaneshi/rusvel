@@ -9,13 +9,16 @@
 pub mod agents;
 pub mod analytics;
 pub mod approvals;
+pub mod artifacts;
 pub mod auth;
 pub mod browser;
 pub mod build_cmd;
 pub mod capability;
 pub mod chat;
 pub mod config;
+pub mod connectors;
 pub mod cron;
+pub mod dashboard;
 pub mod db_routes;
 pub mod department;
 pub mod engine_routes;
@@ -312,6 +315,7 @@ pub fn build_router_with_frontend(
             post(engine_routes::harvest_score),
         )
         .route("/api/dept/harvest/scan", post(engine_routes::harvest_scan))
+        .route("/api/dept/harvest/ingest", post(engine_routes::harvest_ingest))
         .route(
             "/api/dept/harvest/proposal",
             post(engine_routes::harvest_proposal),
@@ -434,6 +438,23 @@ pub fn build_router_with_frontend(
         )
         // Help (AI-powered)
         .route("/api/help", post(help::help_handler))
+        // Artifacts (saved outputs)
+        .route(
+            "/api/artifacts",
+            get(artifacts::list_artifacts).post(artifacts::create_artifact),
+        )
+        .route(
+            "/api/artifacts/{id}",
+            get(artifacts::get_artifact).delete(artifacts::delete_artifact),
+        )
+        // Connectors (GitHub PAT)
+        .route("/api/connectors/github/status", get(connectors::github_status))
+        .route(
+            "/api/connectors/github/pat",
+            axum::routing::post(connectors::github_set_pat).delete(connectors::github_clear_pat),
+        )
+        // Active tasks dashboard
+        .route("/api/dashboard/active", get(dashboard::active_dashboard))
         // Job queue (ADR-003)
         .route("/api/jobs", get(jobs::list_jobs))
         // Approvals (human-in-the-loop, ADR-008)

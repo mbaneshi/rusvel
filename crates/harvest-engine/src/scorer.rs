@@ -39,6 +39,8 @@ pub struct OpportunityScorer {
     scoring_session: Option<SessionId>,
     /// Recent won/lost lines appended to the LLM prompt (S-044).
     outcome_hints: Vec<String>,
+    /// Optional operator context (e.g. [`rusvel_core::UserProfile::to_system_prompt`] summary).
+    user_profile_prompt: Option<String>,
 }
 
 impl OpportunityScorer {
@@ -53,6 +55,7 @@ impl OpportunityScorer {
             min_budget,
             scoring_session: None,
             outcome_hints: Vec::new(),
+            user_profile_prompt: None,
         }
     }
 
@@ -64,6 +67,11 @@ impl OpportunityScorer {
 
     pub fn with_outcome_hints(mut self, hints: Vec<String>) -> Self {
         self.outcome_hints = hints;
+        self
+    }
+
+    pub fn with_user_profile_prompt(mut self, prompt: Option<String>) -> Self {
+        self.user_profile_prompt = prompt;
         self
     }
 
@@ -138,8 +146,13 @@ impl OpportunityScorer {
         agent: &Arc<dyn AgentPort>,
         raw: &RawOpportunity,
     ) -> Result<ScoredOpportunity> {
-        let prompt =
-            build_llm_scoring_prompt(raw, &self.skills, self.min_budget, &self.outcome_hints);
+        let prompt = build_llm_scoring_prompt(
+            raw,
+            &self.skills,
+            self.min_budget,
+            &self.outcome_hints,
+            self.user_profile_prompt.as_deref(),
+        );
 
         let session_id = self.scoring_session.unwrap_or_else(SessionId::new);
         let config = AgentConfig {
@@ -186,6 +199,7 @@ fn build_llm_scoring_prompt(
     user_skills: &[String],
     min_budget: Option<f64>,
     outcome_hints: &[String],
+    user_profile: Option<&str>,
 ) -> String {
     let skills_line = if user_skills.is_empty() {
         "(none configured)".to_string()
@@ -202,9 +216,13 @@ fn build_llm_scoring_prompt(
             outcome_hints.join("\n")
         )
     };
+    let profile_block = user_profile
+        .filter(|s| !s.is_empty())
+        .map(|p| format!("## Operator profile (score for this builder)\n{p}\n\n"))
+        .unwrap_or_default();
 
     format!(
-        "## User skills (relevance target)\n{skills_line}\n\n\
+        "{profile_block}## User skills (relevance target)\n{skills_line}\n\n\
          ## Minimum budget preference\n{budget_line}\n\n\
          {past}\
          ## Opportunity\n\
@@ -315,6 +333,7 @@ mod tests {
             skills: vec!["rust".into(), "axum".into()],
             posted_at: None,
             source_data: serde_json::json!({}),
+            ..Default::default()
         };
 
         let scored = scorer.score(&raw).await.unwrap();
@@ -335,6 +354,7 @@ mod tests {
             skills: vec!["react-native".into()],
             posted_at: None,
             source_data: serde_json::json!({}),
+            ..Default::default()
         };
 
         let scored = scorer.score(&raw).await.unwrap();
@@ -419,6 +439,7 @@ mod tests {
             skills: vec!["rust".into()],
             posted_at: Some("2026-03-01".into()),
             source_data: serde_json::json!({}),
+            ..Default::default()
         };
 
         let scored = scorer.score(&raw).await.unwrap();

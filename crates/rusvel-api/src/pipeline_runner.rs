@@ -4,23 +4,48 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use content_engine::ContentEngine;
-use harvest_engine::HarvestEngine;
-use harvest_engine::source::MockSource;
+use harvest_engine::{scan_from_params, HarvestEngine, HarvestScanParams};
 use rusvel_core::domain::ContentKind;
 use rusvel_core::error::{Result, RusvelError};
 use rusvel_core::id::SessionId;
+use rusvel_core::ports::BrowserPort;
 use serde_json::{Value, json};
 
-/// Runs scan → score → propose → draft using real engines (mock harvest source in tests).
+/// Runs scan → score → propose → draft using real engines.
 pub struct HarvestContentPipelineRunner {
     pub harvest: Arc<HarvestEngine>,
     pub content: Arc<ContentEngine>,
+    pub browser: Option<Arc<dyn BrowserPort>>,
+    pub scan_params: HarvestScanParams,
+}
+
+impl HarvestContentPipelineRunner {
+    /// Pipeline scan defaults to mock-only when `scan_params` is default-mock.
+    pub fn new(
+        harvest: Arc<HarvestEngine>,
+        content: Arc<ContentEngine>,
+        browser: Option<Arc<dyn BrowserPort>>,
+        scan_params: HarvestScanParams,
+    ) -> Self {
+        Self {
+            harvest,
+            content,
+            browser,
+            scan_params,
+        }
+    }
 }
 
 #[async_trait]
 impl forge_engine::pipeline::PipelineStepRunner for HarvestContentPipelineRunner {
     async fn scan(&self, session_id: &SessionId) -> Result<Value> {
-        let opps = self.harvest.scan(session_id, &MockSource::new()).await?;
+        let opps = scan_from_params(
+            self.harvest.as_ref(),
+            session_id,
+            &self.scan_params,
+            self.browser.clone(),
+        )
+        .await?;
         let opportunity_ids: Vec<String> = opps.iter().map(|o| o.id.to_string()).collect();
         let titles: Vec<String> = opps.iter().map(|o| o.title.clone()).collect();
         Ok(json!({
