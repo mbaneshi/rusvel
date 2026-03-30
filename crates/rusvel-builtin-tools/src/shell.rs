@@ -15,7 +15,14 @@ pub async fn register(registry: &ToolRegistry) {
             ToolDefinition {
                 name: "bash".into(),
                 description:
-                    "Execute a bash command and return its stdout/stderr. Commands have a timeout."
+                    "Execute a bash command and return stdout/stderr. Default timeout: 2 minutes.\n\n\
+                    WHEN TO USE: Running builds, tests, system commands, anything not covered by other tools.\n\
+                    WHEN NOT TO USE: Reading files (use read_file), searching (use grep/glob), git ops (use git_* tools).\n\n\
+                    TIPS:\n\
+                    - Commands run in the project root directory\n\
+                    - Use && to chain dependent commands\n\
+                    - Set timeout_ms for long-running commands (max 10 min)\n\
+                    - Exit code > 0 means failure — check stderr in the output"
                         .into(),
                 parameters: json!({
                     "type": "object",

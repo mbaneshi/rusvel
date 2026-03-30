@@ -69,7 +69,8 @@ impl NodeHandler for AgentNode {
             tools: vec![],
             instructions: Some(resolved_prompt.clone()),
             budget_limit: None,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
 
         let run_id = self.agent_port.create(config).await?;

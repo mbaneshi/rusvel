@@ -189,6 +189,7 @@ async fn run_trigger_agent(
         tools,
         instructions: Some(instructions),
         budget_limit: None,
+        max_iterations: None,
         metadata,
     };
 

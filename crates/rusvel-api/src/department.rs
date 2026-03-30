@@ -571,6 +571,7 @@ pub async fn dept_chat(
         tools: resolved.allowed_tools.clone(),
         instructions: Some(resolved.system_prompt.clone()),
         budget_limit: resolved.max_budget_usd,
+        max_iterations: None,
         metadata: serde_json::Value::Object(meta),
     };
 
@@ -642,7 +643,7 @@ pub async fn dept_chat(
                                 "response_length": msg.content.len(),
                             }),
                             created_at: Utc::now(),
-                            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
                         })
                         .await;
                     crate::hook_dispatch::dispatch_hooks(

@@ -167,7 +167,7 @@ impl ForgeEngine {
                                 "threshold_ratio": 0.8
                             }),
                             created_at: Utc::now(),
-                            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
                         })
                         .await;
                 }
@@ -186,7 +186,7 @@ impl ForgeEngine {
                             kind: events::SAFETY_CIRCUIT_OPEN.into(),
                             payload: serde_json::json!({"reason": "mission_agent_failed"}),
                             created_at: Utc::now(),
-                            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
                         })
                         .await;
                 }
@@ -237,7 +237,8 @@ impl ForgeEngine {
             tools: vec![],
             instructions: Some("You are a mission planning agent. Return valid JSON only.".into()),
             budget_limit: Some(0.10),
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
         let output = self
             .run_agent_with_mission_safety(*session_id, config, Content::text(prompt))
@@ -272,7 +273,7 @@ impl ForgeEngine {
                 status: TaskStatus::Todo,
                 due_at: None,
                 priority,
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             };
             self.storage
                 .objects()
@@ -286,7 +287,7 @@ impl ForgeEngine {
             tasks,
             focus_areas: parsed.focus_areas,
             notes: parsed.notes,
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         };
         self.events
             .emit(Event {
@@ -297,7 +298,7 @@ impl ForgeEngine {
                 kind: events::MISSION_PLAN_GENERATED.into(),
                 payload: serde_json::to_value(&plan)?,
                 created_at: Utc::now(),
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
             .await?;
         Ok(plan)
@@ -319,7 +320,7 @@ impl ForgeEngine {
             timeframe,
             status: GoalStatus::Active,
             progress: 0.0,
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         };
         self.storage
             .objects()
@@ -334,7 +335,7 @@ impl ForgeEngine {
                 kind: events::MISSION_GOAL_CREATED.into(),
                 payload: serde_json::to_value(&goal)?,
                 created_at: Utc::now(),
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
             .await?;
         Ok(goal)
@@ -401,7 +402,8 @@ impl ForgeEngine {
             tools: vec![],
             instructions: Some("You are a review agent. Return valid JSON only.".into()),
             budget_limit: Some(0.10),
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
         let output = self
             .run_agent_with_mission_safety(*session_id, config, Content::text(prompt))
@@ -423,7 +425,7 @@ impl ForgeEngine {
             blockers: parsed.blockers,
             insights: parsed.insights,
             next_actions: parsed.next_actions,
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         };
         self.events
             .emit(Event {
@@ -434,7 +436,7 @@ impl ForgeEngine {
                 kind: events::MISSION_REVIEW_COMPLETED.into(),
                 payload: serde_json::to_value(&review)?,
                 created_at: Utc::now(),
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
             .await?;
         Ok(review)
@@ -453,7 +455,7 @@ impl ForgeEngine {
                     status: "red".into(),
                     highlights: vec![format!("Brief section failed: {e}")],
                     metrics: serde_json::json!({}),
-                    metadata: Default::default(),
+        metadata: Default::default(),
                 },
             };
             sections.push(section);
@@ -492,7 +494,7 @@ impl ForgeEngine {
             summary: parsed.summary,
             action_items: parsed.action_items,
             created_at: Utc::now(),
-            metadata: Default::default(),
+        metadata: Default::default(),
         };
 
         self.persist_executive_brief(session_id, &brief).await;
@@ -558,7 +560,7 @@ impl ForgeEngine {
                     "date": brief.date,
                 }),
                 created_at: Utc::now(),
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
             .await;
     }
@@ -606,7 +608,7 @@ impl ForgeEngine {
                 parsed.highlights
             },
             metrics: parsed.metrics,
-            metadata: Default::default(),
+        metadata: Default::default(),
         })
     }
 }

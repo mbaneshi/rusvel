@@ -97,7 +97,8 @@ impl ForgeEngine {
             tools: profile.allowed_tools.clone(),
             instructions: Some(profile.instructions.clone()),
             budget_limit: profile.budget_limit,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         })
     }
 }
@@ -136,7 +137,7 @@ impl Engine for ForgeEngine {
         Ok(HealthStatus {
             healthy: true,
             message: Some("Forge Engine is operational".into()),
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         })
     }
 }
@@ -173,7 +174,7 @@ mod tests {
                 tool_calls: 0,
                 usage: LlmUsage::default(),
                 cost_estimate: 0.01,
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
         }
         async fn stop(&self, _: &RunId) -> Result<()> {

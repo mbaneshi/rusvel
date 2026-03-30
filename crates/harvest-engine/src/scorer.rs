@@ -152,7 +152,8 @@ impl OpportunityScorer {
                     .into(),
             ),
             budget_limit: Some(0.05),
-            metadata: serde_json::json!({ "task": "harvest_opportunity_score" }),
+            max_iterations: None,
+        metadata: serde_json::json!({ "task": "harvest_opportunity_score" }),
         };
 
         let run_id = agent.create(config).await?;
@@ -382,7 +383,7 @@ mod tests {
                 tool_calls: 0,
                 usage: LlmUsage::default(),
                 cost_estimate: 0.0,
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
         }
 

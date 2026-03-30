@@ -49,4 +49,4 @@
 	let Icon = $derived(MAP[deptId] ?? Layers);
 </script>
 
-<svelte:component this={Icon} {size} {strokeWidth} class={className} />
+<Icon {size} {strokeWidth} class={className} />

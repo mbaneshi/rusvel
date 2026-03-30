@@ -62,7 +62,8 @@ impl ProposalGenerator {
                     .into(),
             ),
             budget_limit: Some(0.05),
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
 
         let run_id = self.agent.create(config).await?;
@@ -91,7 +92,7 @@ impl ProposalGenerator {
                 body,
                 estimated_value,
                 tone,
-                metadata: serde_json::json!({"opportunity_id": opportunity.id.to_string()}),
+        metadata: serde_json::json!({"opportunity_id": opportunity.id.to_string()}),
             });
         }
 
@@ -100,7 +101,7 @@ impl ProposalGenerator {
             body: text,
             estimated_value: opportunity.value_estimate,
             tone: "professional".into(),
-            metadata: serde_json::json!({"opportunity_id": opportunity.id.to_string()}),
+        metadata: serde_json::json!({"opportunity_id": opportunity.id.to_string()}),
         })
     }
 }

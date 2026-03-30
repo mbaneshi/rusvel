@@ -12,7 +12,9 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "git_status".into(),
-                description: "Show the working tree status (staged, unstaged, untracked files)."
+                description: "Show git working tree status (staged, unstaged, untracked files).\n\n\
+                    USE: Check what's changed before committing, see if files are tracked.\n\
+                    OUTPUT: Short format — M=modified, A=added, ??=untracked."
                     .into(),
                 parameters: json!({
                     "type": "object",
@@ -61,7 +63,10 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "git_diff".into(),
-                description: "Show changes between commits, commit and working tree, etc.".into(),
+                description: "Show git diff — changes between commits, staged/unstaged changes.\n\n\
+                    USE: See what code changed, review before committing.\n\
+                    ARGS: 'args' can be '--staged', 'HEAD~1', a file path, or a commit range.\n\
+                    TIPS: No args = unstaged changes. '--staged' = what's about to be committed.".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -119,7 +124,9 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "git_log".into(),
-                description: "Show recent commit history.".into(),
+                description: "Show recent git commit history (oneline format).\n\n\
+                    USE: Understand recent changes, find commit hashes, check commit style.\n\
+                    TIPS: Default 10 commits. Use 'count' param for more. Shows hash + message.".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {

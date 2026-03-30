@@ -39,7 +39,13 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "read_file".into(),
-                description: "Read the contents of a file. Returns the file text.".into(),
+                description: "Read file contents from disk. Returns numbered lines (cat -n format).\n\n\
+                    WHEN TO USE: Reading known files, inspecting code, checking config.\n\
+                    WHEN NOT TO USE: Searching for files (use glob), searching content (use grep).\n\n\
+                    TIPS:\n\
+                    - For files >500 lines, use offset+limit to read sections\n\
+                    - Returns error if file doesn't exist — check with glob first if unsure\n\
+                    - Binary files return raw bytes (not useful) — skip them".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -104,7 +110,13 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "write_file".into(),
-                description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does.".into(),
+                description: "Write content to a file (creates or overwrites).\n\n\
+                    WHEN TO USE: Creating new files, full file rewrites.\n\
+                    WHEN NOT TO USE: Small edits to existing files (use edit_file instead).\n\n\
+                    TIPS:\n\
+                    - Creates parent directories automatically\n\
+                    - Overwrites entire file — use edit_file for targeted changes\n\
+                    - Path must be within the project directory".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -151,7 +163,14 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "edit_file".into(),
-                description: "Perform a search-and-replace edit on a file. The old_string must match exactly.".into(),
+                description: "Search-and-replace edit on a file. The old_string must match exactly one location.\n\n\
+                    WHEN TO USE: Modifying existing code, updating config values, fixing bugs.\n\
+                    WHEN NOT TO USE: Creating new files (use write_file), large rewrites (use write_file).\n\n\
+                    TIPS:\n\
+                    - old_string must be unique in the file — include surrounding context if needed\n\
+                    - If found 0 times: check for whitespace/indentation differences\n\
+                    - If found >1 times: add more surrounding lines to make it unique\n\
+                    - Read the file first to get the exact text to match".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -216,7 +235,14 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "glob".into(),
-                description: "Find files matching a glob pattern. Returns matching file paths.".into(),
+                description: "Find files matching a glob pattern. Returns matching file paths.\n\n\
+                    WHEN TO USE: Discovering files by name/extension, finding all files of a type.\n\
+                    WHEN NOT TO USE: Searching file contents (use grep), reading a known file (use read_file).\n\n\
+                    PATTERNS: **/*.rs (all Rust files), src/**/*.ts (TS in src/), Cargo.toml (exact name)\n\
+                    TIPS:\n\
+                    - Use ** for recursive matching across directories\n\
+                    - Set 'path' to narrow the search base directory\n\
+                    - Returns empty list if no matches — not an error".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {
@@ -274,7 +300,14 @@ pub async fn register(registry: &ToolRegistry) {
         .register_with_handler(
             ToolDefinition {
                 name: "grep".into(),
-                description: "Search file contents for a regex pattern. Returns matching lines with file paths and line numbers.".into(),
+                description: "Search file contents for a regex pattern. Returns matching lines with file paths and line numbers.\n\n\
+                    WHEN TO USE: Finding where a function/variable/string is used, searching code.\n\
+                    WHEN NOT TO USE: Finding files by name (use glob), reading a known file (use read_file).\n\n\
+                    TIPS:\n\
+                    - Pattern is regex: use literal strings or regex syntax (e.g. 'fn\\s+main')\n\
+                    - Set 'path' to search a specific directory/file\n\
+                    - Use 'include' to filter file types (e.g. '*.rs')\n\
+                    - Returns file:line:content format".into(),
                 parameters: json!({
                     "type": "object",
                     "properties": {

@@ -41,8 +41,8 @@ use rusvel_core::ports::{AgentPort, LlmPort, MemoryPort, ToolPort};
 /// A hook handler invoked before or after a tool call.
 pub type HookHandler = Arc<dyn Fn(&str, &serde_json::Value) -> HookDecision + Send + Sync>;
 
-/// Maximum iterations in the agent loop to prevent runaways.
-const MAX_ITERATIONS: u32 = 10;
+/// Default maximum iterations in the agent loop.
+const DEFAULT_MAX_ITERATIONS: u32 = 50;
 
 /// When conversation turns exceed this count, older turns are summarized.
 const COMPACT_THRESHOLD: usize = 30;
@@ -328,7 +328,7 @@ impl AgentRuntime {
             tools,
             temperature: None,
             max_tokens: None,
-            metadata: merge_llm_request_metadata(config),
+        metadata: merge_llm_request_metadata(config),
         }
     }
 
@@ -652,8 +652,10 @@ async fn run_streaming_loop(
     // Searchable tools are discovered via `tool_search` and added dynamically.
     let mut tool_defs: Vec<ToolDefinition> =
         tools.list().into_iter().filter(|t| !t.searchable).collect();
+    let mut consecutive_failures: u32 = 0;
 
-    for iteration in 0..MAX_ITERATIONS {
+    let max_iter = config.max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
+    for iteration in 0..max_iter {
         debug!(%run_id, iteration, "streaming agent loop iteration");
 
         compact_messages(llm.as_ref(), &mut messages).await;
@@ -704,7 +706,7 @@ async fn run_streaming_loop(
                     tool_calls,
                     usage: total_usage,
                     cost_estimate: 0.0,
-                    metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
                 });
             }
             FinishReason::ToolUse => {
@@ -817,6 +819,23 @@ async fn run_streaming_loop(
                         }],
                     },
                 });
+
+                // Error recovery: inject reflection prompts on consecutive failures
+                if is_error {
+                    consecutive_failures += 1;
+                    if consecutive_failures >= 3 {
+                        messages.push(LlmMessage {
+                            role: LlmRole::System,
+                            content: Content::text(
+                                "[REFLECTION REQUIRED] 3 consecutive tool failures. \
+                                 Stop and reassess your approach. What assumption is wrong? \
+                                 Try a completely different strategy."
+                            ),
+                        });
+                    }
+                } else {
+                    consecutive_failures = 0;
+                }
             }
             FinishReason::Other(ref reason) => {
                 return Err(RusvelError::Agent(format!(
@@ -827,7 +846,7 @@ async fn run_streaming_loop(
     }
 
     Err(RusvelError::Agent(format!(
-        "agent loop exceeded {MAX_ITERATIONS} iterations"
+        "agent loop exceeded {max_iter} iterations"
     )))
 }
 
@@ -893,9 +912,11 @@ impl AgentPort for AgentRuntime {
             .into_iter()
             .filter(|t| !t.searchable)
             .collect();
+        let mut consecutive_failures: u32 = 0;
 
         // ── Agent loop ───────────────────────────────────────────────
-        for iteration in 0..MAX_ITERATIONS {
+        let max_iter = config.max_iterations.unwrap_or(DEFAULT_MAX_ITERATIONS);
+        for iteration in 0..max_iter {
             debug!(%run_id, iteration, "agent loop iteration");
 
             // Check if stopped between iterations.
@@ -926,7 +947,7 @@ impl AgentPort for AgentRuntime {
                         tool_calls,
                         usage: total_usage,
                         cost_estimate: 0.0,
-                        metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
                     };
 
                     self.runs.write().await.entry(*run_id).and_modify(|s| {
@@ -1035,6 +1056,23 @@ impl AgentPort for AgentRuntime {
                         },
                     });
 
+                    // Error recovery: inject reflection on consecutive failures
+                    if is_error {
+                        consecutive_failures += 1;
+                        if consecutive_failures >= 3 {
+                            messages.push(LlmMessage {
+                                role: LlmRole::System,
+                                content: Content::text(
+                                    "[REFLECTION REQUIRED] 3 consecutive tool failures. \
+                                     Stop and reassess your approach. What assumption is wrong? \
+                                     Try a completely different strategy."
+                                ),
+                            });
+                        }
+                    } else {
+                        consecutive_failures = 0;
+                    }
+
                     // Transition back to Running.
                     self.runs.write().await.entry(*run_id).and_modify(|s| {
                         s.status = AgentStatus::Running;
@@ -1054,7 +1092,7 @@ impl AgentPort for AgentRuntime {
             s.status = AgentStatus::Failed;
         });
         Err(RusvelError::Agent(format!(
-            "agent loop exceeded {MAX_ITERATIONS} iterations"
+            "agent loop exceeded {max_iter} iterations"
         )))
     }
 
@@ -1135,7 +1173,7 @@ mod tests {
             Ok(ToolResult {
                 success: true,
                 output: Content::text("tool result"),
-                metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
             })
         }
 
@@ -1190,7 +1228,8 @@ mod tests {
             tools: vec![],
             instructions: Some("You are a helpful assistant.".into()),
             budget_limit: None,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         }
     }
 
@@ -1202,7 +1241,7 @@ mod tests {
                 input_tokens: 10,
                 output_tokens: 20,
             },
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         }
     }
 
@@ -1220,7 +1259,7 @@ mod tests {
                 input_tokens: 10,
                 output_tokens: 5,
             },
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         }
     }
 

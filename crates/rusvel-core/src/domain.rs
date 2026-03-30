@@ -450,6 +450,9 @@ pub struct AgentConfig {
     pub tools: Vec<String>,
     pub instructions: Option<String>,
     pub budget_limit: Option<f64>,
+    /// Maximum tool-use iterations. Default: 50. Set lower for simple Q&A.
+    #[serde(default)]
+    pub max_iterations: Option<u32>,
     pub metadata: serde_json::Value,
 }
 

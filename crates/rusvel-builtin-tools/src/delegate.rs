@@ -66,7 +66,7 @@ pub async fn register(
                     "required": ["prompt"]
                 }),
                 searchable: true,
-                metadata: json!({"category": "agent", "max_depth": MAX_DELEGATION_DEPTH}),
+        metadata: json!({"category": "agent", "max_depth": MAX_DELEGATION_DEPTH}),
             },
             Arc::new(move |args| {
                 let agent = agent.clone();
@@ -83,7 +83,7 @@ pub async fn register(
                             output: Content::text(format!(
                                 "Delegation rejected: depth {depth} >= max {MAX_DELEGATION_DEPTH}"
                             )),
-                            metadata: json!({"error": "max_delegation_depth_exceeded", "depth": depth}),
+        metadata: json!({"error": "max_delegation_depth_exceeded", "depth": depth}),
                         });
                     }
 
@@ -96,7 +96,7 @@ pub async fn register(
                         return Ok(ToolResult {
                             success: false,
                             output: Content::text("delegate_agent: prompt is required"),
-                            metadata: json!({"error": "missing_prompt"}),
+        metadata: json!({"error": "missing_prompt"}),
                         });
                     }
 
@@ -154,6 +154,7 @@ pub async fn register(
                         tools,
                         instructions: Some(instructions),
                         budget_limit: None,
+                        max_iterations: None,
                         metadata,
                     };
 
@@ -248,7 +249,7 @@ pub async fn register(
                     Ok(ToolResult {
                         success: true,
                         output: Content::text(text),
-                        metadata: meta,
+        metadata: meta,
                     })
                 })
             }),

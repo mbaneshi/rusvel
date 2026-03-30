@@ -142,7 +142,8 @@ impl ContentWriter {
             tools: vec![],
             instructions: Some("You are a professional content writer.".into()),
             budget_limit: None,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
@@ -164,7 +165,7 @@ impl ContentWriter {
             approval: ApprovalStatus::Pending,
             scheduled_at: None,
             published_at: None,
-            metadata: serde_json::json!({}),
+        metadata: serde_json::json!({}),
         })
     }
 
@@ -191,7 +192,8 @@ impl ContentWriter {
             tools: vec![],
             instructions: Some("You are a social-media content strategist.".into()),
             budget_limit: None,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
@@ -212,7 +214,8 @@ impl ContentWriter {
             tools: vec![],
             instructions: Some("You are an editorial reviewer.".into()),
             budget_limit: None,
-            metadata: serde_json::json!({}),
+            max_iterations: None,
+        metadata: serde_json::json!({}),
         };
         let run_id = self.agent.create(config).await?;
         let output = self.agent.run(&run_id, Content::text(prompt)).await?;
@@ -269,7 +272,7 @@ mod prompt_tests {
             total_symbols: 200,
             top_symbols: vec!["main".into(), "run".into()],
             largest_function: Some("process_batch".into()),
-            metadata: Default::default(),
+        metadata: Default::default(),
         }
     }
 

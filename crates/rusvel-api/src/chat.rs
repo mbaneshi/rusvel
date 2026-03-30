@@ -128,6 +128,7 @@ pub async fn chat_handler(
         tools: chat_config.allowed_tools.clone(),
         instructions: Some(system_prompt),
         budget_limit: chat_config.max_budget_usd,
+        max_iterations: None,
         metadata: serde_json::Value::Object(meta),
     };
 
