@@ -139,3 +139,107 @@
 **Context:** The `EngineKind` enum in `rusvel-core` grew with every new department, forcing core changes for what should be a registration concern. `DepartmentRegistry` hardcoded metadata (prompts, capabilities, colors) that belongs with the department itself. Adding a department touched 5+ files.
 **Decision:** Introduce `DepartmentApp` trait and `DepartmentManifest` struct in `rusvel-core::department`. Each department lives in its own `dept-*` crate implementing `DepartmentApp`. The host collects manifests, resolves dependencies, and calls `register()` in order. `EngineKind` enum is removed entirely; departments use string IDs. **14** `dept-*` workspace crates: `dept-forge`, `dept-code`, `dept-content`, `dept-harvest`, `dept-flow`, `dept-gtm`, `dept-finance`, `dept-product`, `dept-growth`, `dept-distro`, `dept-legal`, `dept-support`, `dept-infra`, `dept-messaging` (registered **last** at boot; channel shell until expanded).
 **Consequence:** Adding a department = adding a `dept-*` crate. Zero changes to `rusvel-core`. Each department declares its own routes, tools, capabilities, and system prompt via `DepartmentManifest`. Supersedes the `department-scaling-proposal.md` and the **registration** aspects of ADR-011.
+
+---
+
+## ADR-015: Flow Node Retry Policies and Timeouts
+
+**Date:** 2026-03-30
+**Status:** Proposed
+**Context:** Flow-engine has checkpoint/resume/retry-single-node and 3 error behaviors (`StopFlow`, `ContinueOnFail`, `UseErrorOutput`). However, node failures are immediate and final — no automatic retries with backoff. Agent nodes calling LLMs are inherently flaky (rate limits, network timeouts, model overload). n8n's execution model shows that per-node retry policies and timeouts are essential for production workflows. Sprint 4 task #25 ("Durable Execution") partially overlaps — checkpoint/resume already shipped; this ADR covers the remaining retry/timeout gap.
+
+**Decision:**
+1. Add `RetryPolicy` struct to `rusvel-core::domain` with `max_retries`, `initial_delay_ms`, `backoff_multiplier`, `max_delay_ms`.
+2. Add `retry_policy: Option<RetryPolicy>` and `timeout_secs: Option<u64>` to `FlowNodeDef` (both `#[serde(default)]` for backward compat).
+3. Add `Timeout(String)` variant to `RusvelError`.
+4. Executor wraps `handler.execute()` in an `execute_with_retry()` helper that applies `tokio::time::timeout` per attempt and retries with exponential backoff. After all retries exhausted, falls through to existing `on_error` behavior.
+5. Retry attempts are invisible to downstream nodes — only the final result (success or failure) propagates. Attempt count is recorded in `FlowNodeResult.metadata`.
+6. Add `export_flow(id)` / `import_flow(json)` to `FlowEngine` and corresponding `GET /api/flows/:id/export`, `POST /api/flows/import` endpoints for portable workflow sharing.
+
+**Consequence:** Flows become production-grade. LLM-backed agent nodes can survive transient failures without manual intervention. Timeouts prevent runaway nodes from blocking entire workflows. Export/import enables workflow sharing between RUSVEL instances. Backward compatible — existing flows without retry/timeout fields default to current behavior (no retry, no timeout).
+
+---
+
+## ADR-016: Multi-Channel Messaging via ChannelRegistry
+
+**Date:** 2026-03-30
+**Status:** Proposed
+**Context:** RUSVEL currently supports only Telegram via a single `TelegramChannel` adapter behind `ChannelPort`. Every B2B client asks "does it work in Slack/Discord/WhatsApp?" The `ChannelPort` trait (`channel_kind()` + `send_message()`) is the right abstraction but only supports one channel at a time via `AppState.channel: Option<Arc<dyn ChannelPort>>`. Adding each new channel requires editing the composition root and has no routing mechanism. OpenClaw's multi-channel architecture shows the pattern: a registry that routes by channel kind, with each adapter as a self-contained plugin.
+
+**Decision:**
+1. Introduce `ChannelRegistry` in `rusvel-channel` — a `HashMap<String, Arc<dyn ChannelPort>>` that itself implements `ChannelPort`. Routes messages by `payload["channel"]` key; broadcasts when no channel specified.
+2. Add `SlackChannel` (webhook) and `DiscordChannel` (webhook) adapters, each following the `from_env()` pattern. Environment-driven: `RUSVEL_SLACK_WEBHOOK_URL`, `RUSVEL_DISCORD_WEBHOOK_URL`.
+3. Add `ChannelMessage` and `MessageDirection` domain types to `rusvel-core` for inbound message persistence.
+4. Composition root (main.rs) auto-registers all configured channels into `ChannelRegistry`. AppState continues using `Option<Arc<dyn ChannelPort>>` — no breaking change.
+5. New API surface in `channel_routes.rs`: `GET /api/channels` (list), `POST /api/channels/send` (targeted), `POST /api/channels/broadcast`, `GET /api/channels/messages` (unified inbox), `POST /api/channels/:kind/inbound` (webhook receiver).
+6. Adding a new channel = one new file in `rusvel-channel/src/` + one `from_env()` call in main.rs. No core changes.
+
+**Consequence:** RUSVEL gains multi-channel output and inbound message capture with zero breaking changes. The unified inbox enables cross-channel conversation views. Each channel adapter is < 100 lines and self-contained. `dept-messaging` can evolve from placeholder to channel management UI.
+
+---
+
+## ADR-017: Session Context Persistence and Self-Improvement Loop
+
+**Date:** 2026-03-30
+**Status:** Proposed
+**Context:** The `!build` command (ADR-013) creates skills/rules/hooks/agents from natural language — RUSVEL's most differentiating feature. But it is stateless: sessions forget what was discussed, what worked, and what failed. The system cannot learn from its own usage patterns. everything-claude-code demonstrates that session hooks + automatic pattern extraction turn a one-shot tool into a self-improving system.
+
+**Decision:**
+1. Add `SessionContext`, `EntityRef`, `BuildRecord`, and `BuildSuggestion` domain types to `rusvel-core`.
+2. At session end (`POST /api/dept/:dept/sessions/:id/end`), use AgentPort (Haiku tier for cost) to extract key decisions, created entities, errors, and a conversation summary. Persist as `SessionContext` in ObjectStore.
+3. On new chat session, load the most recent `SessionContext` for the department and inject it into the system prompt as prior context.
+4. After saving context, run `extract_patterns()` — LLM compares session patterns against existing skills/rules and generates `BuildSuggestion` entries (pending review).
+5. Track every `!build` output as a `BuildRecord` with `usage_count`. Increment count when a skill is resolved or a rule is loaded.
+6. New API: `GET /api/build/suggestions`, `POST /api/build/suggestions/:id/accept` (auto-creates entity), `POST /api/build/suggestions/:id/dismiss`, `GET /api/build/history`.
+
+**Consequence:** RUSVEL becomes a self-improving system. Sessions build on prior context instead of starting cold. The `!build` loop evolves from manual ("I need a skill for X") to autonomous ("based on your last 3 sessions, here are 2 suggested skills"). Usage tracking provides signal for which builds are valuable, enabling pruning of unused entities over time.
+
+---
+
+## ADR-015: Flow Node Extension Model — Registry-Based Node Types
+
+**Date:** 2026-03-30
+**Status:** Accepted
+**Context:** `flow-engine` currently has 6 hardcoded node types (code, condition, agent, browser_trigger, browser_action, parallel_evaluate). Adding a node requires editing `FlowEngine::new()` and creating a file in `flow-engine/src/nodes/`. Reference: n8n has 400+ node types with a self-describing `INodeType` interface that carries parameter schemas and port definitions. RUSVEL needs more node types (loop, delay, http, tool_call, switch, merge, sub_flow, notify) without bloating the `flow-engine` crate beyond 2000 lines.
+**Decision:** Node types are registered via `NodeRegistry::register()` at boot, not hardcoded. `dept-flow` registers the 6 built-in nodes. Other departments register their own nodes during `DepartmentApp::register()`. The `NodeHandler` trait gains `fn parameter_schema(&self) -> serde_json::Value` and `fn ports(&self) -> NodePorts` so the frontend can auto-render configuration UIs. A new `flow-engine/src/nodes/` module `loop_node.rs`, `delay.rs`, `http.rs`, `tool_call.rs`, `switch.rs`, `merge.rs`, `sub_flow.rs`, `notify.rs` adds the Tier 1 node types. Expression interpolation in node parameters uses `minijinja` with `{{ inputs.field }}` / `{{ env.KEY }}` / `{{ variables.name }}` syntax.
+**Consequence:** Node ecosystem grows without touching `flow-engine/src/lib.rs`. Departments can contribute domain-specific nodes (e.g., `dept-harvest` registers a `harvest_scan` node). Frontend `/flows` page auto-discovers available node types and their schemas via `GET /api/flows/node-types`. Expression language enables dynamic parameter resolution without agent calls.
+
+---
+
+## ADR-016: Multi-Channel Architecture — ChannelPort Expansion
+
+**Date:** 2026-03-30
+**Status:** Accepted
+**Context:** `rusvel-channel` is 112 lines with Telegram-only, send-only support. `ChannelPort` has a minimal interface: `channel_kind() -> &'static str` and `send_message(session_id, payload)`. Reference: OpenClaw supports 10+ channels (WhatsApp, Discord, Slack, Signal, iMessage) with a layered adapter contract covering outbound, inbound, threading, media, security, and groups. RUSVEL needs multi-channel outbound (notifications, reports, alerts) and inbound (user commands, webhook-triggered flows) to be a real "virtual agency."
+**Decision:** Expand `ChannelPort` in `rusvel-core/src/ports.rs` with: `send_rich(target, payload) -> DeliveryReceipt`, `handle_inbound(raw) -> InboundMessage`, and `capabilities() -> ChannelCapabilities`. Add domain types `ChannelTarget`, `MessagePayload`, `RichPayload` (embeds, buttons, media), `InboundMessage`, `DeliveryReceipt`, `ChannelCapabilities` to `rusvel-core/src/domain.rs`. Add `ChannelRouter` in `rusvel-channel` that maps department + event_kind patterns to channel adapters. Implement adapters in priority order: Discord (Phase 1), Slack (Phase 2), Email/SMTP (Phase 3), Webhook (Phase 4). Inbound webhooks route through `rusvel-webhook` to `EventPort` with kind `channel.message.received`. Default methods on `ChannelPort` provide graceful degradation (rich -> text fallback).
+**Consequence:** `dept-messaging` evolves from shell to active department managing channel configuration and routing rules. Channels degrade gracefully based on declared capabilities. Inbound messages trigger event-driven flows. The existing `TelegramChannel` implements the expanded trait with `capabilities()` returning `{ inbound: false, rich_text: false, ... }`.
+
+---
+
+## ADR-017: Cost Tracking — Per-Operation Spend Recording
+
+**Date:** 2026-03-30
+**Status:** Accepted
+**Context:** RUSVEL has `ModelTier` routing and a `CostTrackingLlm` wrapper, but no per-operation cost recording visible to users. Reference: n8n tracks execution cost per node; Everything Claude Code has cost-tracker hooks per session. Solo builders need spend visibility to control LLM costs across departments, flows, and agent runs.
+**Decision:** Define `CostEvent` struct in `rusvel-core` with: `department`, `operation` (LlmCall, Embedding, ToolExecution, FlowNode, VectorSearch), `tokens_in`, `tokens_out`, `cost_usd`, `model`, `session_id`, `context` (Chat/Flow/Job/Agent discriminator). Record via `MetricStore::record()` on every LLM call (in `CostTrackingLlm`), embedding call (in `rusvel-embed`), and flow node execution (in `flow-engine` executor). Add `GET /api/analytics/costs` with filters by department, time range, operation type. Add `GET /api/analytics/costs/summary` for dashboard widget. Frontend `/analytics` page shows spend-by-department chart and per-session cost breakdown.
+**Consequence:** Every billable operation is tracked. Users can set per-department budget alerts. `forge mission today` includes cost summary. Flow execution metadata includes `total_cost_usd`. Agent runs report cost in `AgentOutput.cost_estimate`.
+
+---
+
+## ADR-018: Expression Language — MiniJinja for Flow Parameters
+
+**Date:** 2026-03-30
+**Status:** Accepted
+**Context:** Flow node parameters are static JSON. Dynamic values require an agent node to compute them, which is expensive (LLM call) and slow. Reference: n8n allows expressions in every parameter field (`{{ $json.name }}`, `{{ $env.API_KEY }}`). RUSVEL needs lightweight template resolution for flow parameters without LLM overhead.
+**Decision:** Add `minijinja` as a dependency of `flow-engine`. Before executing each node, resolve all string values in `node.parameters` through MiniJinja with context: `inputs` (upstream outputs), `env` (environment variables, filtered allowlist), `variables` (flow-level variables), `trigger` (trigger_data), `results` (all node_results so far). Non-string values pass through unchanged. Template errors produce `FlowError::Expression` with node_id and expression text. Recursive resolution handles nested objects/arrays. `{{ inputs.upstream_node.field }}` is the primary pattern.
+**Consequence:** Code nodes become simpler (template instead of extract logic). HTTP nodes can template URLs and headers. Condition nodes can use expressions instead of hardcoded `result: bool`. Reduces agent node usage for simple data transformations. Template syntax is familiar (Jinja2/Ansible/dbt).
+
+---
+
+## ADR-019: Claude Code Hooks — Quality Gates and Session Persistence
+
+**Date:** 2026-03-30
+**Status:** Accepted
+**Context:** RUSVEL's `.claude/` directory has agents, skills, and rules but minimal hooks. Reference: Everything Claude Code (ECC) has 15+ hooks across PreToolUse, PostToolUse, Stop, and Session* triggers providing auto-formatting, quality gates, secret detection, session persistence, and continuous learning observation. These hooks improve code quality and enable cross-session knowledge transfer with zero runtime cost to RUSVEL itself.
+**Decision:** Add `.claude/hooks/` with 6 initial hooks configured in `.claude/settings.json`: (1) `pre-bash-commit-quality` — block commits with secrets or non-conventional messages; (2) `post-edit-format` — auto-run `rustfmt` after `.rs` edits; (3) `post-edit-typecheck` — run `cargo check -p <crate>` after edits; (4) `pre-bash-no-npm` — block `npm` commands (enforce `pnpm`); (5) `stop-session-save` — persist session state to `~/.claude/session-data/`; (6) `stop-evaluate` — extract reusable patterns for learned skills. Add `/learn` command to `.claude/commands/` for manual pattern extraction. Add provenance tracking (`.provenance.json`) for learned skills in `.claude/skills/learned/`.
+**Consequence:** Code quality improves automatically (formatting, type-checking on every edit). Secrets never reach git. Session knowledge persists across conversations. Learned patterns accumulate over time, making the harness progressively smarter. All hooks are non-blocking except the commit quality gate.

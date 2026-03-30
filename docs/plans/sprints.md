@@ -54,9 +54,10 @@
 
 ---
 
-### Sprint 3: Orchestration + Agent Visibility (~12 days)
+### Sprint 3: Orchestration + Flow Engine Evolution (~14 days)
 
-> Theme: Agents controlling agents — and you can watch them.
+> Theme: Agents controlling agents, flow engine becomes production-grade.
+> ADRs: ADR-015 (Node Extension), ADR-018 (Expression Language)
 
 | # | Task | Effort | Status | Depends On |
 |---|------|--------|--------|------------|
@@ -67,14 +68,18 @@
 | 22 | **Event triggers** — `EventTrigger` subscribes to patterns, auto-starts agents/flows | 2d | Not started | #18, #19 |
 | 23 | **Self-correction loops** — `VerificationStep` trait, per-tool critique, auto-fix rules | 4d | Not started | #8 ✅ (done) |
 | 24 | **Terminal Phase 4: Agent Visibility** — `DelegationTerminal.svelte`, `terminal_open/watch` tools | 3d | Not started | #16, #18 |
+| 34 | **Flow node Tier 1** — `LoopNode`, `DelayNode`, `HttpRequestNode`, `ToolCallNode` (ADR-015) | 3d | Not started | — |
+| 35 | **MiniJinja expressions** — template resolution in node parameters (ADR-018) | 2d | Not started | — |
+| 36 | **Claude Code hooks** — 6 hooks in `.claude/hooks/` + settings.json wiring (ADR-019) | 1d | Not started | — |
 
-**Sprint 3 total:** ~12 days (18-21 parallel, 22-23 after deps, 24 after 16+18)
+**Sprint 3 total:** ~14 days (18-21+34-36 parallel, 22-23 after deps, 24 after 16+18)
 
 ---
 
-### Sprint 4: Platform & Interop (~12 days)
+### Sprint 4: Channels + Cost Tracking (~14 days)
 
-> Theme: Crash-resilient workflows, ecosystem compatibility, full pipeline visibility.
+> Theme: Multi-channel communication, spend visibility, workflow depth.
+> ADRs: ADR-016 (Multi-Channel), ADR-017 (Cost Tracking)
 
 | # | Task | Effort | Status | Depends On |
 |---|------|--------|--------|------------|
@@ -82,24 +87,53 @@
 | 26 | **Playbooks** — predefined multi-step JSON pipelines, UI at `/playbooks`, run/history | 5d | Not started | #18, #19, #22 |
 | 27 | **AG-UI Protocol** — map SSE events to AG-UI schema, add RUN_STARTED/STATE_DELTA | 4d | Not started | — |
 | 28 | **Terminal Phase 5: Flow/Playbook Visibility** — node-per-pane in DAG execution | 3d | Not started | #16, #25, #26 |
+| 37 | **ChannelPort expansion** — expand trait in `rusvel-core`, add domain types (ADR-016) | 2d | Not started | — |
+| 38 | **Discord adapter** — rich embeds, threads, reactions, webhook inbound (ADR-016) | 3d | Not started | #37 |
+| 39 | **ChannelRouter** — pattern-based routing in `rusvel-channel`, dept→channel mapping | 2d | Not started | #37 |
+| 40 | **Cost tracking** — `CostEvent` in core, record in `CostTrackingLlm` + executor (ADR-017) | 2d | Not started | — |
+| 41 | **Cost API + dashboard** — `GET /api/analytics/costs`, frontend spend-by-dept chart | 2d | Not started | #40 |
+| 42 | **Flow node Tier 2** — `SwitchNode`, `MergeNode`, `SubFlowNode`, `NotifyNode` | 3d | Not started | #34, #39 |
 
-**Sprint 4 total:** ~12 days (25+27 parallel, 26 after deps, 28 after 25+26)
+**Sprint 4 total:** ~14 days (25+27+37+40 parallel, 38+39 after #37, 26+41+42 after deps, 28 last)
 
 ---
 
-### Sprint 5: Product Features (~12 days)
+### Sprint 5: Product Features + Channel Depth (~14 days)
 
-> Theme: Framework → Product. Features users see and love.
+> Theme: Framework → Product. Multi-channel depth, self-improvement.
 
 | # | Task | Effort | Status | Depends On |
 |---|------|--------|--------|------------|
-| 29 | **Executive Brief** — enhanced `forge mission today` + delegate per dept | 3d | Not started | #18 |
+| 29 | **Executive Brief** — enhanced `forge mission today` + delegate per dept + cost summary | 3d | Not started | #18, #40 |
 | 30 | **Starter Kits** — pre-built dept bundles via `!build` + Capability Engine | 3d | Not started | ADR-014 ✅ |
 | 31 | **Self-Improving KB** — auto-index engine outputs, cross-dept insights | 3d | Not started | #14 |
 | 32 | **Streamable HTTP MCP** — Axum handlers, session mgmt, OAuth, keep stdio fallback | 5d | Not started | — |
 | 33 | **Terminal Phase 6-7: CDP + TUI** — browser panes, ratatui panel | 4d | Not started | #16, CDP bridge |
+| 43 | **Slack adapter** — threads, interactive messages, app mentions (ADR-016) | 3d | Not started | #37, #39 |
+| 44 | **Email adapter** — SMTP outbound + retry queue, HTML templates (ADR-016) | 2d | Not started | #37 |
+| 45 | **`/learn` command + provenance** — pattern extraction, `.provenance.json`, learned skills (ADR-019) | 2d | Not started | #36 |
+| 46 | **Session persistence** — session-end hook saves state, session-start loads it (ADR-019) | 1d | Not started | #36 |
 
-**Sprint 5 total:** ~12 days (29-31 parallel, 32 independent, 33 after CDP)
+**Sprint 5 total:** ~14 days (29-31+43-46 parallel, 32 independent, 33 after CDP)
+
+---
+
+### Sprint 6: Scale + Polish (~12 days)
+
+> Theme: Production hardening, design system, advanced flows.
+
+| # | Task | Effort | Status | Depends On |
+|---|------|--------|--------|------------|
+| 47 | **Webhook channel** — generic HTTP POST outbound, configurable templates, retry (ADR-016) | 2d | Not started | #37 |
+| 48 | **Inbound channel routing** — webhook receivers → EventPort → flow triggers (ADR-016) | 3d | Not started | #39, #47 |
+| 49 | **Message queue + batching** — debounce rapid notifications, batch flush (ADR-016) | 2d | Not started | #39 |
+| 50 | **Design tokens + component variants** — CSS custom properties, `tailwind-variants` in Svelte 5 | 3d | Not started | — |
+| 51 | **Credential encryption** — AES-256 at rest in SQLite, decrypt per-execution | 3d | Not started | — |
+| 52 | **Flow versioning** — version counter on `FlowDef`, execution links to version, diff view | 2d | Not started | — |
+| 53 | **Flow templates** — predefined starter flows, `POST /api/flows/from-template` | 2d | Not started | #52 |
+| 54 | **Continuous learning pipeline** — observe hook + evaluate-session hook + `/evolve` command | 3d | Not started | #45, #46 |
+
+**Sprint 6 total:** ~12 days (47+50+51+52 parallel, 48+49 after #47, 53 after #52, 54 after #45)
 
 ---
 
